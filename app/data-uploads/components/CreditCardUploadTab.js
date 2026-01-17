@@ -58,14 +58,20 @@ export default function CreditCardUploadTab() {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
+      // Use AbortController with 5 minute timeout for large file uploads
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5 * 60 * 1000); // 5 minutes
+
       const response = await fetch(`${API_BASE_URL}/uploads/credit-card-transactions/preview`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
         body: formData,
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         let errorMessage = "Failed to upload and parse CSV file";

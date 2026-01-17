@@ -55,7 +55,6 @@ export default function DriversPage() {
       const response = await fetch(`${API_BASE_URL}/drivers`, {
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
       });
 
@@ -92,7 +91,6 @@ export default function DriversPage() {
         method: "PUT",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
       });
 
