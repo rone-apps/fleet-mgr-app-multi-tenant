@@ -20,7 +20,7 @@ import {
   Chip,
 } from "@mui/material";
 import { Block, CheckCircle, Star } from "@mui/icons-material";
-import { getCurrentUser, isAuthenticated, API_BASE_URL } from "../lib/api";
+import { getCurrentUser, isAuthenticated, API_BASE_URL, getTenantSchema } from "../lib/api";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -29,7 +29,9 @@ export default function DriversPage() {
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [tenantSchema, setTenantSchema] = useState(null);
 
+  // Initialize tenant and user
   useEffect(() => {
     if (!isAuthenticated()) {
       router.push("/signin");
@@ -38,14 +40,20 @@ export default function DriversPage() {
 
     const user = getCurrentUser();
     setCurrentUser(user);
+    setTenantSchema(getTenantSchema());
 
     if (!["ADMIN", "MANAGER", "DISPATCHER"].includes(user?.role)) {
       router.push("/");
       return;
     }
-
-    loadDrivers();
   }, [router]);
+
+  // Load drivers when tenant changes
+  useEffect(() => {
+    if (tenantSchema && currentUser) {
+      loadDrivers();
+    }
+  }, [tenantSchema, currentUser]);
 
   const loadDrivers = async () => {
     try {

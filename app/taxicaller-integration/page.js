@@ -38,6 +38,11 @@ import {
   Clear as ClearIcon,
   ArrowUpward as ArrowUpwardIcon,
   ArrowDownward as ArrowDownwardIcon,
+  Settings as SettingsIcon,
+  Visibility as VisibilityIcon,
+  VisibilityOff as VisibilityOffIcon,
+  Save as SaveIcon,
+  Key as KeyIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, isAuthenticated, API_BASE_URL } from "../lib/api";
@@ -74,6 +79,17 @@ export default function TaxiCallerIntegrationPage() {
   const [summary, setSummary] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState(null);
 
+  // API Key configuration state
+  const [showApiKeySettings, setShowApiKeySettings] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [companyName, setCompanyName] = useState("");
+  const [taxicallerCompanyId, setTaxicallerCompanyId] = useState("");
+  const [taxicallerBaseUrl, setTaxicallerBaseUrl] = useState("https://app.taxicaller.net");
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyLoading, setApiKeyLoading] = useState(false);
+  const [hasExistingConfig, setHasExistingConfig] = useState(false);
+  const [existingConfig, setExistingConfig] = useState(null);
+
   // Filter states for Account Jobs
   const [accountJobsDriverIdFilter, setAccountJobsDriverIdFilter] = useState("");
   const [accountJobsDriverNameFilter, setAccountJobsDriverNameFilter] = useState("");
@@ -107,7 +123,90 @@ export default function TaxiCallerIntegrationPage() {
       return;
     }
     setCurrentUser(user);
+    
+    // Load API key configuration
+    loadApiKeyConfig();
   }, [router]);
+
+  const loadApiKeyConfig = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/tenant-config`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setHasExistingConfig(data.configured || false);
+        setExistingConfig(data);
+        // Pre-fill non-sensitive fields
+        if (data.companyName) setCompanyName(data.companyName);
+        if (data.taxicallerCompanyId) setTaxicallerCompanyId(data.taxicallerCompanyId.toString());
+        if (data.taxicallerBaseUrl) setTaxicallerBaseUrl(data.taxicallerBaseUrl);
+      }
+    } catch (err) {
+      console.error("Error loading API key config:", err);
+    }
+  };
+
+  const saveApiKey = async () => {
+    if (!apiKey.trim() && !hasExistingConfig) {
+      setError("Please enter an API key");
+      return;
+    }
+
+    setApiKeyLoading(true);
+    setError("");
+    setSuccess("");
+    
+    try {
+      const requestBody = {
+        companyName: companyName.trim() || null,
+        taxicallerCompanyId: taxicallerCompanyId ? parseInt(taxicallerCompanyId, 10) : null,
+        taxicallerBaseUrl: taxicallerBaseUrl.trim() || null,
+      };
+      
+      // Only include API key if provided (allows updating other fields without changing key)
+      if (apiKey.trim()) {
+        requestBody.taxicallerApiKey = apiKey.trim();
+      }
+
+      const response = await fetch(`${API_BASE_URL}/tenant-config`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setSuccess("TaxiCaller configuration saved successfully");
+        setApiKey(""); // Clear the API key field after save
+        setHasExistingConfig(true);
+        setExistingConfig(data);
+        setShowApiKeySettings(false);
+        setConnectionStatus(null); // Reset connection status to encourage re-testing
+      } else {
+        setError(data.message || "Failed to save configuration");
+      }
+    } catch (err) {
+      console.error("Error saving configuration:", err);
+      setError(`Failed to save configuration: ${err.message}`);
+    } finally {
+      setApiKeyLoading(false);
+    }
+  };
 
   // Apply filters for Account Jobs
   useEffect(() => {
@@ -583,18 +682,116 @@ export default function TaxiCallerIntegrationPage() {
                 </Box>
               </Grid>
               <Grid item xs={12} md={6} sx={{ textAlign: "right" }}>
-                <Button
-                  variant="contained"
-                  onClick={testConnection}
-                  disabled={loading}
-                  sx={{ backgroundColor: "#000", "&:hover": { backgroundColor: "#333" } }}
-                >
-                  {loading ? <CircularProgress size={24} /> : "Test Connection"}
-                </Button>
+                <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-end" }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => setShowApiKeySettings(!showApiKeySettings)}
+                    startIcon={<SettingsIcon />}
+                    sx={{ borderColor: "#000", color: "#000", "&:hover": { borderColor: "#333", backgroundColor: "rgba(0,0,0,0.05)" } }}
+                  >
+                    {showApiKeySettings ? "Hide Settings" : "API Settings"}
+                  </Button>
+                  <Button
+                    variant="contained"
+                    onClick={testConnection}
+                    disabled={loading || !hasExistingConfig}
+                    sx={{ backgroundColor: "#000", "&:hover": { backgroundColor: "#333" } }}
+                  >
+                    {loading ? <CircularProgress size={24} /> : "Test Connection"}
+                  </Button>
+                </Box>
               </Grid>
             </Grid>
           </CardContent>
         </Card>
+
+        {/* API Key Settings Card */}
+        {showApiKeySettings && (
+          <Card sx={{ mb: 3, border: "1px solid #e0e0e0" }}>
+            <CardContent>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+                <KeyIcon color="primary" />
+                <Typography variant="h6">TaxiCaller API Configuration</Typography>
+              </Box>
+              
+              {hasExistingConfig && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Configuration exists for this tenant. 
+                  {existingConfig?.taxicallerApiKey && ` API Key: ${existingConfig.taxicallerApiKey}`}
+                  {" "}Update fields below as needed.
+                </Alert>
+              )}
+
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="Company Name"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    fullWidth
+                    placeholder="Your company name"
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="TaxiCaller Company ID"
+                    type="number"
+                    value={taxicallerCompanyId}
+                    onChange={(e) => setTaxicallerCompanyId(e.target.value)}
+                    fullWidth
+                    placeholder="e.g., 12345"
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="TaxiCaller API Key"
+                    type={showApiKey ? "text" : "password"}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    fullWidth
+                    placeholder={hasExistingConfig ? "Enter new key to replace existing" : "Enter your TaxiCaller API key"}
+                    InputProps={{
+                      endAdornment: (
+                        <IconButton
+                          onClick={() => setShowApiKey(!showApiKey)}
+                          edge="end"
+                        >
+                          {showApiKey ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                        </IconButton>
+                      ),
+                    }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    label="TaxiCaller Base URL"
+                    value={taxicallerBaseUrl}
+                    onChange={(e) => setTaxicallerBaseUrl(e.target.value)}
+                    fullWidth
+                    placeholder="https://app.taxicaller.net"
+                  />
+                </Grid>
+                <Grid item xs={12}>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={saveApiKey}
+                    disabled={apiKeyLoading || (!apiKey.trim() && !hasExistingConfig)}
+                    startIcon={apiKeyLoading ? <CircularProgress size={20} color="inherit" /> : <SaveIcon />}
+                    sx={{ height: "48px" }}
+                  >
+                    {apiKeyLoading ? "Saving..." : "Save Configuration"}
+                  </Button>
+                </Grid>
+              </Grid>
+
+              <Typography variant="caption" color="textSecondary" sx={{ mt: 2, display: "block" }}>
+                Your API key is stored securely and used to authenticate requests to the TaxiCaller API.
+                You can obtain your API key and Company ID from your TaxiCaller admin portal.
+              </Typography>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Date Range Selector */}
         <Paper sx={{ p: 3, mb: 3 }}>
