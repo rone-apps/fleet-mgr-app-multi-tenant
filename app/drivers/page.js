@@ -20,7 +20,7 @@ import {
   Chip,
 } from "@mui/material";
 import { Block, CheckCircle, Star } from "@mui/icons-material";
-import { getCurrentUser, isAuthenticated, API_BASE_URL, getTenantSchema } from "../lib/api";
+import { getCurrentUser, isAuthenticated, API_BASE_URL, getTenantSchema, tenantFetch } from "../lib/api";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -60,11 +60,7 @@ export default function DriversPage() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(`${API_BASE_URL}/drivers`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      });
+      const response = await tenantFetch(`${API_BASE_URL}/drivers`);
 
       if (!response.ok) {
         throw new Error("Failed to load drivers");
@@ -95,11 +91,8 @@ export default function DriversPage() {
           ? `${API_BASE_URL}/drivers/${driver.id}/suspend`
           : `${API_BASE_URL}/drivers/${driver.id}/activate`;
 
-      await fetch(endpoint, {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
+      await tenantFetch(endpoint, {
+        method: "PUT"
       });
 
       setDrivers((prev) =>

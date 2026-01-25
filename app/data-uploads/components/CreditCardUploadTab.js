@@ -20,7 +20,7 @@ import {
   TableChart as TableIcon,
   CheckCircle as CheckIcon,
 } from "@mui/icons-material";
-import { API_BASE_URL } from "../../lib/api";
+import { API_BASE_URL, tenantFetch } from "../../lib/api";
 import FileUploadStep from "./FileUploadStep";
 import DataPreviewStep from "./DataPreviewStep";
 import ImportResultsStep from "./ImportResultsStep";
@@ -66,6 +66,7 @@ export default function CreditCardUploadTab() {
         method: "POST",
         headers: {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
         body: formData,
         signal: controller.signal,
