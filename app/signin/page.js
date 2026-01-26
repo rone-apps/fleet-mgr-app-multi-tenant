@@ -45,9 +45,9 @@ const theme = createTheme({
 const KNOWN_COMPANIES = [
   { id: 'MAC-Cabs', name: 'Maclures Cabs', schema: 'fareflow' },
   { id: 'BONNY-Taxi', name: "Bonny's Taxi", schema: 'fareflow_bonny' },
-  { id: 'demo', name: 'Demo Company', schema: 'demo' },
-  { id: 'yellowcab', name: 'Yellow Cab Co.', schema: 'yellowcab' },
-  { id: 'citytaxi', name: 'City Taxi Services', schema: 'citytaxi' },
+  // { id: 'demo', name: 'Demo Company', schema: 'demo' },
+  // { id: 'yellowcab', name: 'Yellow Cab Co.', schema: 'yellowcab' },
+  // { id: 'citytaxi', name: 'City Taxi Services', schema: 'citytaxi' },
   { id: 'metrocab', name: 'Metro Cab LLC', schema: 'metrocab' },
 ];
 

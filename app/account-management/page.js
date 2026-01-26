@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Box,
   Typography,
@@ -32,6 +33,8 @@ import {
 } from "./components";
 
 export default function AccountManagementPage() {
+  const [allChargesSummary, setAllChargesSummary] = useState(null);
+
   const {
     // Core state
     currentUser,
@@ -205,6 +208,11 @@ export default function AccountManagementPage() {
           invoices={invoices}
           filteredInvoices={filteredInvoices}
           currentTab={currentTab}
+          filterCustomerName={filterCustomerName}
+          filterCabId={filterCabId}
+          filterDriverId={filterDriverId}
+          filterStartDate={filterStartDate}
+          filterEndDate={filterEndDate}
         />
 
         {/* Main Content */}
@@ -291,6 +299,7 @@ export default function AccountManagementPage() {
               handleAllChargesBulkEditChange={handleAllChargesBulkEditChange}
               handleSaveAllChargesBulkEdit={handleSaveAllChargesBulkEdit}
               handleMarkChargePaid={handleMarkChargePaid}
+              onTotalsUpdate={setAllChargesSummary}
             />
           )}
 

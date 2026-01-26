@@ -36,6 +36,7 @@ import {
 } from "@mui/icons-material";
 import { calculateTotal } from "../../utils/helpers";
 import { API_BASE_URL } from "../../../lib/api";
+import FilteredStatsBanner from "../FilteredStatsBanner";
 
 export default function AllChargesTab({
   cabs,
@@ -44,17 +45,37 @@ export default function AllChargesTab({
   canMarkPaid,
   canBulkEdit,
   handleMarkChargePaid,
+  onTotalsUpdate,
 }) {
+  // Helper function to get current month date range
+  const getCurrentMonthRange = () => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return {
+      start: startOfMonth.toISOString().split('T')[0],
+      end: endOfMonth.toISOString().split('T')[0]
+    };
+  };
+
   // Pagination state
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(50);
   const [totalItems, setTotalItems] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
-  
+
   // Grand totals state (for all filtered data across all pages)
   const [grandTotalFare, setGrandTotalFare] = useState(0);
   const [grandTotalTip, setGrandTotalTip] = useState(0);
   const [grandTotalAmount, setGrandTotalAmount] = useState(0);
+
+  // Summary totals state (for StatisticsCards banner)
+  const [summaryTotals, setSummaryTotals] = useState({
+    totalCharges: 0,
+    unpaidCharges: 0,
+    outstandingBalance: 0,
+    totalAmount: 0
+  });
   
   // Sorting state
   const [orderBy, setOrderBy] = useState("tripDate");
@@ -85,6 +106,7 @@ export default function AllChargesTab({
   const [appliedStartDate, setAppliedStartDate] = useState("");
   const [appliedEndDate, setAppliedEndDate] = useState("");
   const [appliedPaidStatus, setAppliedPaidStatus] = useState("all");
+  const [showFilteredStatsBanner, setShowFilteredStatsBanner] = useState(false);
 
   // Natural sort function for cab numbers (e.g., M1, M2, M11, M123)
   const naturalSort = (a, b) => {
@@ -128,7 +150,7 @@ export default function AllChargesTab({
           .map(charge => charge.customerName)
           .filter(name => name && name.trim() !== '')
       )].sort((a, b) => a.localeCompare(b));
-      
+
       setCustomerNames(prevNames => {
         // Merge with existing names to build up the list over time
         const merged = [...new Set([...prevNames, ...uniqueNames])];
@@ -137,14 +159,21 @@ export default function AllChargesTab({
     }
   }, [charges]);
 
+  // Call parent with summary totals whenever they change
+  useEffect(() => {
+    if (onTotalsUpdate) {
+      onTotalsUpdate(summaryTotals);
+    }
+  }, [summaryTotals, onTotalsUpdate]);
+
   const loadChargesWithPagination = useCallback(async (filterOverrides = {}) => {
     setLoading(true);
     setError(null);
     try {
       const token = localStorage.getItem("token");
-      
+
       // Use overrides if provided, otherwise use applied filter state
-      const filters = {
+      let filters = {
         customerName: filterOverrides.customerName !== undefined ? filterOverrides.customerName : appliedCustomerName,
         cabId: filterOverrides.cabId !== undefined ? filterOverrides.cabId : appliedCabId,
         driverId: filterOverrides.driverId !== undefined ? filterOverrides.driverId : appliedDriverId,
@@ -152,6 +181,14 @@ export default function AllChargesTab({
         endDate: filterOverrides.endDate !== undefined ? filterOverrides.endDate : appliedEndDate,
         paidStatus: filterOverrides.paidStatus !== undefined ? filterOverrides.paidStatus : appliedPaidStatus,
       };
+
+      // Apply current month default if no date range selected
+      if (!filters.startDate && !filters.endDate) {
+        const currentMonthRange = getCurrentMonthRange();
+        filters.startDate = currentMonthRange.start;
+        filters.endDate = currentMonthRange.end;
+        console.log('📅 Using current month range:', filters.startDate, 'to', filters.endDate);
+      }
       
       // Build query parameters with filters
       const params = new URLSearchParams({
@@ -259,7 +296,7 @@ export default function AllChargesTab({
   const fetchGrandTotals = useCallback(async (filters) => {
     try {
       const token = localStorage.getItem("token");
-      
+
       // Build query parameters with same filters but request totals
       const params = new URLSearchParams();
       if (filters.customerName) params.append('customerName', filters.customerName);
@@ -268,17 +305,17 @@ export default function AllChargesTab({
       if (filters.startDate) params.append('startDate', filters.startDate);
       if (filters.endDate) params.append('endDate', filters.endDate);
       if (filters.paidStatus !== 'all') params.append('paid', filters.paidStatus === 'paid');
-      
+
       // Try to fetch totals from a dedicated endpoint first
       const totalsUrl = `${API_BASE_URL}/account-charges/totals?${params.toString()}`;
       const response = await fetch(totalsUrl, {
-        headers: { 
+        headers: {
           "Authorization": `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           "Content-Type": "application/json",
           "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
       });
-      
+
       if (response.ok) {
         const totals = await response.json();
         setGrandTotalFare(totals.totalFareAmount || 0);
@@ -296,10 +333,79 @@ export default function AllChargesTab({
     }
   }, []);
 
+  // Fetch summary totals for StatisticsCards banner
+  const fetchSummaryTotals = useCallback(async (filters) => {
+    try {
+      const token = localStorage.getItem("token");
+
+      // Build query parameters with same filters
+      const params = new URLSearchParams();
+      if (filters.customerName) params.append('customerName', filters.customerName);
+      if (filters.cabId) params.append('cabId', filters.cabId);
+      if (filters.driverId) params.append('driverId', filters.driverId);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      if (filters.paidStatus !== 'all') params.append('paid', filters.paidStatus === 'paid');
+
+      const totalsUrl = `${API_BASE_URL}/account-charges/totals?${params.toString()}`;
+      console.log('📊 Fetching summary totals:', totalsUrl);
+
+      const response = await fetch(totalsUrl, {
+        headers: {
+          "Authorization": `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          "Content-Type": "application/json",
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('✅ Summary totals received:', data);
+
+        // Calculate outstanding balance from unpaid amounts
+        const outstandingBalance = (data.unpaidFareAmount || 0) + (data.unpaidTipAmount || 0);
+
+        setSummaryTotals({
+          totalCharges: data.totalCharges || 0,
+          unpaidCharges: data.unpaidCharges || 0,
+          outstandingBalance: outstandingBalance,
+          totalAmount: (data.totalFareAmount || 0) + (data.totalTipAmount || 0)
+        });
+      } else {
+        console.warn('Failed to fetch summary totals:', response.status);
+        setSummaryTotals({
+          totalCharges: 0,
+          unpaidCharges: 0,
+          outstandingBalance: 0,
+          totalAmount: 0
+        });
+      }
+    } catch (err) {
+      console.error("Error fetching summary totals:", err);
+      setSummaryTotals({
+        totalCharges: 0,
+        unpaidCharges: 0,
+        outstandingBalance: 0,
+        totalAmount: 0
+      });
+    }
+  }, []);
+
   // Load charges with pagination and filters
   useEffect(() => {
+    // Fetch summary totals with current month default
+    const currentMonthRange = getCurrentMonthRange();
+    fetchSummaryTotals({
+      customerName: "",
+      cabId: "",
+      driverId: "",
+      startDate: currentMonthRange.start,
+      endDate: currentMonthRange.end,
+      paidStatus: "all",
+    });
+
     loadChargesWithPagination();
-  }, [loadChargesWithPagination]);
+  }, [loadChargesWithPagination, fetchSummaryTotals]);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -333,7 +439,7 @@ export default function AllChargesTab({
       startDateType: typeof filterStartDate,
       endDateType: typeof filterEndDate
     });
-    
+
     // Apply the current filter values
     setAppliedCustomerName(filterCustomerName);
     setAppliedCabId(filterCabId);
@@ -341,18 +447,26 @@ export default function AllChargesTab({
     setAppliedStartDate(filterStartDate);
     setAppliedEndDate(filterEndDate);
     setAppliedPaidStatus(filterPaidStatus);
+    // Show filtered stats banner when filters are applied
+    setShowFilteredStatsBanner(true);
     // Reset to first page when applying filters
     setPage(0);
-    
-    // Immediately load with the new filter values
-    await loadChargesWithPagination({
+
+    // Build filter object for API calls
+    const appliedFilters = {
       customerName: filterCustomerName,
       cabId: filterCabId,
       driverId: filterDriverId,
       startDate: filterStartDate,
       endDate: filterEndDate,
       paidStatus: filterPaidStatus,
-    });
+    };
+
+    // Fetch summary totals
+    await fetchSummaryTotals(appliedFilters);
+
+    // Immediately load with the new filter values
+    await loadChargesWithPagination(appliedFilters);
   };
 
   const clearFilters = async () => {
@@ -370,8 +484,21 @@ export default function AllChargesTab({
     setAppliedStartDate("");
     setAppliedEndDate("");
     setAppliedPaidStatus("all");
+    // Hide filtered stats banner when filters are cleared
+    setShowFilteredStatsBanner(false);
     setPage(0);
-    
+
+    // Fetch summary totals with current month default
+    const currentMonthRange = getCurrentMonthRange();
+    await fetchSummaryTotals({
+      customerName: "",
+      cabId: "",
+      driverId: "",
+      startDate: currentMonthRange.start,
+      endDate: currentMonthRange.end,
+      paidStatus: "all",
+    });
+
     // Immediately load with cleared filters
     await loadChargesWithPagination({
       customerName: "",
@@ -466,6 +593,17 @@ export default function AllChargesTab({
           {error}
         </Alert>
       )}
+
+      {/* Filtered Stats Banner - Shows when filters are applied */}
+      <FilteredStatsBanner
+        filterCustomerName={appliedCustomerName}
+        filterCabId={appliedCabId}
+        filterDriverId={appliedDriverId}
+        filterStartDate={appliedStartDate}
+        filterEndDate={appliedEndDate}
+        filterPaidStatus={appliedPaidStatus}
+        showBanner={showFilteredStatsBanner}
+      />
 
       {/* Filters Section */}
       <Paper variant="outlined" sx={{ p: 3, mb: 3 }}>
@@ -604,7 +742,7 @@ export default function AllChargesTab({
       {/* Action Buttons */}
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
         <Typography variant="h6">
-          All Charges ({totalItems} total)
+          All Charges
         </Typography>
         {canBulkEdit && (
           <Box sx={{ display: "flex", gap: 1 }}>
