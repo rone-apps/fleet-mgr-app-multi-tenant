@@ -58,6 +58,10 @@ export default function AccountManagementPage() {
     setFilterAccountId,
     filterCompanyName,
     setFilterCompanyName,
+    filterActiveStatus,
+    setFilterActiveStatus,
+    filterAccountType,
+    setFilterAccountType,
     openCustomerDialog,
     setOpenCustomerDialog,
     editingCustomer,
@@ -232,6 +236,10 @@ export default function AccountManagementPage() {
               setFilterAccountId={setFilterAccountId}
               filterCompanyName={filterCompanyName}
               setFilterCompanyName={setFilterCompanyName}
+              filterActiveStatus={filterActiveStatus}
+              setFilterActiveStatus={setFilterActiveStatus}
+              filterAccountType={filterAccountType}
+              setFilterAccountType={setFilterAccountType}
               applyCustomerFilters={applyCustomerFilters}
               clearCustomerFilters={clearCustomerFilters}
               canEdit={canEdit}

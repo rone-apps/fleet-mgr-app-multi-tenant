@@ -15,6 +15,10 @@ import {
   IconButton,
   Chip,
   Grid,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -33,6 +37,10 @@ export default function CustomersTab({
   setFilterAccountId,
   filterCompanyName,
   setFilterCompanyName,
+  filterActiveStatus,
+  setFilterActiveStatus,
+  filterAccountType,
+  setFilterAccountType,
   applyCustomerFilters,
   clearCustomerFilters,
   canEdit,
@@ -61,7 +69,7 @@ export default function CustomersTab({
         </Box>
 
         <Grid container spacing={2}>
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <TextField
               label="Account ID"
               size="small"
@@ -72,7 +80,7 @@ export default function CustomersTab({
             />
           </Grid>
 
-          <Grid item xs={12} sm={6} md={3}>
+          <Grid item xs={12} sm={6} md={2.4}>
             <TextField
               label="Company Name"
               size="small"
@@ -83,7 +91,39 @@ export default function CustomersTab({
             />
           </Grid>
 
-          <Grid item xs={12} sm={6} md={2}>
+          <Grid item xs={12} sm={6} md={2.4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Status</InputLabel>
+              <Select
+                value={filterActiveStatus}
+                label="Status"
+                onChange={(e) => setFilterActiveStatus(e.target.value)}
+              >
+                <MenuItem value="ACTIVE">Active</MenuItem>
+                <MenuItem value="INACTIVE">Inactive</MenuItem>
+                <MenuItem value="ALL">All</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2.4}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Account Type</InputLabel>
+              <Select
+                value={filterAccountType}
+                label="Account Type"
+                onChange={(e) => setFilterAccountType(e.target.value)}
+              >
+                <MenuItem value="ALL">All Types</MenuItem>
+                <MenuItem value="ONE_TIME_USER">One time User</MenuItem>
+                <MenuItem value="PARTY_ACCOUNT">Party Account</MenuItem>
+                <MenuItem value="CORPORATE">Corporate</MenuItem>
+                <MenuItem value="PERSONAL">Personal</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} sm={6} md={2.4}>
             <Button
               variant="contained"
               fullWidth
@@ -116,6 +156,7 @@ export default function CustomersTab({
             <TableRow>
               <TableCell>Account ID</TableCell>
               <TableCell>Company Name</TableCell>
+              <TableCell>Account Type</TableCell>
               <TableCell>Contact</TableCell>
               <TableCell>Phone</TableCell>
               <TableCell>Credit Limit</TableCell>
@@ -146,6 +187,19 @@ export default function CustomersTab({
                   <Typography variant="body2" fontWeight="bold">
                     {customer.companyName}
                   </Typography>
+                </TableCell>
+                <TableCell>
+                  <Chip
+                    label={customer.accountType ? customer.accountType.replace(/_/g, " ") : "Personal"}
+                    size="small"
+                    variant="outlined"
+                    color={
+                      customer.accountType === "CORPORATE" ? "primary" :
+                      customer.accountType === "PARTY_ACCOUNT" ? "secondary" :
+                      customer.accountType === "ONE_TIME_USER" ? "default" :
+                      "default"
+                    }
+                  />
                 </TableCell>
                 <TableCell>{customer.contactPerson}</TableCell>
                 <TableCell>{customer.phoneNumber}</TableCell>

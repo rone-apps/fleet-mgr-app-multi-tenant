@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 const initialCustomerFormData = {
   accountId: "",
   companyName: "",
+  accountType: "PERSONAL",
   contactPerson: "",
   streetAddress: "",
   city: "",
@@ -67,6 +68,8 @@ export function useAccountManagement() {
   const [filteredCustomers, setFilteredCustomers] = useState([]);
   const [filterAccountId, setFilterAccountId] = useState("");
   const [filterCompanyName, setFilterCompanyName] = useState("");
+  const [filterActiveStatus, setFilterActiveStatus] = useState("ACTIVE"); // ACTIVE, INACTIVE, ALL
+  const [filterAccountType, setFilterAccountType] = useState("ALL"); // ONE_TIME_USER, PARTY_ACCOUNT, CORPORATE, PERSONAL, ALL
   const [openCustomerDialog, setOpenCustomerDialog] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerFormData, setCustomerFormData] = useState(initialCustomerFormData);
@@ -131,12 +134,14 @@ export function useAccountManagement() {
       });
       if (response.ok) {
         const data = await response.json();
-        
+
         // Handle both array response and paginated response
         const customersArray = Array.isArray(data) ? data : (data.content || data.data || []);
-        
+
         setCustomers(customersArray);
-        setFilteredCustomers(customersArray);
+        // Show only active customers by default
+        const activeCustomers = customersArray.filter(c => c.active);
+        setFilteredCustomers(activeCustomers);
       }
     } catch (err) {
       console.error("Error loading customers:", err);
@@ -303,6 +308,7 @@ export function useAccountManagement() {
       setCustomerFormData({
         accountId: customer.accountId || "",
         companyName: customer.companyName,
+        accountType: customer.accountType || "PERSONAL",
         contactPerson: customer.contactPerson || "",
         streetAddress: customer.streetAddress || "",
         city: customer.city || "",
@@ -395,12 +401,29 @@ export function useAccountManagement() {
   const applyCustomerFilters = useCallback(() => {
     let filtered = [...customers];
 
+    // Filter by active status
+    if (filterActiveStatus === "ACTIVE") {
+      filtered = filtered.filter(customer => customer.active);
+    } else if (filterActiveStatus === "INACTIVE") {
+      filtered = filtered.filter(customer => !customer.active);
+    }
+    // If "ALL", no filter is applied
+
+    // Filter by account type
+    if (filterAccountType !== "ALL") {
+      filtered = filtered.filter(customer =>
+        customer.accountType === filterAccountType
+      );
+    }
+
+    // Filter by account ID
     if (filterAccountId) {
       filtered = filtered.filter(customer =>
         customer.accountId?.toLowerCase().includes(filterAccountId.toLowerCase())
       );
     }
 
+    // Filter by company name
     if (filterCompanyName) {
       filtered = filtered.filter(customer =>
         customer.companyName?.toLowerCase().includes(filterCompanyName.toLowerCase())
@@ -408,12 +431,16 @@ export function useAccountManagement() {
     }
 
     setFilteredCustomers(filtered);
-  }, [customers, filterAccountId, filterCompanyName]);
+  }, [customers, filterAccountId, filterCompanyName, filterActiveStatus, filterAccountType]);
 
   const clearCustomerFilters = useCallback(() => {
     setFilterAccountId("");
     setFilterCompanyName("");
-    setFilteredCustomers(customers);
+    setFilterActiveStatus("ACTIVE"); // Reset to show only active by default
+    setFilterAccountType("ALL");
+    // Re-apply filters to show only active customers
+    const activeCustomers = customers.filter(c => c.active);
+    setFilteredCustomers(activeCustomers);
   }, [customers]);
 
   // ==================== Charge Operations ====================
@@ -981,6 +1008,10 @@ export function useAccountManagement() {
     setFilterAccountId,
     filterCompanyName,
     setFilterCompanyName,
+    filterActiveStatus,
+    setFilterActiveStatus,
+    filterAccountType,
+    setFilterAccountType,
     openCustomerDialog,
     setOpenCustomerDialog,
     editingCustomer,

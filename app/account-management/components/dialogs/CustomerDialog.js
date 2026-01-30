@@ -14,6 +14,7 @@ import {
   Select,
   Alert,
   Grid,
+  Typography,
 } from "@mui/material";
 
 export default function CustomerDialog({
@@ -48,6 +49,19 @@ export default function CustomerDialog({
             fullWidth
             required
           />
+          <FormControl fullWidth>
+            <InputLabel>Account Type</InputLabel>
+            <Select
+              value={customerFormData.accountType || "PERSONAL"}
+              label="Account Type"
+              onChange={(e) => setCustomerFormData({ ...customerFormData, accountType: e.target.value })}
+            >
+              <MenuItem value="ONE_TIME_USER">One time User</MenuItem>
+              <MenuItem value="PARTY_ACCOUNT">Party Account</MenuItem>
+              <MenuItem value="CORPORATE">Corporate</MenuItem>
+              <MenuItem value="PERSONAL">Personal</MenuItem>
+            </Select>
+          </FormControl>
           <TextField
             label="Contact Person"
             value={customerFormData.contactPerson}
