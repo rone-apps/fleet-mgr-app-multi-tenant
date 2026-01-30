@@ -1,17 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import { 
-  TextField, 
-  Button, 
-  Box, 
-  Typography, 
-  Container, 
+import {
+  TextField,
+  Button,
+  Box,
+  Typography,
+  Container,
   Alert,
   Paper,
   InputAdornment,
   IconButton,
-  Autocomplete,
   Divider,
   Chip
 } from "@mui/material";
@@ -53,7 +52,6 @@ const KNOWN_COMPANIES = [
 
 export default function SignInPage() {
   const [companyId, setCompanyId] = useState("");
-  const [companyInput, setCompanyInput] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -148,9 +146,6 @@ export default function SignInPage() {
     }
   };
 
-  // Find matching company for autocomplete
-  const selectedCompany = KNOWN_COMPANIES.find(c => c.id === companyId);
-
   return (
     <ThemeProvider theme={theme}>
       <Box
@@ -241,74 +236,21 @@ export default function SignInPage() {
             {/* Sign In Form */}
             <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
               {/* Company ID Field */}
-              <Autocomplete
-                freeSolo
-                options={KNOWN_COMPANIES}
-                getOptionLabel={(option) => 
-                  typeof option === 'string' ? option : option.name
-                }
-                value={selectedCompany || null}
-                inputValue={companyInput}
-                onInputChange={(event, newInputValue) => {
-                  setCompanyInput(newInputValue);
-                  // If it matches a known company, use its ID
-                  const match = KNOWN_COMPANIES.find(
-                    c => c.name.toLowerCase() === newInputValue.toLowerCase() ||
-                         c.id.toLowerCase() === newInputValue.toLowerCase()
-                  );
-                  setCompanyId(match ? match.id : newInputValue);
-                }}
-                onChange={(event, newValue) => {
-                  if (typeof newValue === 'string') {
-                    setCompanyId(newValue);
-                    setCompanyInput(newValue);
-                  } else if (newValue) {
-                    setCompanyId(newValue.id);
-                    setCompanyInput(newValue.name);
-                  } else {
-                    setCompanyId('');
-                    setCompanyInput('');
-                  }
-                }}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    margin="normal"
-                    required
-                    fullWidth
-                    label="Company ID"
-                    placeholder="Enter your company ID"
-                    disabled={loading}
-                    InputProps={{
-                      ...params.InputProps,
-                      startAdornment: (
-                        <>
-                          <InputAdornment position="start">
-                            <Business sx={{ color: "#667eea" }} />
-                          </InputAdornment>
-                          {params.InputProps.startAdornment}
-                        </>
-                      ),
-                    }}
-                  />
-                )}
-                renderOption={(props, option) => {
-                  const { key, ...otherProps } = props;
-                  return (
-                    <li key={key} {...otherProps}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Business sx={{ color: '#667eea', fontSize: 20 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            {option.name}
-                          </Typography>
-                          <Typography variant="caption" sx={{ color: '#999' }}>
-                            ID: {option.id}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </li>
-                  );
+              <TextField
+                margin="normal"
+                required
+                fullWidth
+                label="Company ID"
+                placeholder="Enter your company ID"
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                disabled={loading}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Business sx={{ color: "#667eea" }} />
+                    </InputAdornment>
+                  ),
                 }}
                 sx={{ mb: 1 }}
               />
