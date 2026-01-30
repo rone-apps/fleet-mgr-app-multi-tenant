@@ -79,10 +79,12 @@ export default function UsersPage() {
   const [dialogMode, setDialogMode] = useState("create"); // "create" or "edit"
   const [editingUser, setEditingUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  
+  const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+
   const [formData, setFormData] = useState({
     username: "",
     password: "",
+    passwordConfirm: "",
     email: "",
     firstName: "",
     lastName: "",
@@ -102,33 +104,49 @@ export default function UsersPage() {
     const user = getCurrentUser();
     setCurrentUser(user);
 
-    // Check if user is admin
-    if (user?.role !== "ADMIN") {
-      router.push("/");
-      return;
-    }
-
     loadUsers();
-    loadDrivers();
+
+    // Only admins can view and manage drivers
+    if (user?.role === "ADMIN") {
+      loadDrivers();
+    }
   }, [router]);
 
   // Filter users whenever search/filter changes
   useEffect(() => {
     filterUsers();
-  }, [searchTerm, roleFilter, statusFilter, users]);
+  }, [searchTerm, roleFilter, statusFilter, users, currentUser]);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const response = await apiRequest('/users');
-      
-      if (!response.ok) {
-        throw new Error('Failed to load users');
+      const user = getCurrentUser();
+
+      if (user?.role === "ADMIN") {
+        // Admins fetch all users
+        const response = await apiRequest('/users');
+
+        if (!response.ok) {
+          throw new Error('Failed to load users');
+        }
+
+        const data = await response.json();
+        setUsers(data);
+        setFilteredUsers(data);
+      } else {
+        // Non-admins fetch their own profile
+        const response = await apiRequest('/users/me');
+
+        if (!response.ok) {
+          throw new Error('Failed to load profile');
+        }
+
+        const data = await response.json();
+        // For non-admins, wrap single user in array for table display
+        const userList = [data];
+        setUsers(userList);
+        setFilteredUsers(userList);
       }
-      
-      const data = await response.json();
-      setUsers(data);
-      setFilteredUsers(data);
     } catch (err) {
       console.error("Error loading users:", err);
       setError("Failed to load users. " + err.message);
@@ -162,26 +180,29 @@ export default function UsersPage() {
   const filterUsers = () => {
     let filtered = [...users];
 
-    // Search by name or username
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter((user) =>
-        user.username.toLowerCase().includes(search) ||
-        user.firstName.toLowerCase().includes(search) ||
-        user.lastName.toLowerCase().includes(search) ||
-        `${user.firstName} ${user.lastName}`.toLowerCase().includes(search)
-      );
-    }
+    // Only apply filters for admins - non-admins always just see their own profile
+    if (currentUser && currentUser.role === "ADMIN") {
+      // Search by name or username
+      if (searchTerm) {
+        const search = searchTerm.toLowerCase();
+        filtered = filtered.filter((user) =>
+          user.username.toLowerCase().includes(search) ||
+          user.firstName.toLowerCase().includes(search) ||
+          user.lastName.toLowerCase().includes(search) ||
+          `${user.firstName} ${user.lastName}`.toLowerCase().includes(search)
+        );
+      }
 
-    // Filter by role
-    if (roleFilter !== "ALL") {
-      filtered = filtered.filter((user) => user.role === roleFilter);
-    }
+      // Filter by role
+      if (roleFilter !== "ALL") {
+        filtered = filtered.filter((user) => user.role === roleFilter);
+      }
 
-    // Filter by status
-    if (statusFilter !== "ALL") {
-      const isActive = statusFilter === "ACTIVE";
-      filtered = filtered.filter((user) => user.isActive === isActive);
+      // Filter by status
+      if (statusFilter !== "ALL") {
+        const isActive = statusFilter === "ACTIVE";
+        filtered = filtered.filter((user) => user.active === isActive);
+      }
     }
 
     setFilteredUsers(filtered);
@@ -194,13 +215,24 @@ export default function UsersPage() {
   };
 
   const handleOpenDialog = (mode, user = null) => {
+    // Only admins can create users
+    if (mode === "create" && currentUser?.role !== "ADMIN") {
+      setError("You don't have permission to create users");
+      return;
+    }
+
     setDialogMode(mode);
     setEditingUser(user);
-    
+    setShowPassword(false);
+    setShowPasswordConfirm(false);
+    setError("");
+    setSuccess("");
+
     if (mode === "create") {
       setFormData({
         username: "",
-        password: "",
+        password: "", // NEVER prepopulate
+        passwordConfirm: "", // NEVER prepopulate
         email: "",
         firstName: "",
         lastName: "",
@@ -212,25 +244,36 @@ export default function UsersPage() {
       // Edit mode - populate form with user data
       setFormData({
         username: user.username,
-        password: "", // Don't populate password for security
+        password: "", // ALWAYS empty - NEVER prepopulate password
+        passwordConfirm: "", // ALWAYS empty - NEVER prepopulate password
         email: user.email || "",
         firstName: user.firstName,
         lastName: user.lastName,
-        phone: user.phone || "",
+        phone: user.phone || "", // Only populate if phone exists, otherwise empty
         role: user.role,
-        selectedDriver: null, // Driver can't be changed in edit mode
+        selectedDriver: null,
       });
     }
-    
-    setError("");
-    setSuccess("");
+
     setOpenDialog(true);
   };
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
     setShowPassword(false);
+    setShowPasswordConfirm(false);
     setEditingUser(null);
+    setFormData({
+      username: "",
+      password: "",
+      passwordConfirm: "",
+      email: "",
+      firstName: "",
+      lastName: "",
+      phone: "",
+      role: "DRIVER",
+      selectedDriver: null,
+    });
   };
 
   const handleChange = (e) => {
@@ -252,13 +295,28 @@ export default function UsersPage() {
 
   const validateForm = () => {
     if (dialogMode === "create") {
-      if (formData.username.length < 3) {
+      if (!formData.username || formData.username.trim().length < 3) {
         setError("Username must be at least 3 characters");
+        return false;
+      }
+
+      if (!formData.password || formData.password.length === 0) {
+        setError("Password is required and cannot be empty");
         return false;
       }
 
       if (formData.password.length < 6) {
         setError("Password must be at least 6 characters");
+        return false;
+      }
+
+      if (!formData.passwordConfirm || formData.passwordConfirm.length === 0) {
+        setError("Password confirmation is required");
+        return false;
+      }
+
+      if (formData.password !== formData.passwordConfirm) {
+        setError("Passwords do not match");
         return false;
       }
 
@@ -271,6 +329,11 @@ export default function UsersPage() {
       // Edit mode - password is optional
       if (formData.password && formData.password.length < 6) {
         setError("Password must be at least 6 characters if provided");
+        return false;
+      }
+
+      if (formData.password && formData.password !== formData.passwordConfirm) {
+        setError("Passwords do not match");
         return false;
       }
     }
@@ -290,6 +353,17 @@ export default function UsersPage() {
   };
 
   const handleSubmit = async () => {
+    // Debug: Log formData before validation
+    console.log("Form data before validation:", {
+      username: formData.username,
+      password: formData.password ? `[${formData.password.length} chars]` : "EMPTY!",
+      passwordConfirm: formData.passwordConfirm ? `[${formData.passwordConfirm.length} chars]` : "EMPTY!",
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      email: formData.email,
+      role: formData.role,
+    });
+
     if (!validateForm()) {
       return;
     }
@@ -301,7 +375,7 @@ export default function UsersPage() {
       if (dialogMode === "create") {
         // Create new user
         const requestBody = {
-          username: formData.username,
+          username: formData.username.trim(),
           password: formData.password,
           email: formData.email || null,
           firstName: formData.firstName,
@@ -315,11 +389,20 @@ export default function UsersPage() {
           requestBody.driverId = formData.selectedDriver.id;
         }
 
+        console.log("Sending user creation request with:", {
+          username: requestBody.username,
+          password: requestBody.password ? `[${requestBody.password.length} chars] = "${requestBody.password}"` : "EMPTY!",
+          email: requestBody.email,
+          firstName: requestBody.firstName,
+          lastName: requestBody.lastName,
+          role: requestBody.role,
+        });
+
         const response = await fetch(`${API_BASE_URL}/users`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
             "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           },
           body: JSON.stringify(requestBody),
@@ -395,7 +478,7 @@ export default function UsersPage() {
       });
 
       if (response.ok) {
-        const newStatus = !user.isActive;
+        const newStatus = !user.active;
         const action = newStatus ? "activated" : "deactivated";
         
         setSuccess(`User "${user.username}" ${action} successfully!`);
@@ -447,21 +530,40 @@ export default function UsersPage() {
         {/* Header with Create Button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: "bold", color: "#3e5244" }}>
-            User Management
+            {currentUser?.role === "ADMIN" ? "User Management" : "My Profile"}
           </Typography>
 
-          <Button
-            variant="contained"
-            startIcon={<Add />}
-            onClick={() => handleOpenDialog("create")}
-            sx={{
-              backgroundColor: "#3e5244",
-              "&:hover": { backgroundColor: "#2d3d32" },
-            }}
-          >
-            Create User
-          </Button>
+          {currentUser?.role === "ADMIN" && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => handleOpenDialog("create")}
+              sx={{
+                backgroundColor: "#3e5244",
+                "&:hover": { backgroundColor: "#2d3d32" },
+              }}
+            >
+              Create User
+            </Button>
+          )}
         </Box>
+
+        {/* Reports Card for Drivers */}
+        {currentUser?.role === "DRIVER" && (
+          <Paper sx={{ p: 3, mb: 3, backgroundColor: "#e8f5e9", borderLeft: "4px solid #3e5244" }}>
+            <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+              <DirectionsCar sx={{ fontSize: 32, color: "#3e5244" }} />
+              <Box>
+                <Typography variant="h6" sx={{ fontWeight: "bold", color: "#3e5244" }}>
+                  Welcome, {currentUser?.firstName} {currentUser?.lastName}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  View and manage your reports below. You can edit your profile information.
+                </Typography>
+              </Box>
+            </Box>
+          </Paper>
+        )}
 
         {/* Success Message */}
         {success && (
@@ -477,7 +579,8 @@ export default function UsersPage() {
           </Alert>
         )}
 
-        {/* Search and Filter Section */}
+        {/* Search and Filter Section - Only for Admins */}
+        {currentUser?.role === "ADMIN" && (
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
             {/* Search by Name */}
@@ -560,6 +663,7 @@ export default function UsersPage() {
             </Typography>
           </Box>
         </Paper>
+        )}
 
         {/* Users Table */}
         <TableContainer component={Paper}>
@@ -606,32 +710,34 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={user.isActive ? "Active" : "Inactive"}
-                        color={user.isActive ? "success" : "default"}
+                        label={user.active ? "Active" : "Inactive"}
+                        color={user.active ? "success" : "default"}
                         size="small"
-                        icon={user.isActive ? <CheckCircle /> : <Block />}
+                        icon={user.active ? <CheckCircle /> : <Block />}
                       />
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Edit User">
-                        <IconButton 
-                          size="small" 
-                          color="primary" 
+                      <Tooltip title="Edit Profile">
+                        <IconButton
+                          size="small"
+                          color="primary"
                           onClick={() => handleOpenDialog("edit", user)}
                         >
                           <Edit fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      
-                      <Tooltip title={user.isActive ? "Deactivate User" : "Activate User"}>
-                        <IconButton 
-                          size="small" 
-                          color={user.isActive ? "warning" : "success"}
-                          onClick={() => handleToggleActive(user)}
-                        >
-                          {user.isActive ? <Block fontSize="small" /> : <CheckCircle fontSize="small" />}
-                        </IconButton>
-                      </Tooltip>
+
+                      {currentUser?.role === "ADMIN" && (
+                        <Tooltip title={user.active ? "Deactivate User" : "Activate User"}>
+                          <IconButton
+                            size="small"
+                            color={user.active ? "warning" : "success"}
+                            onClick={() => handleToggleActive(user)}
+                          >
+                            {user.active ? <Block fontSize="small" /> : <CheckCircle fontSize="small" />}
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))
@@ -744,7 +850,7 @@ export default function UsersPage() {
                 label="Role"
                 value={formData.role}
                 onChange={handleChange}
-                disabled={dialogMode === "edit"} // Can't change role in edit mode
+                disabled={dialogMode === "edit" || currentUser?.role !== "ADMIN"} // Can't change role in edit mode or if not admin
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -872,6 +978,30 @@ export default function UsersPage() {
                   ),
                 }}
                 helperText="At least 6 characters"
+              />
+            </Grid>
+
+            {/* Password Confirmation */}
+            <Grid item xs={12}>
+              <TextField
+                required={dialogMode === "create" || (dialogMode === "edit" && formData.password.length > 0)}
+                fullWidth
+                name="passwordConfirm"
+                label={dialogMode === "edit" ? "Confirm New Password" : "Confirm Password"}
+                type={showPasswordConfirm ? "text" : "password"}
+                value={formData.passwordConfirm}
+                onChange={handleChange}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setShowPasswordConfirm(!showPasswordConfirm)} edge="end">
+                        {showPasswordConfirm ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+                helperText={formData.password !== formData.passwordConfirm && formData.passwordConfirm ? "Passwords do not match" : "Must match password above"}
+                error={formData.password !== formData.passwordConfirm && formData.passwordConfirm.length > 0}
               />
             </Grid>
           </Grid>

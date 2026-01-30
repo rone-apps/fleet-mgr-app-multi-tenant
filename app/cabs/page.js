@@ -32,6 +32,12 @@ import {
   Card,
   CardContent,
   Grid,
+  Tabs,
+  Tab,
+  Divider,
+  Autocomplete,
+  Container,
+  InputAdornment,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -42,6 +48,12 @@ import {
   CheckCircle as CheckCircleIcon,
   Block as BlockIcon,
   AirplanemodeActive as AirportIcon,
+  Delete as DeleteIcon,
+  History as HistoryIcon,
+  Tune as TuneIcon,
+  Search as SearchIcon,
+  FilterList as FilterListIcon,
+  Clear as ClearIcon,
 } from "@mui/icons-material";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
 
@@ -53,12 +65,25 @@ export default function CabsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState(0);
+
   // Dialog states
   const [openDialog, setOpenDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedCab, setSelectedCab] = useState(null);
-  
+
+  // Attribute states
+  const [attributeTypes, setAttributeTypes] = useState([]);
+  const [currentAttributes, setCurrentAttributes] = useState([]);
+  const [attributeHistory, setAttributeHistory] = useState([]);
+  const [selectedCabForAttributes, setSelectedCabForAttributes] = useState(null);
+  const [showAttributeHistory, setShowAttributeHistory] = useState(false);
+  const [openAttributeDialog, setOpenAttributeDialog] = useState(false);
+  const [editingAttribute, setEditingAttribute] = useState(null);
+  const [cabAttributesMap, setCabAttributesMap] = useState({}); // Map of cabId -> attributes array
+
   // Filter states
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -66,7 +91,7 @@ export default function CabsPage() {
   const [airportFilter, setAirportFilter] = useState("ALL");
   const [shareTypeFilter, setShareTypeFilter] = useState("ALL");
   const [shiftTypeFilter, setShiftTypeFilter] = useState("ALL");
-  
+
   // Form data
   const [formData, setFormData] = useState({
     registrationNumber: "",
@@ -81,6 +106,35 @@ export default function CabsPage() {
     airportLicenseNumber: "",
     airportLicenseExpiry: "",
     notes: "",
+  });
+
+  // Attribute form data
+  const [attributeFormData, setAttributeFormData] = useState({
+    attributeTypeId: "",
+    attributeValue: "",
+    startDate: "",
+    endDate: "",
+    notes: "",
+  });
+
+  // Attribute Types Management States
+  const [allAttributeTypes, setAllAttributeTypes] = useState([]);
+  const [filteredAttributeTypes, setFilteredAttributeTypes] = useState([]);
+  const [attributeTypeSearchTerm, setAttributeTypeSearchTerm] = useState("");
+  const [attributeTypeCategoryFilter, setAttributeTypeCategoryFilter] = useState("ALL");
+  const [attributeTypeStatusFilter, setAttributeTypeStatusFilter] = useState("ALL");
+  const [openAttributeTypeDialog, setOpenAttributeTypeDialog] = useState(false);
+  const [attributeTypeDialogMode, setAttributeTypeDialogMode] = useState("create");
+  const [editingAttributeType, setEditingAttributeType] = useState(null);
+  const [attributeTypeFormData, setAttributeTypeFormData] = useState({
+    attributeCode: "",
+    attributeName: "",
+    description: "",
+    category: "LICENSE",
+    dataType: "STRING",
+    requiresValue: false,
+    validationPattern: "",
+    helpText: "",
   });
 
   // Check authentication and load cabs
@@ -101,6 +155,7 @@ export default function CabsPage() {
     }
 
     loadCabs();
+    loadAttributeTypes();
   }, [router]);
 
   // Filter cabs whenever search/filter changes
@@ -112,15 +167,15 @@ export default function CabsPage() {
     try {
       const response = await fetch(`${API_BASE_URL}/cabs`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
       });
 
       if (response.ok) {
         const data = await response.json();
         console.log("🚗 Cabs loaded:", data);
-        
+
         // ✅ Sort by cab number (numeric)
         const sortedCabs = data.sort((a, b) => {
           // Extract numeric part from cab number (e.g., "CAB-001" -> 1, "CAB-123" -> 123)
@@ -128,8 +183,11 @@ export default function CabsPage() {
           const numB = parseInt(b.cabNumber?.replace(/\D/g, '') || '0');
           return numA - numB;
         });
-        
+
         setCabs(sortedCabs);
+
+        // Load current attributes for all cabs
+        loadCabsAttributes(sortedCabs);
       } else {
         setError("Failed to load cabs");
       }
@@ -138,6 +196,36 @@ export default function CabsPage() {
       console.error("Error loading cabs:", err);
       setError("Failed to load cabs");
       setLoading(false);
+    }
+  };
+
+  const loadCabsAttributes = async (cabsList) => {
+    try {
+      const attributesMap = {};
+
+      // Load attributes for each cab in parallel
+      const attributePromises = cabsList.map((cab) =>
+        fetch(`${API_BASE_URL}/cabs/${cab.id}/attributes/current`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        })
+          .then((res) => (res.ok ? res.json() : []))
+          .then((attrs) => {
+            console.log(`Attributes for cab ${cab.id}:`, attrs);
+            attributesMap[cab.id] = attrs;
+          })
+          .catch((err) => {
+            console.error(`Error loading attributes for cab ${cab.id}:`, err);
+            attributesMap[cab.id] = [];
+          })
+      );
+
+      await Promise.all(attributePromises);
+      setCabAttributesMap(attributesMap);
+    } catch (err) {
+      console.error("Error loading cab attributes:", err);
     }
   };
 
@@ -310,6 +398,226 @@ export default function CabsPage() {
     router.push("/signin");
   };
 
+  // ===== Attribute Functions =====
+
+  const loadAttributeTypes = async () => {
+    try {
+      // Load active types for dropdown in Tab 2
+      const activeRes = await fetch(`${API_BASE_URL}/cab-attribute-types/active`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+      if (activeRes.ok) {
+        const data = await activeRes.json();
+        setAttributeTypes(data);
+      }
+
+      // Load all types for management in Tab 3
+      const allRes = await fetch(`${API_BASE_URL}/cab-attribute-types`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+      if (allRes.ok) {
+        const data = await allRes.json();
+        setAllAttributeTypes(data);
+      }
+    } catch (err) {
+      console.error("Error loading attribute types:", err);
+    }
+  };
+
+  const loadCabAttributes = async (cabId) => {
+    try {
+      const currentRes = await fetch(
+        `${API_BASE_URL}/cabs/${cabId}/attributes/current`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
+      if (currentRes.ok) {
+        setCurrentAttributes(await currentRes.json());
+      }
+
+      const historyRes = await fetch(
+        `${API_BASE_URL}/cabs/${cabId}/attributes/history`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
+      if (historyRes.ok) {
+        setAttributeHistory(await historyRes.json());
+      }
+    } catch (err) {
+      console.error("Error loading cab attributes:", err);
+      setError("Failed to load attributes");
+    }
+  };
+
+  const handleSelectCabForAttributes = (event, cab) => {
+    setSelectedCabForAttributes(cab);
+    if (cab) {
+      loadCabAttributes(cab.id);
+    }
+    setShowAttributeHistory(false);
+  };
+
+  const handleOpenAttributeDialog = (attribute = null) => {
+    setEditingAttribute(attribute);
+    if (attribute) {
+      setAttributeFormData({
+        attributeTypeId: attribute.attributeTypeId,
+        attributeValue: attribute.attributeValue || "",
+        startDate: attribute.startDate,
+        endDate: attribute.endDate || "",
+        notes: attribute.notes || "",
+      });
+    } else {
+      setAttributeFormData({
+        attributeTypeId: "",
+        attributeValue: "",
+        startDate: new Date().toISOString().split("T")[0],
+        endDate: "",
+        notes: "",
+      });
+    }
+    setError("");
+    setOpenAttributeDialog(true);
+  };
+
+  const handleCloseAttributeDialog = () => {
+    setOpenAttributeDialog(false);
+    setEditingAttribute(null);
+  };
+
+  const handleAttributeFormChange = (e) => {
+    const { name, value } = e.target;
+    setAttributeFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleSubmitAttribute = async () => {
+    if (!selectedCabForAttributes) {
+      setError("Please select a cab first");
+      return;
+    }
+    if (!attributeFormData.attributeTypeId) {
+      setError("Please select an attribute type");
+      return;
+    }
+    if (!attributeFormData.startDate) {
+      setError("Start date is required");
+      return;
+    }
+
+    try {
+      const url = editingAttribute
+        ? `${API_BASE_URL}/cabs/${selectedCabForAttributes.id}/attributes/${editingAttribute.id}`
+        : `${API_BASE_URL}/cabs/${selectedCabForAttributes.id}/attributes`;
+
+      const method = editingAttribute ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        body: JSON.stringify({
+          attributeTypeId: parseInt(attributeFormData.attributeTypeId),
+          attributeValue: attributeFormData.attributeValue || null,
+          startDate: attributeFormData.startDate,
+          endDate: attributeFormData.endDate || null,
+          notes: attributeFormData.notes,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to save");
+      }
+
+      setSuccess(
+        `Attribute ${editingAttribute ? "updated" : "assigned"} successfully`
+      );
+      handleCloseAttributeDialog();
+      loadCabAttributes(selectedCabForAttributes.id);
+    } catch (err) {
+      console.error("Error saving attribute:", err);
+      setError(err.message || "Failed to save attribute");
+    }
+  };
+
+  const handleEndAttribute = async (attributeId) => {
+    if (!window.confirm("End this attribute assignment?")) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cabs/${selectedCabForAttributes.id}/attributes/${attributeId}/end`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+          body: JSON.stringify({
+            endDate: new Date().toISOString().split("T")[0],
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to end attribute");
+
+      setSuccess("Attribute assignment ended");
+      loadCabAttributes(selectedCabForAttributes.id);
+    } catch (err) {
+      console.error("Error ending attribute:", err);
+      setError("Failed to end attribute");
+    }
+  };
+
+  const handleDeleteAttribute = async (attributeId) => {
+    if (!window.confirm("Delete this attribute?")) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cabs/${selectedCabForAttributes.id}/attributes/${attributeId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to delete");
+
+      setSuccess("Attribute deleted");
+      loadCabAttributes(selectedCabForAttributes.id);
+    } catch (err) {
+      console.error("Error deleting:", err);
+      setError("Failed to delete attribute");
+    }
+  };
+
+  const getAttributeType = (typeId) => {
+    return attributeTypes.find((t) => t.id === typeId);
+  };
+
   const getStatusColor = (status) => {
     const colors = {
       ACTIVE: "success",
@@ -325,6 +633,121 @@ export default function CabsPage() {
       HANDICAP_VAN: "secondary",
     };
     return colors[type] || "default";
+  };
+
+  // Attribute Types Management Functions
+  useEffect(() => {
+    filterAttributeTypes();
+  }, [attributeTypeSearchTerm, attributeTypeCategoryFilter, attributeTypeStatusFilter, allAttributeTypes]);
+
+  const filterAttributeTypes = () => {
+    let filtered = [...allAttributeTypes];
+
+    if (attributeTypeSearchTerm) {
+      const term = attributeTypeSearchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (type) =>
+          type.attributeName.toLowerCase().includes(term) ||
+          type.attributeCode.toLowerCase().includes(term)
+      );
+    }
+
+    if (attributeTypeCategoryFilter !== "ALL") {
+      filtered = filtered.filter((type) => type.category === attributeTypeCategoryFilter);
+    }
+
+    if (attributeTypeStatusFilter !== "ALL") {
+      const isActive = attributeTypeStatusFilter === "ACTIVE";
+      filtered = filtered.filter((type) => type.active === isActive);
+    }
+
+    setFilteredAttributeTypes(filtered);
+  };
+
+  const handleSubmitAttributeType = async () => {
+    try {
+      if (!attributeTypeFormData.attributeName.trim()) {
+        setError("Attribute name is required");
+        return;
+      }
+
+      const url =
+        attributeTypeDialogMode === "create"
+          ? `${API_BASE_URL}/cab-attribute-types`
+          : `${API_BASE_URL}/cab-attribute-types/${editingAttributeType.id}`;
+
+      const method = attributeTypeDialogMode === "create" ? "POST" : "PUT";
+
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        body: JSON.stringify(attributeTypeFormData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to save attribute type");
+      }
+
+      setSuccess(
+        `Attribute type ${attributeTypeDialogMode === "create" ? "created" : "updated"} successfully`
+      );
+      setOpenAttributeTypeDialog(false);
+      loadAttributeTypes();
+    } catch (err) {
+      console.error("Error saving attribute type:", err);
+      setError(err.message || "Failed to save attribute type");
+    }
+  };
+
+  const handleToggleAttributeTypeStatus = async (typeId, isActive) => {
+    try {
+      const endpoint = isActive
+        ? `${API_BASE_URL}/cab-attribute-types/${typeId}/deactivate`
+        : `${API_BASE_URL}/cab-attribute-types/${typeId}/activate`;
+
+      const response = await fetch(endpoint, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to toggle status");
+
+      setSuccess("Status updated successfully");
+      loadAttributeTypes();
+    } catch (err) {
+      console.error("Error toggling status:", err);
+      setError("Failed to toggle status");
+    }
+  };
+
+  const handleDeleteAttributeType = async (typeId) => {
+    if (!window.confirm("Are you sure you want to delete this attribute type?")) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/cab-attribute-types/${typeId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (!response.ok) throw new Error("Failed to delete");
+
+      setSuccess("Attribute type deleted successfully");
+      loadAttributeTypes();
+    } catch (err) {
+      console.error("Error deleting:", err);
+      setError("Failed to delete attribute type");
+    }
   };
 
   if (!currentUser) {
@@ -343,6 +766,23 @@ export default function CabsPage() {
       {/* Global Navigation */}
       <GlobalNav currentUser={currentUser} title="FareFlow - Cab Management" />
 
+      {/* Tabs */}
+      <Paper sx={{ mb: 0 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(e, newValue) => {
+            setActiveTab(newValue);
+            setError("");
+            setSuccess("");
+          }}
+          sx={{ p: 0 }}
+        >
+          <Tab label="Manage Cabs" icon={<DirectionsCar />} iconPosition="start" />
+          <Tab label="Manage Attributes" icon={<AirportIcon />} iconPosition="start" />
+          <Tab label="Attribute Types" icon={<TuneIcon />} iconPosition="start" />
+        </Tabs>
+      </Paper>
+
       {/* Main Content */}
       <Box sx={{ p: 3 }}>
         {/* Success/Error Messages */}
@@ -357,6 +797,9 @@ export default function CabsPage() {
           </Alert>
         )}
 
+        {/* TAB 0: Manage Cabs */}
+        {activeTab === 0 && (
+          <>
         {/* Stats Cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
           <Grid item xs={12} sm={6} md={3}>
@@ -534,6 +977,7 @@ export default function CabsPage() {
                 <TableCell><strong>Share Type</strong></TableCell>
                 <TableCell><strong>Shift Type</strong></TableCell>
                 <TableCell><strong>Airport</strong></TableCell>
+                <TableCell><strong>Attributes</strong></TableCell>
                 <TableCell><strong>Status</strong></TableCell>
                 {canEdit && <TableCell align="center"><strong>Actions</strong></TableCell>}
               </TableRow>
@@ -541,13 +985,13 @@ export default function CabsPage() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 9 : 8} align="center">
+                  <TableCell colSpan={canEdit ? 10 : 9} align="center">
                     Loading cabs...
                   </TableCell>
                 </TableRow>
               ) : filteredCabs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={canEdit ? 9 : 8} align="center">
+                  <TableCell colSpan={canEdit ? 10 : 9} align="center">
                     No cabs found
                   </TableCell>
                 </TableRow>
@@ -622,6 +1066,24 @@ export default function CabsPage() {
                       )}
                     </TableCell>
                     <TableCell>
+                      {cabAttributesMap[cab.id] && cabAttributesMap[cab.id].length > 0 ? (
+                        <Typography variant="body2">
+                          {cabAttributesMap[cab.id]
+                            .map((attr) => {
+                              // Handle different possible field names from the API
+                              const attrName = attr.attributeTypeName || attr.attributeName || attr.name || 'Unknown';
+                              const attrValue = attr.attributeValue || attr.value;
+                              return attrValue ? `${attrName} (${attrValue})` : attrName;
+                            })
+                            .join(", ")}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">
+                          —
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <Chip
                         label={cab.status}
                         color={getStatusColor(cab.status)}
@@ -685,6 +1147,552 @@ export default function CabsPage() {
             </TableBody>
           </Table>
         </TableContainer>
+        </>
+        )}
+
+        {/* TAB 1: Manage Attributes */}
+        {activeTab === 1 && (
+          <Box>
+            {/* Cab Selection */}
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" sx={{ mb: 2 }}>
+                Select a Cab
+              </Typography>
+              <Autocomplete
+                options={cabs}
+                getOptionLabel={(cab) => `${cab.cabNumber} - ${cab.registrationNumber}`}
+                value={selectedCabForAttributes}
+                onChange={handleSelectCabForAttributes}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Search and select a cab"
+                    placeholder="CAB-001, Registration..."
+                  />
+                )}
+              />
+            </Paper>
+
+            {selectedCabForAttributes ? (
+              <>
+                {/* Cab Info Card */}
+                <Card sx={{ mb: 3 }}>
+                  <CardContent>
+                    <Grid container spacing={2}>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography color="textSecondary" gutterBottom>
+                          Cab Number
+                        </Typography>
+                        <Typography variant="h6">
+                          {selectedCabForAttributes.cabNumber}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography color="textSecondary" gutterBottom>
+                          Registration
+                        </Typography>
+                        <Typography variant="h6">
+                          {selectedCabForAttributes.registrationNumber}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography color="textSecondary" gutterBottom>
+                          Make/Model
+                        </Typography>
+                        <Typography variant="h6">
+                          {selectedCabForAttributes.make} {selectedCabForAttributes.model}
+                        </Typography>
+                      </Grid>
+                      <Grid item xs={12} sm={6} md={3}>
+                        <Typography color="textSecondary" gutterBottom>
+                          Status
+                        </Typography>
+                        <Chip
+                          label={selectedCabForAttributes.status}
+                          color={
+                            selectedCabForAttributes.status === "ACTIVE"
+                              ? "success"
+                              : selectedCabForAttributes.status === "MAINTENANCE"
+                              ? "warning"
+                              : "error"
+                          }
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
+
+                {/* Tabs for Current & History */}
+                <Box sx={{ mb: 3 }}>
+                  <Button
+                    variant={!showAttributeHistory ? "contained" : "outlined"}
+                    onClick={() => setShowAttributeHistory(false)}
+                    sx={{ mr: 1 }}
+                  >
+                    Current Attributes ({currentAttributes.length})
+                  </Button>
+                  <Button
+                    variant={showAttributeHistory ? "contained" : "outlined"}
+                    onClick={() => setShowAttributeHistory(true)}
+                  >
+                    History ({attributeHistory.length})
+                  </Button>
+                </Box>
+
+                {!showAttributeHistory ? (
+                  <>
+                    {/* Current Attributes */}
+                    <Paper sx={{ mb: 3 }}>
+                      <Box
+                        sx={{
+                          p: 2,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Typography variant="h6">Current Attributes</Typography>
+                        {canEdit && (
+                          <Button
+                            variant="contained"
+                            startIcon={<AddIcon />}
+                            onClick={() => handleOpenAttributeDialog()}
+                          >
+                            Assign Attribute
+                          </Button>
+                        )}
+                      </Box>
+                      <Divider />
+
+                      {currentAttributes.length === 0 ? (
+                        <Box sx={{ p: 3, textAlign: "center" }}>
+                          <Typography color="textSecondary">
+                            No current attributes assigned
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <TableContainer>
+                          <Table>
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                                <TableCell>
+                                  <strong>Attribute</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Value</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Start Date</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Notes</strong>
+                                </TableCell>
+                                {canEdit && (
+                                  <TableCell align="right">
+                                    <strong>Actions</strong>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {currentAttributes.map((attr) => (
+                                <TableRow key={attr.id} hover>
+                                  <TableCell>
+                                    <Box
+                                      sx={{
+                                        display: "flex",
+                                        alignItems: "center",
+                                        gap: 1,
+                                      }}
+                                    >
+                                      <CheckCircleIcon
+                                        sx={{ color: "green", fontSize: 18 }}
+                                      />
+                                      {attr.attributeName}
+                                    </Box>
+                                  </TableCell>
+                                  <TableCell sx={{ fontFamily: "monospace" }}>
+                                    {attr.attributeValue || "-"}
+                                  </TableCell>
+                                  <TableCell>{attr.startDate}</TableCell>
+                                  <TableCell>{attr.notes || "-"}</TableCell>
+                                  {canEdit && (
+                                    <TableCell align="right">
+                                      <Tooltip title="Edit">
+                                        <IconButton
+                                          size="small"
+                                          color="primary"
+                                          onClick={() => handleOpenAttributeDialog(attr)}
+                                        >
+                                          <EditIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                      <Tooltip title="End Assignment">
+                                        <IconButton
+                                          size="small"
+                                          color="warning"
+                                          onClick={() => handleEndAttribute(attr.id)}
+                                        >
+                                          <CloseIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    </TableCell>
+                                  )}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Paper>
+                  </>
+                ) : (
+                  <>
+                    {/* History */}
+                    <Paper>
+                      <Box sx={{ p: 2 }}>
+                        <Typography variant="h6">Attribute History</Typography>
+                      </Box>
+                      <Divider />
+
+                      {attributeHistory.length === 0 ? (
+                        <Box sx={{ p: 3, textAlign: "center" }}>
+                          <Typography color="textSecondary">
+                            No attribute history
+                          </Typography>
+                        </Box>
+                      ) : (
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                                <TableCell>
+                                  <strong>Attribute</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Value</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Start</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>End</strong>
+                                </TableCell>
+                                <TableCell>
+                                  <strong>Status</strong>
+                                </TableCell>
+                                {canEdit && (
+                                  <TableCell align="right">
+                                    <strong>Actions</strong>
+                                  </TableCell>
+                                )}
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {attributeHistory.map((attr) => (
+                                <TableRow key={attr.id}>
+                                  <TableCell>{attr.attributeName}</TableCell>
+                                  <TableCell sx={{ fontFamily: "monospace" }}>
+                                    {attr.attributeValue || "-"}
+                                  </TableCell>
+                                  <TableCell>{attr.startDate}</TableCell>
+                                  <TableCell>{attr.endDate || "-"}</TableCell>
+                                  <TableCell>
+                                    <Chip
+                                      label={attr.isCurrent ? "Current" : "Ended"}
+                                      size="small"
+                                      color={
+                                        attr.isCurrent ? "success" : "default"
+                                      }
+                                      icon={
+                                        attr.isCurrent ? (
+                                          <CheckCircleIcon />
+                                        ) : (
+                                          <BlockIcon />
+                                        )
+                                      }
+                                    />
+                                  </TableCell>
+                                  {canEdit && (
+                                    <TableCell align="right">
+                                      {attr.isCurrent && (
+                                        <Tooltip title="Delete">
+                                          <IconButton
+                                            size="small"
+                                            color="error"
+                                            onClick={() =>
+                                              handleDeleteAttribute(attr.id)
+                                            }
+                                          >
+                                            <DeleteIcon fontSize="small" />
+                                          </IconButton>
+                                        </Tooltip>
+                                      )}
+                                    </TableCell>
+                                  )}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      )}
+                    </Paper>
+                  </>
+                )}
+              </>
+            ) : (
+              <Paper sx={{ p: 3, textAlign: "center" }}>
+                <Typography color="textSecondary">
+                  Select a cab to manage its attributes
+                </Typography>
+              </Paper>
+            )}
+          </Box>
+        )}
+
+        {/* TAB 2: Manage Attribute Types */}
+        {activeTab === 2 && (
+          <>
+            {/* Header */}
+            <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Typography variant="h5" sx={{ fontWeight: "bold" }}>
+                Cab Attribute Types
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setAttributeTypeDialogMode("create");
+                  setEditingAttributeType(null);
+                  setAttributeTypeFormData({
+                    attributeCode: "",
+                    attributeName: "",
+                    description: "",
+                    category: "LICENSE",
+                    dataType: "STRING",
+                    requiresValue: false,
+                    validationPattern: "",
+                    helpText: "",
+                  });
+                  setOpenAttributeTypeDialog(true);
+                }}
+              >
+                Create Attribute Type
+              </Button>
+            </Box>
+
+            {/* Stats Cards */}
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Total Types
+                    </Typography>
+                    <Typography variant="h4">{allAttributeTypes.length}</Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Active
+                    </Typography>
+                    <Typography variant="h4" color="success.main">
+                      {allAttributeTypes.filter((t) => t.active).length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      Inactive
+                    </Typography>
+                    <Typography variant="h4" color="error.main">
+                      {allAttributeTypes.filter((t) => !t.active).length}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            {/* Filters */}
+            <Paper sx={{ p: 2, mb: 2 }}>
+              <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap", alignItems: "center" }}>
+                <TextField
+                  label="Search"
+                  placeholder="Name or Code"
+                  value={attributeTypeSearchTerm}
+                  onChange={(e) => setAttributeTypeSearchTerm(e.target.value)}
+                  size="small"
+                  sx={{ minWidth: 200 }}
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+
+                <TextField
+                  select
+                  label="Category"
+                  value={attributeTypeCategoryFilter}
+                  onChange={(e) => setAttributeTypeCategoryFilter(e.target.value)}
+                  size="small"
+                  sx={{ minWidth: 180 }}
+                >
+                  <MenuItem value="ALL">All Categories</MenuItem>
+                  <MenuItem value="LICENSE">License/Permit</MenuItem>
+                  <MenuItem value="EQUIPMENT">Equipment/Hardware</MenuItem>
+                  <MenuItem value="TYPE">Vehicle Type/Classification</MenuItem>
+                  <MenuItem value="PERMIT">Special Permits</MenuItem>
+                  <MenuItem value="CERTIFICATION">Certifications</MenuItem>
+                </TextField>
+
+                <TextField
+                  select
+                  label="Status"
+                  value={attributeTypeStatusFilter}
+                  onChange={(e) => setAttributeTypeStatusFilter(e.target.value)}
+                  size="small"
+                  sx={{ minWidth: 150 }}
+                >
+                  <MenuItem value="ALL">All Status</MenuItem>
+                  <MenuItem value="ACTIVE">Active</MenuItem>
+                  <MenuItem value="INACTIVE">Inactive</MenuItem>
+                </TextField>
+
+                {(attributeTypeSearchTerm || attributeTypeCategoryFilter !== "ALL" || attributeTypeStatusFilter !== "ALL") && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<ClearIcon />}
+                    onClick={() => {
+                      setAttributeTypeSearchTerm("");
+                      setAttributeTypeCategoryFilter("ALL");
+                      setAttributeTypeStatusFilter("ALL");
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </Box>
+            </Paper>
+
+            {/* Results Count */}
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="body2" color="textSecondary">
+                Showing {filteredAttributeTypes.length} of {allAttributeTypes.length} types
+              </Typography>
+            </Box>
+
+            {/* Table */}
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                    <TableCell><strong>Code</strong></TableCell>
+                    <TableCell><strong>Name</strong></TableCell>
+                    <TableCell><strong>Category</strong></TableCell>
+                    <TableCell><strong>Data Type</strong></TableCell>
+                    <TableCell align="center"><strong>Requires Value</strong></TableCell>
+                    <TableCell><strong>Status</strong></TableCell>
+                    <TableCell align="right"><strong>Actions</strong></TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {filteredAttributeTypes.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
+                        <Typography color="textSecondary">
+                          {allAttributeTypes.length === 0
+                            ? "No attribute types found"
+                            : "No matches for your filters"}
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAttributeTypes.map((type) => (
+                      <TableRow key={type.id} hover>
+                        <TableCell sx={{ fontFamily: "monospace" }}>
+                          {type.attributeCode}
+                        </TableCell>
+                        <TableCell>{type.attributeName}</TableCell>
+                        <TableCell>
+                          <Chip label={type.category} size="small" variant="outlined" />
+                        </TableCell>
+                        <TableCell>{type.dataType}</TableCell>
+                        <TableCell align="center">
+                          {type.requiresValue ? (
+                            <CheckCircleIcon sx={{ color: "green" }} />
+                          ) : (
+                            <BlockIcon sx={{ color: "gray" }} />
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={type.active ? "Active" : "Inactive"}
+                            color={type.active ? "success" : "default"}
+                            size="small"
+                            icon={type.active ? <CheckCircleIcon /> : <BlockIcon />}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <IconButton
+                            size="small"
+                            color="primary"
+                            onClick={() => {
+                              setAttributeTypeDialogMode("edit");
+                              setEditingAttributeType(type);
+                              setAttributeTypeFormData({
+                                attributeCode: type.attributeCode,
+                                attributeName: type.attributeName,
+                                description: type.description || "",
+                                category: type.category,
+                                dataType: type.dataType,
+                                requiresValue: type.requiresValue,
+                                validationPattern: type.validationPattern || "",
+                                helpText: type.helpText || "",
+                              });
+                              setOpenAttributeTypeDialog(true);
+                            }}
+                            title="Edit"
+                          >
+                            <EditIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color={type.active ? "warning" : "success"}
+                            onClick={() => handleToggleAttributeTypeStatus(type.id, type.active)}
+                            title={type.active ? "Deactivate" : "Activate"}
+                          >
+                            {type.active ? (
+                              <BlockIcon fontSize="small" />
+                            ) : (
+                              <CheckCircleIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                          <IconButton
+                            size="small"
+                            color="error"
+                            onClick={() => handleDeleteAttributeType(type.id)}
+                            title="Delete"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </>
+        )}
       </Box>
 
       {/* Create/Edit Dialog */}
@@ -872,6 +1880,207 @@ export default function CabsPage() {
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={handleSubmit} variant="contained" color="primary">
             {editMode ? "Update" : "Add"} Cab
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Assign/Edit Attribute Dialog */}
+      <Dialog open={openAttributeDialog} onClose={handleCloseAttributeDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {editingAttribute ? "Edit Attribute" : "Assign Attribute"}
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <TextField
+            select
+            fullWidth
+            margin="normal"
+            label="Attribute Type"
+            name="attributeTypeId"
+            value={attributeFormData.attributeTypeId}
+            onChange={handleAttributeFormChange}
+            disabled={editingAttribute}
+            helperText={editingAttribute ? "Type cannot be changed" : ""}
+          >
+            {attributeTypes.map((type) => (
+              <MenuItem key={type.id} value={type.id}>
+                {type.attributeName}
+              </MenuItem>
+            ))}
+          </TextField>
+
+          {attributeFormData.attributeTypeId &&
+            getAttributeType(parseInt(attributeFormData.attributeTypeId))?.requiresValue && (
+            <TextField
+              fullWidth
+              margin="normal"
+              label="Value"
+              name="attributeValue"
+              value={attributeFormData.attributeValue}
+              onChange={handleAttributeFormChange}
+              placeholder="e.g., License Number or ID"
+            />
+          )}
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Start Date"
+            name="startDate"
+            type="date"
+            value={attributeFormData.startDate}
+            onChange={handleAttributeFormChange}
+            InputLabelProps={{ shrink: true }}
+          />
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="End Date (Optional)"
+            name="endDate"
+            type="date"
+            value={attributeFormData.endDate}
+            onChange={handleAttributeFormChange}
+            InputLabelProps={{ shrink: true }}
+            helperText="Leave blank for ongoing"
+          />
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Notes"
+            name="notes"
+            value={attributeFormData.notes}
+            onChange={handleAttributeFormChange}
+            multiline
+            rows={2}
+            placeholder="Optional notes"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseAttributeDialog}>Cancel</Button>
+          <Button onClick={handleSubmitAttribute} variant="contained" color="primary">
+            {editingAttribute ? "Update" : "Assign"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create/Edit Attribute Type Dialog */}
+      <Dialog open={openAttributeTypeDialog} onClose={() => setOpenAttributeTypeDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {attributeTypeDialogMode === "create"
+            ? "Create Attribute Type"
+            : `Edit: ${editingAttributeType?.attributeName}`}
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Attribute Code"
+            value={attributeTypeFormData.attributeCode}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, attributeCode: e.target.value })}
+            disabled={attributeTypeDialogMode === "edit"}
+            placeholder="e.g., AIRPORT_LICENSE"
+            helperText={
+              attributeTypeDialogMode === "edit" ? "Code cannot be changed" : "Unique identifier"
+            }
+          />
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Attribute Name"
+            value={attributeTypeFormData.attributeName}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, attributeName: e.target.value })}
+            placeholder="e.g., Airport License"
+          />
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Description"
+            value={attributeTypeFormData.description}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, description: e.target.value })}
+            multiline
+            rows={2}
+          />
+
+          <TextField
+            select
+            fullWidth
+            margin="normal"
+            label="Category"
+            value={attributeTypeFormData.category}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, category: e.target.value })}
+          >
+            <MenuItem value="LICENSE">License/Permit</MenuItem>
+            <MenuItem value="EQUIPMENT">Equipment/Hardware</MenuItem>
+            <MenuItem value="TYPE">Vehicle Type/Classification</MenuItem>
+            <MenuItem value="PERMIT">Special Permits</MenuItem>
+            <MenuItem value="CERTIFICATION">Certifications</MenuItem>
+          </TextField>
+
+          <TextField
+            select
+            fullWidth
+            margin="normal"
+            label="Data Type"
+            value={attributeTypeFormData.dataType}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, dataType: e.target.value })}
+          >
+            <MenuItem value="STRING">Text</MenuItem>
+            <MenuItem value="NUMBER">Number</MenuItem>
+            <MenuItem value="DATE">Date</MenuItem>
+            <MenuItem value="BOOLEAN">Yes/No</MenuItem>
+          </TextField>
+
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={attributeTypeFormData.requiresValue}
+                onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, requiresValue: e.target.checked })}
+              />
+            }
+            label="Requires Value (e.g., License Number)"
+            sx={{ my: 1 }}
+          />
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Validation Pattern (Regex)"
+            value={attributeTypeFormData.validationPattern}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, validationPattern: e.target.value })}
+            placeholder="Optional regex for validation"
+            helperText="Leave empty for no validation"
+          />
+
+          <TextField
+            fullWidth
+            margin="normal"
+            label="Help Text"
+            value={attributeTypeFormData.helpText}
+            onChange={(e) => setAttributeTypeFormData({ ...attributeTypeFormData, helpText: e.target.value })}
+            multiline
+            rows={2}
+            placeholder="Guide text for users"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenAttributeTypeDialog(false)}>Cancel</Button>
+          <Button onClick={handleSubmitAttributeType} variant="contained" color="primary">
+            {attributeTypeDialogMode === "create" ? "Create" : "Update"}
           </Button>
         </DialogActions>
       </Dialog>
