@@ -74,6 +74,12 @@ export function useAccountManagement() {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [customerFormData, setCustomerFormData] = useState(initialCustomerFormData);
 
+  // Account Customers - Outstanding Balance Filter
+  const [showAllCustomers, setShowAllCustomers] = useState(false);
+
+  // Trip Charges - Outstanding Balance Filter
+  const [showAllCustomersInCharges, setShowAllCustomersInCharges] = useState(false);
+
   // Trip Charges (Tab 2)
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [charges, setCharges] = useState([]);
@@ -198,30 +204,33 @@ export function useAccountManagement() {
     }
   }, [loadCustomers, loadCabs, loadDrivers]);
 
-  const loadChargesForCustomer = useCallback(async (customerId) => {
+  const loadChargesForCustomer = useCallback(async (customerId, useFilters = false) => {
     try {
-      let url = `${API_BASE_URL}/account-charges/customer/${customerId}`;
-      
-      console.log('📅 Trip Charges Date Filter:', { startDate, endDate, hasDateFilter: !!(startDate && endDate) });
-      
-      if (startDate && endDate) {
+      let url;
+
+      // If using filters and both dates are set, use date range
+      if (useFilters && startDate && endDate) {
         url = `${API_BASE_URL}/account-charges/customer/${customerId}/between?startDate=${startDate}&endDate=${endDate}`;
         console.log('📅 Using date-filtered URL:', url);
       } else {
-        console.log('📅 Using unfiltered URL:', url);
+        // To get ALL charges (not just current month), use a very wide date range
+        const allTimeStartDate = "2000-01-01";
+        const allTimeEndDate = "2099-12-31";
+        url = `${API_BASE_URL}/account-charges/customer/${customerId}/between?startDate=${allTimeStartDate}&endDate=${allTimeEndDate}`;
+        console.log('📅 Using all-time URL (all charges):', url);
       }
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             "X-Tenant-ID": localStorage.getItem("tenantSchema"), },
       });
-      
+
       if (response.ok) {
         const data = await response.json();
-        
+
         // Handle both array response and paginated response
         const chargesArray = Array.isArray(data) ? data : (data.content || data.data || []);
-        
+
         setCharges(chargesArray);
         setBulkEditCharges(chargesArray.map(c => ({ ...c })));
       }
@@ -395,6 +404,9 @@ export function useAccountManagement() {
 
   const handleSelectCustomer = useCallback(async (customer) => {
     setSelectedCustomer(customer);
+    // Clear date filters when selecting a customer to show ALL outstanding charges
+    setStartDate("");
+    setEndDate("");
     loadChargesForCustomer(customer.id);
   }, [loadChargesForCustomer]);
 
@@ -628,8 +640,8 @@ export function useAccountManagement() {
     console.log('🔍 Filter button clicked for Trip Charges');
     console.log('📅 Current date values:', { startDate, endDate });
     if (selectedCustomer) {
-      console.log('👤 Reloading charges for customer:', selectedCustomer.companyName);
-      loadChargesForCustomer(selectedCustomer.id);
+      console.log('👤 Reloading charges for customer with date filter:', selectedCustomer.companyName);
+      loadChargesForCustomer(selectedCustomer.id, true);
     } else {
       console.log('⚠️ No customer selected');
     }
@@ -1023,6 +1035,14 @@ export function useAccountManagement() {
     handleSelectCustomer,
     applyCustomerFilters,
     clearCustomerFilters,
+
+    // Account Customers - Outstanding Balance
+    showAllCustomers,
+    setShowAllCustomers,
+
+    // Trip Charges - Outstanding Balance
+    showAllCustomersInCharges,
+    setShowAllCustomersInCharges,
 
     // Trip Charges (Tab 2)
     selectedCustomer,

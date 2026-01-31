@@ -74,6 +74,14 @@ export default function AccountManagementPage() {
     applyCustomerFilters,
     clearCustomerFilters,
 
+    // Account Customers - Outstanding Balance
+    showAllCustomers,
+    setShowAllCustomers,
+
+    // Trip Charges - Outstanding Balance
+    showAllCustomersInCharges,
+    setShowAllCustomersInCharges,
+
     // Trip Charges (Tab 2)
     selectedCustomer,
     charges,
@@ -248,6 +256,8 @@ export default function AccountManagementPage() {
               handleSelectCustomer={handleSelectCustomer}
               handleOpenGenerateInvoiceDialog={handleOpenGenerateInvoiceDialog}
               setCurrentTab={setCurrentTab}
+              showAllCustomers={showAllCustomers}
+              setShowAllCustomers={setShowAllCustomers}
             />
           )}
 
@@ -266,6 +276,8 @@ export default function AccountManagementPage() {
               canEdit={canEdit}
               canBulkEdit={canBulkEdit}
               canMarkPaid={canMarkPaid}
+              showAllCustomersInCharges={showAllCustomersInCharges}
+              setShowAllCustomersInCharges={setShowAllCustomersInCharges}
               handleSelectCustomer={handleSelectCustomer}
               handleOpenChargeDialog={handleOpenChargeDialog}
               handleMarkChargePaid={handleMarkChargePaid}

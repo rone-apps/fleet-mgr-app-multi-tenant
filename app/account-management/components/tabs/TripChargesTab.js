@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Box,
   Typography,
@@ -16,6 +16,8 @@ import {
   IconButton,
   Chip,
   Grid,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -27,6 +29,7 @@ import {
   Business as BusinessIcon,
 } from "@mui/icons-material";
 import { calculateTotal } from "../../utils/helpers";
+import { API_BASE_URL } from "../../../lib/api";
 
 export default function TripChargesTab({
   customers,
@@ -41,6 +44,8 @@ export default function TripChargesTab({
   canEdit,
   canBulkEdit,
   canMarkPaid,
+  showAllCustomersInCharges,
+  setShowAllCustomersInCharges,
   handleSelectCustomer,
   handleOpenChargeDialog,
   handleMarkChargePaid,
@@ -51,34 +56,81 @@ export default function TripChargesTab({
   handleFilterCharges,
 }) {
   const [customerSearch, setCustomerSearch] = useState("");
+  const [customersWithBalance, setCustomersWithBalance] = useState([]);
 
   // Calculate totals for displayed charges
   const totalFare = charges.reduce((sum, c) => sum + (parseFloat(c.fareAmount) || 0), 0);
   const totalTip = charges.reduce((sum, c) => sum + (parseFloat(c.tipAmount) || 0), 0);
   const totalAmount = totalFare + totalTip;
 
-  // Filter customers based on search term
-  const filteredCustomers = customers
-    .filter(c => c.active)
-    .filter(customer => {
-      if (!customerSearch) return true;
-      const searchLower = customerSearch.toLowerCase();
-      return (
-        customer.companyName?.toLowerCase().includes(searchLower) ||
-        customer.city?.toLowerCase().includes(searchLower) ||
-        customer.province?.toLowerCase().includes(searchLower)
-      );
-    });
+  // Load customers based on showAllCustomersInCharges flag
+  useEffect(() => {
+    const loadCustomers = async () => {
+      try {
+        let url;
+        if (showAllCustomersInCharges) {
+          // Load ALL active customers when checkbox is checked
+          url = `${API_BASE_URL}/account-customers/active`;
+        } else {
+          // Load only customers with outstanding balance by default
+          url = `${API_BASE_URL}/account-customers/with-outstanding-balance/amount`;
+        }
+
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const customersArray = Array.isArray(data) ? data : (data.content || data.data || []);
+          setCustomersWithBalance(customersArray);
+        }
+      } catch (err) {
+        console.error("Error loading customers:", err);
+        setCustomersWithBalance([]);
+      }
+    };
+    loadCustomers();
+  }, [showAllCustomersInCharges]);
+
+  // Filter customers based on search term (customers are already filtered by backend based on showAllCustomersInCharges)
+  const filteredCustomers = customersWithBalance.filter(customer => {
+    // Filter by search term
+    if (!customerSearch) return true;
+    const searchLower = customerSearch.toLowerCase();
+    return (
+      customer.companyName?.toLowerCase().includes(searchLower) ||
+      customer.city?.toLowerCase().includes(searchLower) ||
+      customer.province?.toLowerCase().includes(searchLower)
+    );
+  });
 
   return (
     <Box sx={{ p: 3 }}>
       <Grid container spacing={3}>
         {/* Left: Customer Selection */}
         <Grid item xs={12} md={4}>
-          <Typography variant="h6" gutterBottom>
-            Select Customer
-          </Typography>
-          
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+            <Typography variant="h6">
+              Select Customer
+            </Typography>
+          </Box>
+
+          {/* Outstanding Balance Filter Checkbox */}
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={showAllCustomersInCharges}
+                onChange={(e) => setShowAllCustomersInCharges(e.target.checked)}
+              />
+            }
+            label="Show All Customers"
+            sx={{ mb: 2, display: "block" }}
+          />
+
           {/* Customer Search Field */}
           <TextField
             fullWidth
@@ -109,6 +161,17 @@ export default function TripChargesTab({
                       </Typography>
                       <Typography variant="caption" color="textSecondary">
                         {customer.city}, {customer.province}
+                      </Typography>
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: "block",
+                          color: "#d32f2f",
+                          fontWeight: "bold",
+                          mt: 0.5
+                        }}
+                      >
+                        Outstanding: ${(customer.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Typography>
                     </TableCell>
                   </TableRow>
