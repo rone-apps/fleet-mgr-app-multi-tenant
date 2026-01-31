@@ -52,6 +52,7 @@ import {
 import { getCurrentUser, logout, isAuthenticated, apiRequest, API_BASE_URL } from "../lib/api";
 
 const USER_ROLES = [
+  { value: "SUPER_ADMIN", label: "Super Administrator", description: "Full system access with user management" },
   { value: "ADMIN", label: "Administrator", description: "Full system access" },
   { value: "DRIVER", label: "Driver", description: "Operate shifts and view own data" },
   { value: "ACCOUNTANT", label: "Accountant", description: "Manage expenses and financials" },
@@ -106,8 +107,8 @@ export default function UsersPage() {
 
     loadUsers();
 
-    // Only admins can view and manage drivers
-    if (user?.role === "ADMIN") {
+    // Only admins and super admins can view and manage drivers
+    if (['ADMIN', 'SUPER_ADMIN'].includes(user?.role)) {
       loadDrivers();
     }
   }, [router]);
@@ -122,8 +123,8 @@ export default function UsersPage() {
       setLoading(true);
       const user = getCurrentUser();
 
-      if (user?.role === "ADMIN") {
-        // Admins fetch all users
+      if (['ADMIN', 'SUPER_ADMIN'].includes(user?.role)) {
+        // Admins and super admins fetch all users
         const response = await apiRequest('/users');
 
         if (!response.ok) {
@@ -181,7 +182,12 @@ export default function UsersPage() {
     let filtered = [...users];
 
     // Only apply filters for admins - non-admins always just see their own profile
-    if (currentUser && currentUser.role === "ADMIN") {
+    if (currentUser && ['ADMIN', 'SUPER_ADMIN'].includes(currentUser.role)) {
+      // Regular admins cannot see super admins
+      if (currentUser.role === "ADMIN") {
+        filtered = filtered.filter((user) => user.role !== "SUPER_ADMIN");
+      }
+
       // Search by name or username
       if (searchTerm) {
         const search = searchTerm.toLowerCase();
@@ -215,8 +221,8 @@ export default function UsersPage() {
   };
 
   const handleOpenDialog = (mode, user = null) => {
-    // Only admins can create users
-    if (mode === "create" && currentUser?.role !== "ADMIN") {
+    // Only admins and super admins can create users
+    if (mode === "create" && !['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role)) {
       setError("You don't have permission to create users");
       return;
     }
@@ -499,6 +505,7 @@ export default function UsersPage() {
 
   const getRoleColor = (role) => {
     const colors = {
+      SUPER_ADMIN: "secondary",
       ADMIN: "error",
       DRIVER: "primary",
       ACCOUNTANT: "success",
@@ -530,10 +537,10 @@ export default function UsersPage() {
         {/* Header with Create Button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: "bold", color: "#3e5244" }}>
-            {currentUser?.role === "ADMIN" ? "User Management" : "My Profile"}
+            {['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role) ? "User Management" : "My Profile"}
           </Typography>
 
-          {currentUser?.role === "ADMIN" && (
+          {['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role) && (
             <Button
               variant="contained"
               startIcon={<Add />}
@@ -580,7 +587,7 @@ export default function UsersPage() {
         )}
 
         {/* Search and Filter Section - Only for Admins */}
-        {currentUser?.role === "ADMIN" && (
+        {['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role) && (
         <Paper sx={{ p: 2, mb: 3 }}>
           <Grid container spacing={2} alignItems="center">
             {/* Search by Name */}
@@ -615,7 +622,10 @@ export default function UsersPage() {
                   }
                 >
                   <MenuItem value="ALL">All Roles</MenuItem>
-                  {USER_ROLES.map((role) => (
+                  {USER_ROLES.filter(role => {
+                    if (currentUser?.role === "SUPER_ADMIN") return true;
+                    return role.value !== "SUPER_ADMIN";
+                  }).map((role) => (
                     <MenuItem key={role.value} value={role.value}>
                       {role.label}
                     </MenuItem>
@@ -727,7 +737,7 @@ export default function UsersPage() {
                         </IconButton>
                       </Tooltip>
 
-                      {currentUser?.role === "ADMIN" && (
+                      {['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role) && (
                         <Tooltip title={user.active ? "Deactivate User" : "Activate User"}>
                           <IconButton
                             size="small"
@@ -850,7 +860,7 @@ export default function UsersPage() {
                 label="Role"
                 value={formData.role}
                 onChange={handleChange}
-                disabled={dialogMode === "edit" || currentUser?.role !== "ADMIN"} // Can't change role in edit mode or if not admin
+                disabled={dialogMode === "edit" || !['ADMIN', 'SUPER_ADMIN'].includes(currentUser?.role)} // Can't change role in edit mode or if not admin
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
@@ -860,7 +870,12 @@ export default function UsersPage() {
                 }}
                 helperText={dialogMode === "edit" ? "Role cannot be changed" : "Select user role in the system"}
               >
-                {USER_ROLES.map((role) => (
+                {USER_ROLES.filter(role => {
+                  // SUPER_ADMIN can see all roles
+                  if (currentUser?.role === "SUPER_ADMIN") return true;
+                  // Regular ADMIN cannot assign SUPER_ADMIN role
+                  return role.value !== "SUPER_ADMIN";
+                }).map((role) => (
                   <MenuItem key={role.value} value={role.value}>
                     <Box>
                       <Typography variant="body1">{role.label}</Typography>

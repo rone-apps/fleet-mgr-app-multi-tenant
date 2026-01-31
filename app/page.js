@@ -158,9 +158,11 @@ export default function HomePage() {
         </Paper>
 
         {/* Quick Actions Section - Only 4 Key Features */}
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 3 }}>
-          Quick Access
-        </Typography>
+        {user.role !== 'SUPER_ADMIN' && (
+          <>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 3 }}>
+              Quick Access
+            </Typography>
         
         <Grid container spacing={3} sx={{ mb: 6 }}>
           {/* Account Management */}
@@ -523,19 +525,21 @@ export default function HomePage() {
             </Grid>
           )}
         </Grid>
+          </>
+        )}
 
         {/* Classic Dashboard Section */}
         <Box sx={{ mt: 6 }}>
           <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 3 }}>
-            All Features
+            {user.role === 'SUPER_ADMIN' ? 'User Management' : 'All Features'}
           </Typography>
 
           <Grid container spacing={3}>
             {/* All the original cards from your current homepage */}
-            {user.role === 'ADMIN' && (
+            {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     cursor: 'pointer',
                     transition: 'transform 0.2s',
                     '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
@@ -581,8 +585,8 @@ export default function HomePage() {
 
             {user.role === 'ADMIN' && (
               <Grid item xs={12} sm={6} md={4}>
-                <Card 
-                  sx={{ 
+                <Card
+                  sx={{
                     cursor: 'pointer',
                     transition: 'transform 0.2s',
                     '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 },
@@ -740,26 +744,28 @@ export default function HomePage() {
               </>
             )}
 
-            <Grid item xs={12} sm={6} md={4}>
-              <Card 
-                sx={{ 
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s',
-                  '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                }}
-                onClick={() => router.push('/reports')}
-              >
-                <CardContent>
-                  <Assessment sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
-                  <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                    Reports
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    View financial reports
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+            {user.role !== 'SUPER_ADMIN' && (
+              <Grid item xs={12} sm={6} md={4}>
+                <Card
+                  sx={{
+                    cursor: 'pointer',
+                    transition: 'transform 0.2s',
+                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
+                  }}
+                  onClick={() => router.push('/reports')}
+                >
+                  <CardContent>
+                    <Assessment sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
+                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
+                      Reports
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      View financial reports
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            )}
           </Grid>
         </Box>
 

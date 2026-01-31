@@ -38,6 +38,7 @@ import {
   Autocomplete,
   Container,
   InputAdornment,
+  Menu,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -54,8 +55,10 @@ import {
   Search as SearchIcon,
   FilterList as FilterListIcon,
   Clear as ClearIcon,
+  Download as DownloadIcon,
 } from "@mui/icons-material";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
+import { downloadCSV, downloadPDF, formatCabsForExport } from "../lib/exportUtils";
 
 export default function CabsPage() {
   const router = useRouter();
@@ -73,6 +76,9 @@ export default function CabsPage() {
   const [openDialog, setOpenDialog] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedCab, setSelectedCab] = useState(null);
+
+  // Download menu state
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null);
 
   // Attribute states
   const [attributeTypes, setAttributeTypes] = useState([]);
@@ -750,6 +756,28 @@ export default function CabsPage() {
     }
   };
 
+  const handleDownloadMenuOpen = (event) => {
+    setDownloadMenuAnchor(event.currentTarget);
+  };
+
+  const handleDownloadMenuClose = () => {
+    setDownloadMenuAnchor(null);
+  };
+
+  const handleDownloadCSV = () => {
+    const dataToExport = formatCabsForExport(filteredCabs.length > 0 ? filteredCabs : cabs);
+    const fileName = `cabs_${new Date().toISOString().split("T")[0]}.csv`;
+    downloadCSV(dataToExport, fileName);
+    handleDownloadMenuClose();
+  };
+
+  const handleDownloadPDF = async () => {
+    const dataToExport = formatCabsForExport(filteredCabs.length > 0 ? filteredCabs : cabs);
+    const fileName = `cabs_${new Date().toISOString().split("T")[0]}.pdf`;
+    await downloadPDF(dataToExport, fileName, "Cab List");
+    handleDownloadMenuClose();
+  };
+
   if (!currentUser) {
     return (
       <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
@@ -945,6 +973,27 @@ export default function CabsPage() {
             )}
 
             <Box sx={{ flexGrow: 1 }} />
+
+            <Button
+              variant="outlined"
+              startIcon={<DownloadIcon />}
+              onClick={handleDownloadMenuOpen}
+              disabled={cabs.length === 0}
+            >
+              Download
+            </Button>
+            <Menu
+              anchorEl={downloadMenuAnchor}
+              open={Boolean(downloadMenuAnchor)}
+              onClose={handleDownloadMenuClose}
+            >
+              <MenuItem onClick={handleDownloadCSV}>
+                Download as CSV
+              </MenuItem>
+              <MenuItem onClick={handleDownloadPDF}>
+                Download as PDF
+              </MenuItem>
+            </Menu>
 
             {canEdit && (
               <Button

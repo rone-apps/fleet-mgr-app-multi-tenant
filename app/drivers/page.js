@@ -31,9 +31,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Menu,
 } from "@mui/material";
-import { Block, CheckCircle, Star, Edit as EditIcon, Add as AddIcon } from "@mui/icons-material";
+import { Block, CheckCircle, Star, Edit as EditIcon, Add as AddIcon, Download as DownloadIcon } from "@mui/icons-material";
 import { getCurrentUser, isAuthenticated, API_BASE_URL, getTenantSchema, tenantFetch } from "../lib/api";
+import { downloadCSV, downloadPDF, formatDriversForExport } from "../lib/exportUtils";
 
 export default function DriversPage() {
   const router = useRouter();
@@ -56,6 +58,9 @@ export default function DriversPage() {
   const [dialogMode, setDialogMode] = useState("create"); // "create" or "edit"
   const [editingDriver, setEditingDriver] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
+
+  // Download menu state
+  const [downloadMenuAnchor, setDownloadMenuAnchor] = useState(null);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -386,6 +391,28 @@ export default function DriversPage() {
     }
   };
 
+  const handleDownloadMenuOpen = (event) => {
+    setDownloadMenuAnchor(event.currentTarget);
+  };
+
+  const handleDownloadMenuClose = () => {
+    setDownloadMenuAnchor(null);
+  };
+
+  const handleDownloadCSV = () => {
+    const dataToExport = formatDriversForExport(filteredDrivers.length > 0 ? filteredDrivers : drivers);
+    const fileName = `drivers_${new Date().toISOString().split("T")[0]}.csv`;
+    downloadCSV(dataToExport, fileName);
+    handleDownloadMenuClose();
+  };
+
+  const handleDownloadPDF = async () => {
+    const dataToExport = formatDriversForExport(filteredDrivers.length > 0 ? filteredDrivers : drivers);
+    const fileName = `drivers_${new Date().toISOString().split("T")[0]}.pdf`;
+    await downloadPDF(dataToExport, fileName, "Driver List");
+    handleDownloadMenuClose();
+  };
+
   if (!currentUser) {
     return (
       <Box sx={{ minHeight: "100vh", display: "flex", justifyContent: "center", alignItems: "center" }}>
@@ -412,15 +439,37 @@ export default function DriversPage() {
               <Typography variant="h4">
                 Driver Management
               </Typography>
-              {canEdit && (
+              <Box sx={{ display: "flex", gap: 1 }}>
                 <Button
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={() => handleOpenDialog()}
+                  variant="outlined"
+                  startIcon={<DownloadIcon />}
+                  onClick={handleDownloadMenuOpen}
+                  disabled={drivers.length === 0}
                 >
-                  Add Driver
+                  Download
                 </Button>
-              )}
+                <Menu
+                  anchorEl={downloadMenuAnchor}
+                  open={Boolean(downloadMenuAnchor)}
+                  onClose={handleDownloadMenuClose}
+                >
+                  <MenuItem onClick={handleDownloadCSV}>
+                    Download as CSV
+                  </MenuItem>
+                  <MenuItem onClick={handleDownloadPDF}>
+                    Download as PDF
+                  </MenuItem>
+                </Menu>
+                {canEdit && (
+                  <Button
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => handleOpenDialog()}
+                  >
+                    Add Driver
+                  </Button>
+                )}
+              </Box>
             </Box>
 
             {/* Filters */}
