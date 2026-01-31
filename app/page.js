@@ -52,16 +52,20 @@ export default function HomePage() {
   useEffect(() => {
     const autoLogin = async () => {
       try {
-        // Check if already authenticated
+        // Ensure localStorage is properly initialized with correct tenant
+        const storedTenantSchema = localStorage.getItem("tenantSchema");
+        const storedToken = localStorage.getItem("token");
+
+        // Check if already authenticated with correct schema
         let currentUser = getCurrentUser();
-        if (currentUser && isAuthenticated()) {
+        if (currentUser && isAuthenticated() && storedTenantSchema === "fareflow") {
           setUser(currentUser);
           setTenantName(getTenantName());
           setIsLoading(false);
           return;
         }
 
-        // Auto-login with demo credentials
+        // Auto-login with demo credentials for Maclures Cabs
         const response = await fetch(`${API_BASE_URL}/auth/login`, {
           method: "POST",
           headers: {
@@ -80,9 +84,9 @@ export default function HomePage() {
 
           // Store authentication data
           localStorage.setItem("token", data.token);
-          localStorage.setItem("tenantId", "YC-NewYork");
+          localStorage.setItem("tenantId", "mac-cabs");
           localStorage.setItem("tenantSchema", "fareflow");
-          localStorage.setItem("tenantName", "Yellow Cabs Newyork");
+          localStorage.setItem("tenantName", "Maclures Cabs");
           localStorage.setItem("user", JSON.stringify({
             userId: data.userId,
             username: data.username,
@@ -91,7 +95,7 @@ export default function HomePage() {
             lastName: data.lastName,
             role: data.role,
             driverId: data.driverId,
-            tenantId: "YC-NewYork",
+            tenantId: "mac-cabs",
             tenantSchema: "fareflow"
           }));
 
@@ -127,7 +131,7 @@ export default function HomePage() {
         <Box sx={{ textAlign: 'center' }}>
           <LocalTaxi sx={{ fontSize: 60, color: '#ffc107', mb: 2, animation: 'spin 2s linear infinite' }} />
           <Typography variant="h6" sx={{ color: '#3e5244', fontWeight: 600 }}>
-            🚕 Yellow Cabs Newyork
+            🚕 Maclures Cabs
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
             Loading dashboard...

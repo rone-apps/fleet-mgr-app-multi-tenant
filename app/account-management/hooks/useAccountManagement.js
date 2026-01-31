@@ -855,6 +855,51 @@ export function useAccountManagement() {
     }
   }, [loadInvoices]);
 
+  const handleSendInvoiceViaEmail = useCallback(async (invoiceId, recipientEmail) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/invoices/${invoiceId}/send-email?recipientEmail=${encodeURIComponent(recipientEmail)}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccess(data.message || "Invoice sent successfully!");
+        loadInvoices();
+        return true;
+      } else {
+        const errorData = await response.json();
+        setError(errorData.message || "Failed to send invoice");
+        return false;
+      }
+    } catch (err) {
+      console.error("Error sending invoice via email:", err);
+      setError("Failed to send invoice: " + err.message);
+      return false;
+    }
+  }, [loadInvoices]);
+
+  const handleDownloadInvoicePDF = useCallback((invoiceId, invoiceNumber) => {
+    try {
+      const link = document.createElement("a");
+      link.href = `${API_BASE_URL}/invoices/${invoiceId}/pdf`;
+      link.setAttribute("Authorization", `Bearer ${localStorage.getItem("token")}`);
+      link.download = `Invoice_${invoiceNumber}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("Error downloading PDF:", err);
+      setError("Failed to download PDF");
+    }
+  }, []);
+
   const handleOpenCancelInvoiceDialog = useCallback((invoice) => {
     setSelectedInvoice(invoice);
     setCancelReason("");
@@ -1130,6 +1175,8 @@ export function useAccountManagement() {
     handleGenerateInvoice,
     handleViewInvoice,
     handleSendInvoice,
+    handleSendInvoiceViaEmail,
+    handleDownloadInvoicePDF,
     handleOpenCancelInvoiceDialog,
     handleCancelInvoice,
     handleOpenRecordPaymentDialog,

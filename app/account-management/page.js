@@ -166,6 +166,8 @@ export default function AccountManagementPage() {
     handleGenerateInvoice,
     handleViewInvoice,
     handleSendInvoice,
+    handleSendInvoiceViaEmail,
+    handleDownloadInvoicePDF,
     handleOpenCancelInvoiceDialog,
     handleCancelInvoice,
     handleOpenRecordPaymentDialog,
@@ -404,6 +406,8 @@ export default function AccountManagementPage() {
           selectedInvoice={selectedInvoice}
           canMarkPaid={canMarkPaid}
           handleOpenRecordPaymentDialog={handleOpenRecordPaymentDialog}
+          handleSendInvoiceViaEmail={handleSendInvoiceViaEmail}
+          handleDownloadInvoicePDF={handleDownloadInvoicePDF}
         />
 
         <RecordPaymentDialog

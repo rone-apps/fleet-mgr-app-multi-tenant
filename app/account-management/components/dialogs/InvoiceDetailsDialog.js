@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -18,11 +18,16 @@ import {
   DialogActions,
   Chip,
   Grid,
+  TextField,
+  Alert,
+  CircularProgress,
 } from "@mui/material";
-import { 
+import {
   Payment as PaymentIcon,
   Print as PrintIcon,
   PictureAsPdf as PdfIcon,
+  Email as EmailIcon,
+  CheckCircle as CheckCircleIcon,
 } from "@mui/icons-material";
 import { formatCurrency, formatDate, getStatusColor } from "../../utils/helpers";
 
@@ -32,8 +37,42 @@ export default function InvoiceDetailsDialog({
   selectedInvoice,
   canMarkPaid,
   handleOpenRecordPaymentDialog,
+  handleSendInvoiceViaEmail,
+  handleDownloadInvoicePDF,
 }) {
   const printRef = useRef();
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
+  const [emailAddress, setEmailAddress] = useState(selectedInvoice?.customerEmail || "");
+  const [isLoading, setIsLoading] = useState(false);
+  const [emailHistory, setEmailHistory] = useState(null);
+  const [loadingEmailHistory, setLoadingEmailHistory] = useState(false);
+  const [emailSentSuccess, setEmailSentSuccess] = useState(false);
+
+  // Load email history when dialog opens
+  useEffect(() => {
+    if (open && selectedInvoice?.id) {
+      loadEmailHistory();
+    }
+  }, [open, selectedInvoice?.id]);
+
+  const loadEmailHistory = async () => {
+    setLoadingEmailHistory(true);
+    try {
+      const response = await fetch(`/api/invoices/${selectedInvoice.id}/email-history`, {
+        headers: {
+          "X-Tenant-ID": "fareflow",
+        },
+      });
+      if (response.ok) {
+        const history = await response.json();
+        setEmailHistory(history);
+      }
+    } catch (error) {
+      console.error("Failed to load email history:", error);
+    } finally {
+      setLoadingEmailHistory(false);
+    }
+  };
 
   if (!selectedInvoice) return null;
 
@@ -267,6 +306,31 @@ export default function InvoiceDetailsDialog({
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try printing instead.');
     }
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailAddress) {
+      alert("Please enter an email address");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await handleSendInvoiceViaEmail(selectedInvoice.id, emailAddress);
+      if (result) {
+        setEmailSentSuccess(true);
+        // Reload email history to show updated send count
+        await loadEmailHistory();
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCloseEmailDialog = () => {
+    setShowEmailDialog(false);
+    setEmailAddress("");
+    setEmailSentSuccess(false);
   };
 
   const getStatusClass = (status) => {
@@ -520,7 +584,7 @@ export default function InvoiceDetailsDialog({
           )}
         </Box>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2 }}>
+      <DialogActions sx={{ px: 3, pb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         <Button onClick={onClose}>Close</Button>
         <Button
           onClick={handlePrint}
@@ -530,11 +594,22 @@ export default function InvoiceDetailsDialog({
           Print
         </Button>
         <Button
-          onClick={handleDownloadPDF}
+          onClick={() => handleDownloadInvoicePDF(selectedInvoice.id, selectedInvoice.invoiceNumber)}
           variant="outlined"
           startIcon={<PdfIcon />}
         >
           Download PDF
+        </Button>
+        <Button
+          onClick={() => {
+            setShowEmailDialog(true);
+            setEmailSentSuccess(false);
+          }}
+          variant="outlined"
+          startIcon={<EmailIcon />}
+          color="info"
+        >
+          {emailHistory?.lastEmailSentAt ? "Resend Email" : "Send Email"}
         </Button>
         {(selectedInvoice.status === "SENT" || selectedInvoice.status === "PARTIAL" || selectedInvoice.status === "OVERDUE") && canMarkPaid && (
           <Button
@@ -550,6 +625,98 @@ export default function InvoiceDetailsDialog({
           </Button>
         )}
       </DialogActions>
+
+      {/* Email Dialog */}
+      <Dialog open={showEmailDialog} onClose={handleCloseEmailDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          {emailHistory?.lastEmailSentAt ? "Resend Invoice Via Email" : "Send Invoice Via Email"}
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Success Message */}
+            {emailSentSuccess && (
+              <Alert
+                severity="success"
+                icon={<CheckCircleIcon />}
+                sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+              >
+                <Box>
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    Email sent successfully!
+                  </Typography>
+                  <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                    Sent to: {emailAddress}
+                  </Typography>
+                </Box>
+              </Alert>
+            )}
+
+            {/* Email History */}
+            {!emailSentSuccess && (
+              <>
+                {loadingEmailHistory ? (
+                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                    <CircularProgress size={24} />
+                  </Box>
+                ) : emailHistory?.lastEmailSentAt ? (
+                  <Paper variant="outlined" sx={{ p: 2, backgroundColor: '#f5f5f5' }}>
+                    <Typography variant="caption" color="textSecondary">Previous Send History</Typography>
+                    <Box sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        <strong>Last Sent:</strong> {formatDate(new Date(emailHistory.lastEmailSentAt))}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Email Address:</strong> {emailHistory.lastEmailSentTo}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Total Sends:</strong> {emailHistory.emailSendCount}
+                      </Typography>
+                    </Box>
+                  </Paper>
+                ) : null}
+
+                <TextField
+                  label="Recipient Email"
+                  type="email"
+                  value={emailAddress}
+                  onChange={(e) => setEmailAddress(e.target.value)}
+                  fullWidth
+                  placeholder="customer@example.com"
+                  disabled={isLoading}
+                />
+                <Alert severity="info">
+                  The invoice will be sent as a PDF attachment along with a formatted email containing the invoice details.
+                </Alert>
+              </>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          {emailSentSuccess ? (
+            <Button
+              onClick={handleCloseEmailDialog}
+              variant="contained"
+              color="success"
+            >
+              Close
+            </Button>
+          ) : (
+            <>
+              <Button onClick={handleCloseEmailDialog} disabled={isLoading}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendEmail}
+                variant="contained"
+                startIcon={isLoading ? <CircularProgress size={20} /> : <EmailIcon />}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Sending...' : emailHistory?.lastEmailSentAt ? 'Resend' : 'Send'}
+              </Button>
+            </>
+          )}
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }
