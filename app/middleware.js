@@ -16,36 +16,8 @@ function isTokenExpired(token) {
 export function middleware(request) {
   const path = request.nextUrl.pathname;
 
-  // Public paths that don't require authentication
-  const publicPaths = ['/signin', '/'];
-  const isPublicPath = publicPaths.includes(path);
-
-  // Get token from localStorage (via cookies for middleware)
-  // Note: Middleware runs on server, so we need to check cookies if set
-  const token = request.cookies.get('token')?.value;
-
-  // If trying to access protected route without token or with expired token
-  if (!isPublicPath) {
-    if (!token) {
-      console.log('No token found, redirecting to signin');
-      return NextResponse.redirect(new URL('/signin', request.url));
-    }
-
-    // Check if token is expired
-    if (isTokenExpired(token)) {
-      console.log('Token expired, redirecting to signin');
-      const response = NextResponse.redirect(new URL('/signin', request.url));
-      // Clear the expired token cookie
-      response.cookies.delete('token');
-      return response;
-    }
-  }
-
-  // If logged in and trying to access signin page, redirect to home
-  if (path === '/signin' && token && !isTokenExpired(token)) {
-    return NextResponse.redirect(new URL('/', request.url));
-  }
-
+  // All paths are public for demo - auto-authentication enabled
+  // Skip all middleware checks to allow direct access
   return NextResponse.next();
 }
 

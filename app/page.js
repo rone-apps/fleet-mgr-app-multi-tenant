@@ -41,24 +41,107 @@ import {
   Analytics,
   ArrowForward
 } from "@mui/icons-material";
-import { getCurrentUser, logout, isAuthenticated, getTenantName } from './lib/api';
+import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 
 export default function HomePage() {
   const [user, setUser] = useState(null);
   const [tenantName, setTenantName] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    setUser(currentUser);
-    setTenantName(getTenantName());
-  }, [router]);
+    const autoLogin = async () => {
+      try {
+        // Check if already authenticated
+        let currentUser = getCurrentUser();
+        if (currentUser && isAuthenticated()) {
+          setUser(currentUser);
+          setTenantName(getTenantName());
+          setIsLoading(false);
+          return;
+        }
+
+        // Auto-login with demo credentials
+        const response = await fetch(`${API_BASE_URL}/auth/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Tenant-ID": "fareflow",
+          },
+          body: JSON.stringify({
+            username: "admin2",
+            password: "admin123",
+            tenantId: "fareflow"
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+
+          // Store authentication data
+          localStorage.setItem("token", data.token);
+          localStorage.setItem("tenantId", "YC-NewYork");
+          localStorage.setItem("tenantSchema", "fareflow");
+          localStorage.setItem("tenantName", "Yellow Cabs Newyork");
+          localStorage.setItem("user", JSON.stringify({
+            userId: data.userId,
+            username: data.username,
+            email: data.email,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            role: data.role,
+            driverId: data.driverId,
+            tenantId: "YC-NewYork",
+            tenantSchema: "fareflow"
+          }));
+
+          // Set cookies for middleware
+          document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
+          document.cookie = `tenantId=fareflow; path=/; max-age=86400; SameSite=Strict`;
+
+          // Reload user data
+          currentUser = getCurrentUser();
+          setUser(currentUser);
+          setTenantName(getTenantName());
+        }
+      } catch (err) {
+        console.error("Auto-login error:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    autoLogin();
+  }, []);
 
   const handleLogout = () => {
     logout();
   };
 
   const isUserAuthenticated = isAuthenticated() && user;
+
+  // Show loading screen during auto-login
+  if (isLoading) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f6f9fc' }}>
+        <Box sx={{ textAlign: 'center' }}>
+          <LocalTaxi sx={{ fontSize: 60, color: '#ffc107', mb: 2, animation: 'spin 2s linear infinite' }} />
+          <Typography variant="h6" sx={{ color: '#3e5244', fontWeight: 600 }}>
+            🚕 Yellow Cabs Newyork
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+            Loading dashboard...
+          </Typography>
+          <style>{`
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+          `}</style>
+        </Box>
+      </Box>
+    );
+  }
 
   // Show marketing landing page for non-authenticated users
   if (!isUserAuthenticated) {
@@ -71,16 +154,18 @@ export default function HomePage() {
       {/* Header */}
       <AppBar position="static" sx={{ backgroundColor: '#3e5244' }}>
         <Toolbar>
-          <LocalTaxi sx={{ fontSize: 28, color: '#fff', mr: 1 }} />
-          <Box sx={{ flexGrow: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 'bold', lineHeight: 1.2 }}>
-              FareFlow
-            </Typography>
-            {tenantName && (
-              <Typography variant="caption" sx={{ color: '#a5d6a7', fontWeight: 500 }}>
-                {tenantName}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
+            <LocalTaxi sx={{ fontSize: 28, color: '#ffc107', mr: 1 }} />
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 'bold', lineHeight: 1, color: '#fff' }}>
+                FareFlow
               </Typography>
-            )}
+              {tenantName && (
+                <Typography variant="caption" sx={{ color: '#a5d6a7', fontWeight: 600, display: 'block' }}>
+                  🚕 {tenantName}
+                </Typography>
+              )}
+            </Box>
           </Box>
           
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>

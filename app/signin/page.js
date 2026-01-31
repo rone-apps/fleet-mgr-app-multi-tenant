@@ -42,7 +42,7 @@ const theme = createTheme({
 // Known companies - maps company ID to display name and database schema
 // The schema is the actual MySQL database name that will be used
 const KNOWN_COMPANIES = [
-  { id: 'MAC-Cabs', name: 'Maclures Cabs', schema: 'fareflow' },
+  { id: 'YC-NewYork', name: 'Yellow Cabs Newyork', schema: 'fareflow' },
   { id: 'BONNY-Taxi', name: "Bonny's Taxi", schema: 'fareflow_bonny' },
   // { id: 'demo', name: 'Demo Company', schema: 'demo' },
   // { id: 'yellowcab', name: 'Yellow Cab Co.', schema: 'yellowcab' },
@@ -371,10 +371,10 @@ export default function SignInPage() {
                 }}
               >
                 <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 1, fontWeight: 600 }}>
-                  🚕 Maclures Cabs
+                  🚕 Yellow Cabs Newyork
                 </Typography>
                 <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 0.5 }}>
-                  Company: <strong>MAC-Cabs</strong>
+                  Company: <strong>YC-NewYork</strong>
                 </Typography>
                 <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
                   User: <strong>admin2</strong> / <strong>admin123</strong>
