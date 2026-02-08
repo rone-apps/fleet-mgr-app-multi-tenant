@@ -16,7 +16,11 @@ import {
   Chip,
   alpha,
   Paper,
-  Avatar
+  Avatar,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from "@mui/material";
 import {
   People,
@@ -72,6 +76,7 @@ export default function HomePage() {
   const [tenantName, setTenantName] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -106,11 +111,16 @@ export default function HomePage() {
   }, []);
 
   const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      if (window.confirm('Are you sure you want to logout?')) {
-        logout();
-      }
-    }
+    setLogoutDialogOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setLogoutDialogOpen(false);
+    logout();
+  };
+
+  const handleCancelLogout = () => {
+    setLogoutDialogOpen(false);
   };
 
   const isUserAuthenticated = isAuthenticated() && user;
@@ -357,6 +367,73 @@ export default function HomePage() {
           />
         )}
       </Container>
+
+      {/* Professional Logout Confirmation Dialog */}
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={handleCancelLogout}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)'
+          }
+        }}
+      >
+        <DialogTitle
+          sx={{
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '1.3rem',
+            pb: 1
+          }}
+        >
+          🚪 Confirm Logout
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1rem', lineHeight: 1.6 }}>
+            Are you sure you want to logout? You'll need to sign in again to access your dashboard and manage your taxi fleet.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={handleCancelLogout}
+            variant="outlined"
+            sx={{
+              color: '#fff',
+              borderColor: 'rgba(255,255,255,0.5)',
+              fontWeight: 600,
+              px: 3,
+              '&:hover': {
+                borderColor: '#fff',
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmLogout}
+            variant="contained"
+            sx={{
+              backgroundColor: '#fff',
+              color: '#667eea',
+              fontWeight: 700,
+              px: 4,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.3)'
+              }
+            }}
+          >
+            Yes, Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
@@ -786,7 +863,8 @@ function MarketingLandingPage({ router }) {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ pt: 8, pb: 6 }}>
-        <Box sx={{ textAlign: 'center', mb: 8 }}>
+        {/* Hero Section */}
+        <Box sx={{ textAlign: 'center', mb: 12 }}>
           <Chip
             label="Transform Your Business"
             sx={{
@@ -805,7 +883,8 @@ function MarketingLandingPage({ router }) {
               color: '#fff',
               mb: 3,
               letterSpacing: '-1px',
-              textShadow: '0 2px 10px rgba(0,0,0,0.1)'
+              textShadow: '0 2px 10px rgba(0,0,0,0.1)',
+              fontSize: { xs: '2.5rem', md: '3.5rem' }
             }}
           >
             AI-Driven Taxi Financial Management
@@ -818,39 +897,311 @@ function MarketingLandingPage({ router }) {
               mx: 'auto',
               fontWeight: 400,
               lineHeight: 1.8,
-              mb: 4
+              mb: 5,
+              fontSize: '1.1rem'
             }}
           >
             Revolutionize your taxi business with intelligent automation. Real-time reporting,
             automated billing, and financial insights powered by artificial intelligence.
           </Typography>
 
+          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Button
+              variant="contained"
+              size="large"
+              onClick={() => router.push('/signin')}
+              sx={{
+                backgroundColor: '#fff',
+                color: '#667eea',
+                fontWeight: 700,
+                px: 6,
+                py: 2,
+                borderRadius: 3,
+                fontSize: '1rem',
+                textTransform: 'none',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+                '&:hover': {
+                  backgroundColor: alpha('#fff', 0.95),
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+                  transform: 'translateY(-2px)'
+                },
+                transition: 'all 0.3s ease'
+              }}
+            >
+              Get Started for Free
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              sx={{
+                color: '#fff',
+                borderColor: alpha('#fff', 0.5),
+                fontWeight: 700,
+                px: 6,
+                py: 2,
+                borderRadius: 3,
+                fontSize: '1rem',
+                textTransform: 'none',
+                '&:hover': {
+                  borderColor: '#fff',
+                  backgroundColor: alpha('#fff', 0.1)
+                },
+                transition: 'all 0.3s ease'
+              }}
+            >
+              Watch Demo
+            </Button>
+          </Box>
+        </Box>
+
+        {/* Features Section */}
+        <Box sx={{ mb: 12, pt: 8 }}>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              color: '#fff',
+              textAlign: 'center',
+              mb: 8,
+              fontSize: { xs: '2rem', md: '2.5rem' }
+            }}
+          >
+            Powerful Features for Your Fleet
+          </Typography>
+
+          <Grid container spacing={4}>
+            {[
+              {
+                icon: <TrendingUpOutlined sx={{ fontSize: 40 }} />,
+                title: 'Real-Time Analytics',
+                description: 'Track earnings, expenses, and profitability in real-time with AI-powered insights'
+              },
+              {
+                icon: <MonetizationOn sx={{ fontSize: 40 }} />,
+                title: 'Automated Billing',
+                description: 'Smart expense tracking and automatic invoice generation for customers'
+              },
+              {
+                icon: <LocalShipping sx={{ fontSize: 40 }} />,
+                title: 'Fleet Management',
+                description: 'Manage drivers, vehicles, and shift allocations with intelligent optimization'
+              },
+              {
+                icon: <BarChart sx={{ fontSize: 40 }} />,
+                title: 'Advanced Reports',
+                description: 'Comprehensive financial reports and driver performance metrics'
+              },
+              {
+                icon: <AutoAwesome sx={{ fontSize: 40 }} />,
+                title: 'AI Insights',
+                description: 'Intelligent recommendations for business optimization and growth'
+              },
+              {
+                icon: <CheckCircle sx={{ fontSize: 40 }} />,
+                title: 'Multi-Tenant Support',
+                description: 'Manage multiple taxi companies or divisions from one platform'
+              }
+            ].map((feature, idx) => (
+              <Grid item xs={12} sm={6} md={4} key={idx}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 4,
+                    background: alpha('#fff', 0.08),
+                    backdropFilter: 'blur(10px)',
+                    border: '1px solid ' + alpha('#fff', 0.2),
+                    borderRadius: 3,
+                    height: '100%',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      background: alpha('#fff', 0.12),
+                      border: '1px solid ' + alpha('#fff', 0.4),
+                      transform: 'translateY(-8px)'
+                    }
+                  }}
+                >
+                  <Box sx={{ color: '#ffc107', mb: 2 }}>
+                    {feature.icon}
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', mb: 1 }}>
+                    {feature.title}
+                  </Typography>
+                  <Typography sx={{ color: alpha('#fff', 0.8), lineHeight: 1.6 }}>
+                    {feature.description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        {/* Benefits Section */}
+        <Box sx={{ mb: 12, pt: 8, background: alpha('#fff', 0.05), p: 6, borderRadius: 3 }}>
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              color: '#fff',
+              textAlign: 'center',
+              mb: 8,
+              fontSize: { xs: '2rem', md: '2.5rem' }
+            }}
+          >
+            Why Choose FareFlow?
+          </Typography>
+
+          <Grid container spacing={4}>
+            {[
+              { number: '50+', label: 'Taxi Companies Trust Us', icon: '🚕' },
+              { number: '1M+', label: 'Transactions Processed', icon: '💰' },
+              { number: '99.9%', label: 'System Uptime', icon: '⚡' },
+              { number: '24/7', label: 'Customer Support', icon: '🎯' }
+            ].map((stat, idx) => (
+              <Grid item xs={12} sm={6} md={3} key={idx}>
+                <Box sx={{ textAlign: 'center' }}>
+                  <Typography sx={{ fontSize: '3rem', mb: 1 }}>{stat.icon}</Typography>
+                  <Typography
+                    variant="h4"
+                    sx={{ fontWeight: 800, color: '#ffc107', mb: 1 }}
+                  >
+                    {stat.number}
+                  </Typography>
+                  <Typography sx={{ color: alpha('#fff', 0.8), fontWeight: 500 }}>
+                    {stat.label}
+                  </Typography>
+                </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Box>
+
+        {/* CTA Section */}
+        <Box
+          sx={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+            border: '1px solid ' + alpha('#fff', 0.2),
+            p: 8,
+            borderRadius: 3,
+            textAlign: 'center',
+            mb: 6
+          }}
+        >
+          <Typography
+            variant="h3"
+            sx={{
+              fontWeight: 800,
+              color: '#fff',
+              mb: 3,
+              fontSize: { xs: '1.8rem', md: '2.5rem' }
+            }}
+          >
+            Ready to Transform Your Taxi Business?
+          </Typography>
+          <Typography
+            sx={{
+              color: alpha('#fff', 0.9),
+              mb: 5,
+              fontSize: '1.1rem',
+              maxWidth: 700,
+              mx: 'auto'
+            }}
+          >
+            Join hundreds of taxi companies worldwide that are already using FareFlow to automate their operations and grow their business.
+          </Typography>
           <Button
             variant="contained"
             size="large"
             onClick={() => router.push('/signin')}
             sx={{
-              backgroundColor: '#fff',
-              color: '#667eea',
+              backgroundColor: '#ffc107',
+              color: '#333',
               fontWeight: 700,
-              px: 6,
-              py: 2,
+              px: 8,
+              py: 2.5,
               borderRadius: 3,
               fontSize: '1.1rem',
               textTransform: 'none',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+              boxShadow: '0 8px 24px rgba(255,193,7,0.3)',
               '&:hover': {
-                backgroundColor: alpha('#fff', 0.95),
-                boxShadow: '0 12px 32px rgba(0,0,0,0.3)',
+                backgroundColor: '#ffb300',
+                boxShadow: '0 12px 32px rgba(255,193,7,0.4)',
                 transform: 'translateY(-2px)'
               },
               transition: 'all 0.3s ease'
             }}
           >
-            Get Started for Free
+            Start Your Free Trial Today
           </Button>
         </Box>
       </Container>
+
+      {/* Footer */}
+      <Box
+        sx={{
+          background: 'rgba(0,0,0,0.3)',
+          backdropFilter: 'blur(10px)',
+          borderTop: '1px solid ' + alpha('#fff', 0.1),
+          py: 6,
+          mt: 6
+        }}
+      >
+        <Container maxWidth="lg">
+          <Grid container spacing={4} sx={{ mb: 4 }}>
+            <Grid item xs={12} sm={6} md={3}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <LocalTaxi sx={{ fontSize: 24, color: '#ffc107' }} />
+                <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '1.1rem' }}>
+                  FareFlow
+                </Typography>
+              </Box>
+              <Typography sx={{ color: alpha('#fff', 0.7), fontSize: '0.9rem' }}>
+                AI-powered taxi financial management platform
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>Product</Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), mb: 1, cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Features
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), mb: 1, cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Pricing
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Security
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>Company</Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), mb: 1, cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                About Us
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), mb: 1, cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Blog
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Contact
+              </Typography>
+            </Grid>
+            <Grid item xs={12} sm={6} md={3}>
+              <Typography sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>Legal</Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), mb: 1, cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Privacy Policy
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), mb: 1, cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Terms of Service
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.7), cursor: 'pointer', '&:hover': { color: '#fff' } }}>
+                Cookies
+              </Typography>
+            </Grid>
+          </Grid>
+          <Box sx={{ borderTop: '1px solid ' + alpha('#fff', 0.1), pt: 4, textAlign: 'center' }}>
+            <Typography sx={{ color: alpha('#fff', 0.6), fontSize: '0.9rem' }}>
+              © 2026 FareFlow. All rights reserved. | Powered by AI
+            </Typography>
+          </Box>
+        </Container>
+      </Box>
     </Box>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Box, Typography, Button, IconButton, useMediaQuery, useTheme } from "@mui/material";
+import { Box, Typography, Button, IconButton, useMediaQuery, useTheme, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
 import { DirectionsCar, Home, Logout, Business, ArrowBack } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -29,6 +29,7 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tenantName, setTenantName] = useState(null);
   const [categoryInfo, setCategoryInfo] = useState(null);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   useEffect(() => {
     setTenantName(getTenantName());
@@ -42,11 +43,16 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
   }, [pathname]);
 
   const handleLogout = () => {
-    if (typeof window !== 'undefined') {
-      if (window.confirm('Are you sure you want to logout?')) {
-        apiLogout();
-      }
-    }
+    setLogoutDialogOpen(true);
+  };
+
+  const handleConfirmLogout = () => {
+    setLogoutDialogOpen(false);
+    apiLogout();
+  };
+
+  const handleCancelLogout = () => {
+    setLogoutDialogOpen(false);
   };
 
   const handleBackToCategory = () => {
@@ -205,6 +211,73 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
           </Box>
         </Box>
       )}
+
+      {/* Professional Logout Confirmation Dialog */}
+      <Dialog
+        open={logoutDialogOpen}
+        onClose={handleCancelLogout}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)'
+          }
+        }}
+      >
+        <DialogTitle
+          sx={{
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: '1.3rem',
+            pb: 1
+          }}
+        >
+          🚪 Confirm Logout
+        </DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1rem', lineHeight: 1.6 }}>
+            Are you sure you want to logout? You'll need to sign in again to access your dashboard.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, gap: 2 }}>
+          <Button
+            onClick={handleCancelLogout}
+            variant="outlined"
+            sx={{
+              color: '#fff',
+              borderColor: 'rgba(255,255,255,0.5)',
+              fontWeight: 600,
+              px: 3,
+              '&:hover': {
+                borderColor: '#fff',
+                backgroundColor: 'rgba(255,255,255,0.1)'
+              }
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmLogout}
+            variant="contained"
+            sx={{
+              backgroundColor: '#fff',
+              color: '#667eea',
+              fontWeight: 700,
+              px: 4,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.2)',
+              '&:hover': {
+                backgroundColor: 'rgba(255,255,255,0.95)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.3)'
+              }
+            }}
+          >
+            Yes, Logout
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
