@@ -16,6 +16,8 @@ import {
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
+import RecurringExpenseDialogContent from "./components/RecurringExpenseDialogContent";
+import { autoApplyExpenses, bulkCreateExpenses } from "../lib/expenseCategoryRuleService";
 
 export default function ExpensesRevenuesPage() {
   const [currentUser, setCurrentUser] = useState(null);
@@ -210,6 +212,66 @@ export default function ExpensesRevenuesPage() {
   };
 
   const handleSaveRecurring = async () => {
+    // Determine the category configuration mode
+    const selectedCategory = expenseCategories.find(c => c.id === parseInt(recurringFormData.expenseCategoryId));
+
+    // For AUTO_MATCH mode, need amount and effective date
+    if (selectedCategory?.supportsAutoMatching && !editingRecurring) {
+      if (!recurringFormData.expenseCategoryId || !recurringFormData.amount || !recurringFormData.effectiveFrom) {
+        setError("Category, amount, and effective date are required");
+        return;
+      }
+
+      try {
+        // Call auto-apply endpoint
+        const result = await autoApplyExpenses(recurringFormData.expenseCategoryId, {
+          amount: parseFloat(recurringFormData.amount),
+          billingMethod: recurringFormData.billingMethod,
+          effectiveFrom: recurringFormData.effectiveFrom,
+          effectiveTo: recurringFormData.effectiveTo || null,
+        });
+
+        setSuccess(`Auto-applied expenses to ${result.createdExpenses?.length || 0} cabs. ${result.errors?.length > 0 ? `(${result.errors.length} errors)` : ""}`);
+        setOpenRecurringDialog(false);
+        loadRecurringExpenses();
+      } catch (err) {
+        setError(err.message);
+      }
+      return;
+    }
+
+    // For INDIVIDUAL_CONFIG mode, need cab amounts
+    if (selectedCategory?.supportsIndividualConfig && !editingRecurring) {
+      if (!recurringFormData.expenseCategoryId || !recurringFormData.billingMethod || !recurringFormData.effectiveFrom) {
+        setError("Category, billing method, and effective date are required");
+        return;
+      }
+
+      const cabAmounts = recurringFormData.cabAmounts || {};
+      if (Object.keys(cabAmounts).length === 0) {
+        setError("Please select at least one cab with an amount");
+        return;
+      }
+
+      try {
+        // Call bulk-create endpoint
+        const result = await bulkCreateExpenses(recurringFormData.expenseCategoryId, {
+          cabIdToAmount: cabAmounts,
+          billingMethod: recurringFormData.billingMethod,
+          effectiveFrom: recurringFormData.effectiveFrom,
+          effectiveTo: recurringFormData.effectiveTo || null,
+        });
+
+        setSuccess(`Created expenses for ${result.createdExpenses?.length || 0} cabs. ${result.errors?.length > 0 ? `(${result.errors.length} errors)` : ""}`);
+        setOpenRecurringDialog(false);
+        loadRecurringExpenses();
+      } catch (err) {
+        setError(err.message);
+      }
+      return;
+    }
+
+    // For MANUAL mode or editing, use traditional method
     if (!recurringFormData.expenseCategoryId || !recurringFormData.entityId || !recurringFormData.amount || !recurringFormData.effectiveFrom) {
       setError("Category, entity, amount, and effective date are required");
       return;
@@ -660,106 +722,15 @@ export default function ExpensesRevenuesPage() {
         <Dialog open={openRecurringDialog} onClose={() => setOpenRecurringDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle>{editingRecurring ? "Edit Recurring Expense" : "Add Recurring Expense"}</DialogTitle>
           <DialogContent>
-            <Grid container spacing={2} sx={{ pt: 2 }}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
-                  <Select value={recurringFormData.expenseCategoryId} label="Category" onChange={(e) => setRecurringFormData({ ...recurringFormData, expenseCategoryId: e.target.value })} disabled={!!editingRecurring}>
-                    {expenseCategories.filter(c => c.categoryType === "FIXED").map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Billing Method</InputLabel>
-                  <Select value={recurringFormData.billingMethod} label="Billing Method" onChange={(e) => setRecurringFormData({ ...recurringFormData, billingMethod: e.target.value })} disabled={!!editingRecurring}>
-                    <MenuItem value="MONTHLY">Monthly</MenuItem>
-                    <MenuItem value="DAILY">Daily</MenuItem>
-                    <MenuItem value="PER_SHIFT">Per Shift</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Entity Type</InputLabel>
-                  <Select value={recurringFormData.entityType} label="Entity Type" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityType: e.target.value, entityId: "", shiftType: "" })} disabled={!!editingRecurring}>
-                    <MenuItem value="CAB">Cab</MenuItem>
-                    <MenuItem value="DRIVER">Driver</MenuItem>
-                    <MenuItem value="SHIFT">Shift</MenuItem>
-                    <MenuItem value="COMPANY">Company</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              {recurringFormData.entityType === "SHIFT" ? (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Shift Type</InputLabel>
-                    <Select value={recurringFormData.shiftType} label="Shift Type" onChange={(e) => setRecurringFormData({ ...recurringFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })} disabled={!!editingRecurring}>
-                      <MenuItem value="DAY">Day Shift</MenuItem>
-                      <MenuItem value="NIGHT">Night Shift</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : recurringFormData.entityType === "DRIVER" ? (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Driver</InputLabel>
-                    <Select
-                      value={recurringFormData.entityId}
-                      label="Driver"
-                      onChange={(e) => setRecurringFormData({ ...recurringFormData, entityId: e.target.value })}
-                      disabled={!!editingRecurring}
-                    >
-                      {drivers.map(driver => (
-                        <MenuItem key={driver.id} value={driver.id}>
-                          {driver.firstName} {driver.lastName} ({driver.driverNumber})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : recurringFormData.entityType === "CAB" ? (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Cab</InputLabel>
-                    <Select value={recurringFormData.entityId} label="Cab" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityId: e.target.value })} disabled={!!editingRecurring}>
-                      {cabs.map(cab => <MenuItem key={cab.id} value={cab.id}>Cab {cab.cabNumber}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Entity</InputLabel>
-                    <Select value={recurringFormData.entityId} label="Entity" onChange={(e) => setRecurringFormData({ ...recurringFormData, entityId: e.target.value })} disabled={!!editingRecurring}>
-                      <MenuItem value="1">Company</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              )}
-              <Grid item xs={12} md={6}>
-                <TextField label="Amount" type="number" value={recurringFormData.amount} onChange={(e) => setRecurringFormData({ ...recurringFormData, amount: e.target.value })} 
-                  fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} disabled={!!editingRecurring} />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField label="Effective From" type="date" value={recurringFormData.effectiveFrom} onChange={(e) => setRecurringFormData({ ...recurringFormData, effectiveFrom: e.target.value })} 
-                  fullWidth required InputLabelProps={{ shrink: true }} disabled={!!editingRecurring} />
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  label="End Date (Optional)"
-                  type="date"
-                  value={recurringFormData.effectiveTo}
-                  onChange={(e) => setRecurringFormData({ ...recurringFormData, effectiveTo: e.target.value })}
-                  fullWidth
-                  InputLabelProps={{ shrink: true }}
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <TextField label="Notes" value={recurringFormData.notes} onChange={(e) => setRecurringFormData({ ...recurringFormData, notes: e.target.value })} fullWidth multiline rows={2} />
-              </Grid>
-            </Grid>
-            {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+            <RecurringExpenseDialogContent
+              formData={recurringFormData}
+              setFormData={setRecurringFormData}
+              expenseCategories={expenseCategories.filter(c => c.categoryType === "FIXED")}
+              cabs={cabs}
+              drivers={drivers}
+              editing={editingRecurring}
+              error={error}
+            />
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setOpenRecurringDialog(false)}>Cancel</Button>

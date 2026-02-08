@@ -2,11 +2,11 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { 
-  Box, 
-  Typography, 
-  Container, 
-  Card, 
+import {
+  Box,
+  Typography,
+  Container,
+  Card,
   CardContent,
   Button,
   Grid,
@@ -39,92 +39,82 @@ import {
   Insights,
   Schedule,
   Analytics,
-  ArrowForward
+  ArrowForward,
+  Category,
+  ArrowBack,
+  Engineering,
+  FileUpload,
+  ListAlt,
+  SmartToy,
+  VerifiedUser,
+  LocalShipping,
+  MonetizationOn,
+  BarChart,
+  PersonAdd,
+  DirectionsBus,
+  AccessTime,
+  Palette,
+  ApiOutlined,
+  UploadFile,
+  Lightbulb,
+  TrendingUpOutlined,
+  ReceiptOutlined,
+  StorefrontOutlined,
+  GroupOutlined,
+  AiOutlined,
+  SchemaOutlined
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
+import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
 
 export default function HomePage() {
   const [user, setUser] = useState(null);
   const [tenantName, setTenantName] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
-    const autoLogin = async () => {
+    const checkAuthentication = () => {
       try {
-        // Ensure localStorage is properly initialized with correct tenant
         const storedTenantSchema = localStorage.getItem("tenantSchema");
-        const storedToken = localStorage.getItem("token");
-
-        // Check if already authenticated with correct schema
         let currentUser = getCurrentUser();
-        if (currentUser && isAuthenticated() && storedTenantSchema === "fareflow") {
+
+        if (currentUser && isAuthenticated() && storedTenantSchema) {
           setUser(currentUser);
           setTenantName(getTenantName());
+
+          // Load saved category if returning from a sub-page
+          const savedCategory = localStorage.getItem('dashboardCategory');
+          if (savedCategory) {
+            setSelectedCategory(savedCategory);
+            localStorage.removeItem('dashboardCategory'); // Clear after using
+          }
+
           setIsLoading(false);
           return;
         }
 
-        // Auto-login with demo credentials for Maclures Cabs
-        const response = await fetch(`${API_BASE_URL}/auth/login`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Tenant-ID": "fareflow",
-          },
-          body: JSON.stringify({
-            username: "admin2",
-            password: "admin123",
-            tenantId: "fareflow"
-          }),
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-
-          // Store authentication data
-          localStorage.setItem("token", data.token);
-          localStorage.setItem("tenantId", "mac-cabs");
-          localStorage.setItem("tenantSchema", "fareflow");
-          localStorage.setItem("tenantName", "Maclures Cabs");
-          localStorage.setItem("user", JSON.stringify({
-            userId: data.userId,
-            username: data.username,
-            email: data.email,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            role: data.role,
-            driverId: data.driverId,
-            tenantId: "mac-cabs",
-            tenantSchema: "fareflow"
-          }));
-
-          // Set cookies for middleware
-          document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
-          document.cookie = `tenantId=fareflow; path=/; max-age=86400; SameSite=Strict`;
-
-          // Reload user data
-          currentUser = getCurrentUser();
-          setUser(currentUser);
-          setTenantName(getTenantName());
-        }
+        setIsLoading(false);
       } catch (err) {
-        console.error("Auto-login error:", err);
-      } finally {
+        console.error("Authentication check error:", err);
         setIsLoading(false);
       }
     };
 
-    autoLogin();
+    checkAuthentication();
   }, []);
 
   const handleLogout = () => {
-    logout();
+    if (typeof window !== 'undefined') {
+      if (window.confirm('Are you sure you want to logout?')) {
+        logout();
+      }
+    }
   };
 
   const isUserAuthenticated = isAuthenticated() && user;
 
-  // Show loading screen during auto-login
   if (isLoading) {
     return (
       <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f6f9fc' }}>
@@ -147,15 +137,12 @@ export default function HomePage() {
     );
   }
 
-  // Show marketing landing page for non-authenticated users
   if (!isUserAuthenticated) {
     return <MarketingLandingPage router={router} />;
   }
 
-  // Show enhanced dashboard for authenticated users
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f6f9fc' }}>
-      {/* Header */}
       <AppBar position="static" sx={{ backgroundColor: '#3e5244' }}>
         <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
@@ -171,7 +158,7 @@ export default function HomePage() {
               )}
             </Box>
           </Box>
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Person />
@@ -184,7 +171,7 @@ export default function HomePage() {
                 </Typography>
               </Box>
             </Box>
-            
+
             <IconButton color="inherit" onClick={handleLogout} title="Logout">
               <Logout />
             </IconButton>
@@ -192,9 +179,7 @@ export default function HomePage() {
         </Toolbar>
       </AppBar>
 
-      {/* Main Content */}
       <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        {/* Welcome Banner */}
         <Paper
           elevation={0}
           sx={{
@@ -228,10 +213,10 @@ export default function HomePage() {
               </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
-              <Chip 
+              <Chip
                 icon={<AutoAwesome />}
-                label="AI Dashboard" 
-                sx={{ 
+                label="AI Dashboard"
+                sx={{
                   backgroundColor: alpha('#fff', 0.25),
                   backdropFilter: 'blur(10px)',
                   color: '#fff',
@@ -246,667 +231,491 @@ export default function HomePage() {
           </Box>
         </Paper>
 
-        {/* Quick Actions Section - Only 4 Key Features */}
-        {user.role !== 'SUPER_ADMIN' && (
+        {/* Breadcrumb Navigation */}
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Button
+            onClick={() => setSelectedCategory(null)}
+            sx={{
+              color: selectedCategory ? '#667eea' : '#3e5244',
+              fontWeight: 600,
+              textTransform: 'none',
+              fontSize: '0.95rem',
+              p: 0,
+              minWidth: 'auto',
+              '&:hover': { textDecoration: 'underline' }
+            }}
+          >
+            Dashboard
+          </Button>
+          {selectedCategory && (
+            <>
+              <Typography sx={{ color: '#999' }}>/</Typography>
+              <Typography sx={{ fontWeight: 600, color: '#3e5244', fontSize: '0.95rem' }}>
+                {selectedCategory === 'account' && 'Account & Customers'}
+                {selectedCategory === 'operations' && 'Operations'}
+                {selectedCategory === 'financials' && 'Financials'}
+                {selectedCategory === 'reports' && 'Reports'}
+                {selectedCategory === 'integrations' && 'Data & Integrations'}
+                {selectedCategory === 'profiles' && 'Shift Profiles'}
+              </Typography>
+            </>
+          )}
+        </Box>
+
+        {!selectedCategory ? (
           <>
-            <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 3 }}>
-              Quick Access
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 4 }}>
+              Select a Category
             </Typography>
-        
-        <Grid container spacing={3} sx={{ mb: 6 }}>
-          {/* Account Management */}
-          {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '2px solid transparent',
-                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  backgroundOrigin: 'border-box',
-                  backgroundClip: 'padding-box, border-box',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(102, 126, 234, 0.25)',
-                  }
-                }}
-                onClick={() => router.push('/account-management')}
-              >
-                <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
-                      boxShadow: '0 8px 16px rgba(102, 126, 234, 0.3)'
-                    }}
-                  >
-                    <AccountBalance sx={{ fontSize: 32, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    Account Management
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
-                    Customers & invoices
-                  </Typography>
-                  <Chip 
-                    label="Featured" 
-                    size="small"
-                    sx={{ 
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.7rem'
-                    }}
-                  />
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
 
-          {/* Reports */}
-          {user.role !== 'VIEWER' && (
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '2px solid transparent',
-                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                  backgroundOrigin: 'border-box',
-                  backgroundClip: 'padding-box, border-box',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(79, 172, 254, 0.25)',
-                  }
-                }}
-                onClick={() => router.push('/reports')}
-              >
-                <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
-                      boxShadow: '0 8px 16px rgba(79, 172, 254, 0.3)'
-                    }}
-                  >
-                    <Assessment sx={{ fontSize: 32, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    Reports
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
-                    Financial analytics
-                  </Typography>
-                  <Chip 
-                    label="Featured" 
-                    size="small"
-                    sx={{ 
-                      background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.7rem'
-                    }}
+            <Grid container spacing={3}>
+              {/* Account & Customers Management */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Account & Customers"
+                    description="Manage customers and invoicing"
+                    icon={AccountBalance}
+                    gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    onClick={() => setSelectedCategory('account')}
                   />
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+                </Grid>
+              )}
 
-          {/* Driver Summary - Only for non-driver roles */}
-          {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '2px solid transparent',
-                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-                  backgroundOrigin: 'border-box',
-                  backgroundClip: 'padding-box, border-box',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(67, 233, 123, 0.25)',
-                  }
-                }}
-                onClick={() => router.push('/driver-summary')}
-              >
-                <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
-                      boxShadow: '0 8px 16px rgba(67, 233, 123, 0.3)'
-                    }}
-                  >
-                    <People sx={{ fontSize: 32, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    Driver Summary
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
-                    Financial overview
-                  </Typography>
-                  <Chip
-                    label="New"
-                    size="small"
-                    sx={{
-                      background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.7rem'
-                    }}
+              {/* Operations */}
+              {['ADMIN', 'MANAGER', 'DISPATCHER'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Operations"
+                    description="Manage drivers, cabs & shifts"
+                    icon={DirectionsCar}
+                    gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
+                    onClick={() => setSelectedCategory('operations')}
                   />
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+                </Grid>
+              )}
 
-          {/* My Profile - Only for DRIVER role */}
-          {user.role === 'DRIVER' && (
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '2px solid transparent',
-                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  backgroundOrigin: 'border-box',
-                  backgroundClip: 'padding-box, border-box',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(102, 126, 234, 0.25)',
-                  }
-                }}
-                onClick={() => router.push('/users')}
-              >
-                <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
-                      boxShadow: '0 8px 16px rgba(102, 126, 234, 0.3)'
-                    }}
-                  >
-                    <Person sx={{ fontSize: 32, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    My Profile
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
-                    Edit your information
-                  </Typography>
-                  <Chip
-                    label="Personal"
-                    size="small"
-                    sx={{
-                      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.7rem'
-                    }}
+              {/* Financials */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Financials"
+                    description="Setup expenses, revenues & reporting"
+                    icon={AttachMoney}
+                    gradient="linear-gradient(135deg, #f5576c 0%, #f093fb 100%)"
+                    onClick={() => setSelectedCategory('financials')}
                   />
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+                </Grid>
+              )}
 
-          {/* Third-party Integrations */}
-          {user.role === 'ADMIN' && (
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '2px solid transparent',
-                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)',
-                  backgroundOrigin: 'border-box',
-                  backgroundClip: 'padding-box, border-box',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(249, 209, 62, 0.25)',
-                  }
-                }}
-                onClick={() => router.push('/taxicaller-integration')}
-              >
-                <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
-                      boxShadow: '0 8px 16px rgba(249, 209, 62, 0.3)'
-                    }}
-                  >
-                    <LocalTaxi sx={{ fontSize: 32, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    Third-party Integrations
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
-                    TaxiCaller & more
-                  </Typography>
-                  <Chip 
-                    label="Featured" 
-                    size="small"
-                    sx={{ 
-                      background: 'linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.7rem'
-                    }}
+              {/* Reports */}
+              {user.role !== 'VIEWER' && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Reports"
+                    description="Financial analytics & insights"
+                    icon={Assessment}
+                    gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                    onClick={() => setSelectedCategory('reports')}
                   />
-                </CardContent>
-              </Card>
-            </Grid>
-          )}
+                </Grid>
+              )}
 
-          {/* Data Uploads */}
-          {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
-            <Grid item xs={12} sm={6} md={3}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '2px solid transparent',
-                  backgroundImage: 'linear-gradient(white, white), linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                  backgroundOrigin: 'border-box',
-                  backgroundClip: 'padding-box, border-box',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(240, 147, 251, 0.25)',
-                  }
-                }}
-                onClick={() => router.push('/data-uploads')}
-              >
-                <CardContent sx={{ p: 3, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: 3,
-                      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mx: 'auto',
-                      mb: 2,
-                      boxShadow: '0 8px 16px rgba(240, 147, 251, 0.3)'
-                    }}
-                  >
-                    <CloudUpload sx={{ fontSize: 32, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    Data Uploads
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
-                    Import CSV data
-                  </Typography>
-                  <Chip 
-                    label="Featured" 
-                    size="small"
-                    sx={{ 
-                      background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-                      color: '#fff',
-                      fontWeight: 700,
-                      fontSize: '0.7rem'
-                    }}
+              {/* Data Imports & Integrations */}
+              {user.role === 'ADMIN' && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Data & Integrations"
+                    description="Imports & third-party integrations"
+                    icon={CloudUpload}
+                    gradient="linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)"
+                    onClick={() => setSelectedCategory('integrations')}
                   />
-                </CardContent>
-              </Card>
+                </Grid>
+              )}
+
+              {/* Shift Profiles */}
+              {['ADMIN', 'MANAGER', 'DISPATCHER', 'ACCOUNTANT'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Shift Profiles"
+                    description="Manage reusable attribute bundles"
+                    icon={Category}
+                    gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                    onClick={() => setSelectedCategory('profiles')}
+                  />
+                </Grid>
+              )}
             </Grid>
-          )}
-        </Grid>
           </>
+        ) : (
+          <SubCategoryView
+            user={user}
+            category={selectedCategory}
+            onBack={() => setSelectedCategory(null)}
+            onNavigate={(path) => router.push(path)}
+          />
         )}
-
-        {/* Classic Dashboard Section */}
-        <Box sx={{ mt: 6 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 3 }}>
-            {user.role === 'SUPER_ADMIN' ? 'User Management' : 'All Features'}
-          </Typography>
-
-          <Grid container spacing={3}>
-            {/* All the original cards from your current homepage */}
-            {['ADMIN', 'SUPER_ADMIN'].includes(user.role) && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  sx={{
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s',
-                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                  }}
-                  onClick={() => router.push('/users')}
-                >
-                  <CardContent>
-                    <People sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      User Management
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Create and manage system users
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-
-            {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Card 
-                  sx={{ 
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s',
-                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 },
-                    border: '2px solid #1976d2'
-                  }}
-                  onClick={() => router.push('/account-management')}
-                >
-                  <CardContent>
-                    <AccountBalance sx={{ fontSize: 40, color: '#1976d2', mb: 2 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      Account Management
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Manage customers, charges & invoices
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-
-            {user.role === 'ADMIN' && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  sx={{
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s',
-                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 },
-                    border: '2px solid #E5C02E',
-                    backgroundColor: '#F9D13E'
-                  }}
-                  onClick={() => router.push('/taxicaller-integration')}
-                >
-                  <CardContent>
-                    <LocalTaxi sx={{ fontSize: 40, color: '#000', mb: 2 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      TaxiCaller Integration
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Import trip data & driver reports
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-
-            {['ADMIN', 'MANAGER', 'DISPATCHER'].includes(user.role) && (
-              <>
-                <Grid item xs={12} sm={6} md={4}>
-                  <Card 
-                    sx={{ 
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                      '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                    }}
-                    onClick={() => router.push('/drivers')}
-                  >
-                    <CardContent>
-                      <DirectionsCar sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Drivers
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Manage driver information
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={4}>
-                  <Card 
-                    sx={{ 
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                      '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                    }}
-                    onClick={() => router.push('/cabs')}
-                  >
-                    <CardContent>
-                      <DirectionsCar sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Cabs
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Manage fleet vehicles
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={4}>
-                  <Card 
-                    sx={{ 
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                      '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                    }}
-                    onClick={() => router.push('/shifts')}
-                  >
-                    <CardContent>
-                      <Assessment sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Shift Ownership
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Manage shift ownership & history
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </>
-            )}
-
-            {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
-              <>
-                <Grid item xs={12} sm={6} md={4}>
-                  <Card 
-                    sx={{ 
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                      '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                    }}
-                    onClick={() => router.push('/financial-setup')}
-                  >
-                    <CardContent>
-                      <Assessment sx={{ fontSize: 40, color: '#1976d2', mb: 2 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Financial Setup
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Configure expense categories & lease rates
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={4}>
-                  <Card 
-                    sx={{ 
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                      '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                    }}
-                    onClick={() => router.push('/expenses')}
-                  >
-                    <CardContent>
-                      <Assessment sx={{ fontSize: 40, color: '#f57c00', mb: 2 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Expenses & Revenues Setup
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Track one-time & recurring expenses & revenues
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-
-                <Grid item xs={12} sm={6} md={4}>
-                  <Card
-                    sx={{
-                      cursor: 'pointer',
-                      transition: 'transform 0.2s',
-                      '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 },
-                      border: '2px solid rgba(25, 118, 210, 0.35)',
-                      background: 'linear-gradient(135deg, rgba(25, 118, 210, 0.10) 0%, rgba(156, 39, 176, 0.08) 100%)'
-                    }}
-                    onClick={() => router.push('/data-uploads')}
-                  >
-                    <CardContent>
-                      <CloudUpload sx={{ fontSize: 40, color: '#1976d2', mb: 2 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                        Data Uploads
-                      </Typography>
-                      <Typography variant="body2" color="textSecondary">
-                        Upload and import CSV transaction data
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              </>
-            )}
-
-            {user.role !== 'SUPER_ADMIN' && (
-              <Grid item xs={12} sm={6} md={4}>
-                <Card
-                  sx={{
-                    cursor: 'pointer',
-                    transition: 'transform 0.2s',
-                    '&:hover': { transform: 'translateY(-4px)', boxShadow: 3 }
-                  }}
-                  onClick={() => router.push('/reports')}
-                >
-                  <CardContent>
-                    <Assessment sx={{ fontSize: 40, color: '#3e5244', mb: 2 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
-                      Reports
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      View financial reports
-                    </Typography>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
-          </Grid>
-        </Box>
-
-        {/* User Info Section */}
-        <Box sx={{ mt: 6, p: 3, backgroundColor: '#fff', borderRadius: 2, boxShadow: 1 }}>
-          <Typography variant="h6" sx={{ mb: 2, fontWeight: 'bold', color: '#3e5244' }}>
-            🎉 Session Active
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <Typography variant="body2" sx={{ color: '#666' }}>
-                <strong>Name:</strong> {user.firstName} {user.lastName}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Typography variant="body2" sx={{ color: '#666' }}>
-                <strong>Username:</strong> {user.username}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Typography variant="body2" sx={{ color: '#666' }}>
-                <strong>Email:</strong> {user.email || 'Not set'}
-              </Typography>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <Typography variant="body2" sx={{ color: '#666' }}>
-                <strong>Role:</strong> {user.role}
-              </Typography>
-            </Grid>
-            {user.driverId && (
-              <Grid item xs={12}>
-                <Typography variant="body2" sx={{ color: '#666' }}>
-                  ✅ <strong>Driver ID:</strong> {user.driverId}
-                </Typography>
-              </Grid>
-            )}
-          </Grid>
-        </Box>
       </Container>
     </Box>
   );
 }
 
-// Marketing Landing Page Component for non-authenticated users
+// Category Card Component
+function CategoryCard({ title, description, icon: Icon, gradient, onClick }) {
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        height: '100%',
+        background: '#fff',
+        borderRadius: 3,
+        cursor: 'pointer',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        border: '2px solid transparent',
+        backgroundImage: `linear-gradient(white, white), ${gradient}`,
+        backgroundOrigin: 'border-box',
+        backgroundClip: 'padding-box, border-box',
+        '&:hover': {
+          transform: 'translateY(-8px)',
+          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+        }
+      }}
+      onClick={onClick}
+    >
+      <CardContent sx={{ p: 3, textAlign: 'center' }}>
+        <Box
+          sx={{
+            width: 64,
+            height: 64,
+            borderRadius: 3,
+            background: gradient,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            mx: 'auto',
+            mb: 2,
+            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)'
+          }}
+        >
+          <Icon sx={{ fontSize: 32, color: '#fff' }} />
+        </Box>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
+          {title}
+        </Typography>
+        <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+          {description}
+        </Typography>
+        <ArrowForward sx={{ fontSize: 20, color: '#667eea' }} />
+      </CardContent>
+    </Card>
+  );
+}
+
+// Sub-Category View Component
+function SubCategoryView({ user, category, onBack, onNavigate }) {
+  const getSubCategories = () => {
+    switch (category) {
+      case 'account':
+        return [
+          {
+            title: 'Customer Management',
+            description: 'Client profiles, invoicing & payment tracking',
+            icon: StorefrontOutlined,
+            path: '/account-management',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Smart CRM',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#667eea'
+          }
+        ];
+
+      case 'operations':
+        return [
+          {
+            title: 'Drivers',
+            description: 'Intelligent driver management & performance tracking',
+            icon: GroupOutlined,
+            path: '/drivers',
+            roles: ['ADMIN', 'MANAGER', 'DISPATCHER'],
+            badge: 'AI Insights',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#667eea'
+          },
+          {
+            title: 'Fleet Management',
+            description: 'Real-time vehicle tracking & maintenance scheduling',
+            icon: LocalShipping,
+            path: '/cabs',
+            roles: ['ADMIN', 'MANAGER', 'DISPATCHER'],
+            badge: 'Live Tracking',
+            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            accent: '#f5576c'
+          },
+          {
+            title: 'Shift Assignment',
+            description: 'Smart shift allocation & ownership management',
+            icon: AccessTime,
+            path: '/shifts',
+            roles: ['ADMIN', 'MANAGER', 'DISPATCHER'],
+            badge: 'Optimized',
+            gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            accent: '#00f2fe'
+          },
+          {
+            title: 'Shift Profiles',
+            description: 'Define & manage shift attribute presets',
+            icon: Palette,
+            path: '/shift-attributes',
+            roles: ['ADMIN', 'MANAGER', 'DISPATCHER'],
+            badge: 'Templates',
+            gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            accent: '#38f9d7'
+          }
+        ];
+
+      case 'financials':
+        return [
+          {
+            title: 'Income & Expenses',
+            description: 'Real-time financial tracking with AI insights',
+            icon: MonetizationOn,
+            path: '/expenses',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Smart Analysis',
+            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            accent: '#f5576c'
+          },
+          {
+            title: 'Financial Configuration',
+            description: 'Setup categories, rates & automated calculations',
+            icon: SchemaOutlined,
+            path: '/financial-setup',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Setup',
+            gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            accent: '#00f2fe'
+          }
+        ];
+
+      case 'reports':
+        return [
+          {
+            title: 'Analytics Dashboard',
+            description: 'AI-powered financial insights & forecasting',
+            icon: BarChart,
+            path: '/reports',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Predictive',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#667eea'
+          },
+          {
+            title: 'Driver Performance',
+            description: 'Individual earnings, efficiency & metrics',
+            icon: TrendingUpOutlined,
+            path: '/driver-summary',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'ML Powered',
+            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            accent: '#f5576c'
+          }
+        ];
+
+      case 'integrations':
+        return [
+          {
+            title: 'Taxi Caller Sync',
+            description: 'Real-time integration with dispatch system',
+            icon: ApiOutlined,
+            path: '/taxicaller-integration',
+            roles: ['ADMIN'],
+            badge: 'Connected',
+            gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            accent: '#38f9d7'
+          },
+          {
+            title: 'Data Import',
+            description: 'Batch upload CSV, Excel & external data sources',
+            icon: UploadFile,
+            path: '/data-uploads',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Bulk',
+            gradient: 'linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)',
+            accent: '#E5C02E'
+          }
+        ];
+
+      case 'profiles':
+        return [
+          {
+            title: 'Shift Profile Templates',
+            description: 'Create & manage reusable shift configurations',
+            icon: Palette,
+            path: '/shift-profiles',
+            roles: ['ADMIN', 'MANAGER', 'DISPATCHER', 'ACCOUNTANT'],
+            badge: 'Templates',
+            gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            accent: '#38f9d7'
+          }
+        ];
+
+      default:
+        return [];
+    }
+  };
+
+  const getCategoryTitle = () => {
+    const titles = {
+      account: 'Account & Customers',
+      operations: 'Operations',
+      financials: 'Financials',
+      reports: 'Reports',
+      integrations: 'Data & Integrations',
+      profiles: 'Shift Profiles'
+    };
+    return titles[category] || 'Category';
+  };
+
+  const subCategories = getSubCategories().filter(item =>
+    item.roles.includes(user.role)
+  );
+
+  return (
+    <>
+      {/* Header with Back Button and Category Info */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 4 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Button
+            variant="outlined"
+            startIcon={<ArrowBack />}
+            onClick={onBack}
+            sx={{
+              color: '#667eea',
+              borderColor: '#667eea',
+              fontWeight: 600,
+              textTransform: 'none',
+              '&:hover': {
+                backgroundColor: alpha('#667eea', 0.1),
+                borderColor: '#667eea'
+              }
+            }}
+          >
+            Back to Dashboard
+          </Button>
+          <Box>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244' }}>
+              {getCategoryTitle()}
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#999', display: 'block', mt: 0.5 }}>
+              {getSubCategories().filter(item => item.roles.includes(user.role)).length} item{getSubCategories().filter(item => item.roles.includes(user.role)).length !== 1 ? 's' : ''}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      <Grid container spacing={3}>
+        {subCategories.map((item, index) => (
+          <Grid item xs={12} sm={6} md={4} key={index}>
+            <Card
+              elevation={0}
+              sx={{
+                height: '100%',
+                background: '#fff',
+                borderRadius: 3,
+                cursor: 'pointer',
+                transition: 'all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                border: '2px solid transparent',
+                backgroundImage: `linear-gradient(white, white), ${item.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}`,
+                backgroundOrigin: 'border-box',
+                backgroundClip: 'padding-box, border-box',
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  inset: 0,
+                  background: `radial-gradient(circle at top right, ${item.accent || '#667eea'}15, transparent 60%)`,
+                  pointerEvents: 'none'
+                },
+                '&:hover': {
+                  transform: 'translateY(-12px) scale(1.02)',
+                  boxShadow: `0 20px 50px ${(item.accent || '#667eea')}25`,
+                  borderColor: item.accent || '#667eea'
+                }
+              }}
+              onClick={() => {
+                storeCategoryNav(category);
+                onNavigate(item.path);
+              }}
+            >
+              <CardContent sx={{ p: 3, position: 'relative', zIndex: 1 }}>
+                {/* Badge */}
+                {item.badge && (
+                  <Box sx={{ mb: 1.5, display: 'flex', gap: 1 }}>
+                    <Chip
+                      icon={<AutoAwesome sx={{ fontSize: 14 }} />}
+                      label={item.badge}
+                      size="small"
+                      sx={{
+                        background: `linear-gradient(135deg, ${item.accent || '#667eea'}, ${item.accent || '#667eea'}dd)`,
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: '0.7rem',
+                        height: 20
+                      }}
+                    />
+                  </Box>
+                )}
+
+                {/* Icon Box with gradient */}
+                <Box
+                  sx={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 2.5,
+                    background: item.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mb: 2,
+                    boxShadow: `0 10px 30px ${(item.accent || '#667eea')}30`,
+                    transition: 'all 0.3s ease'
+                  }}
+                >
+                  <item.icon sx={{ fontSize: 32, color: '#fff' }} />
+                </Box>
+
+                {/* Title and Description */}
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5, color: '#1a1a1a' }}>
+                  {item.title}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#555', lineHeight: 1.5, mb: 2 }}>
+                  {item.description}
+                </Typography>
+
+                {/* Action indicator */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: item.accent || '#667eea', fontWeight: 600, fontSize: '0.9rem' }}>
+                  <ArrowForward sx={{ fontSize: 18 }} />
+                  <span>Open</span>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+        ))}
+      </Grid>
+    </>
+  );
+}
+
+// Marketing Landing Page Component
 function MarketingLandingPage({ router }) {
   return (
     <Box sx={{ minHeight: '100vh', background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-      {/* Header with Sign In / Get Started */}
-      <AppBar 
-        position="static" 
+      <AppBar
+        position="static"
         elevation={0}
-        sx={{ 
+        sx={{
           backgroundColor: 'transparent',
           backdropFilter: 'blur(10px)',
           borderBottom: '1px solid rgba(255,255,255,0.1)'
@@ -918,11 +727,11 @@ function MarketingLandingPage({ router }) {
             <Typography variant="h5" sx={{ fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
               FareFlow
             </Typography>
-            <Chip 
+            <Chip
               icon={<AutoAwesome sx={{ fontSize: 16 }} />}
-              label="AI-Powered" 
+              label="AI-Powered"
               size="small"
-              sx={{ 
+              sx={{
                 ml: 1,
                 backgroundColor: alpha('#fff', 0.2),
                 color: '#fff',
@@ -931,7 +740,7 @@ function MarketingLandingPage({ router }) {
               }}
             />
           </Box>
-          
+
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Button
               variant="outlined"
@@ -976,12 +785,11 @@ function MarketingLandingPage({ router }) {
         </Toolbar>
       </AppBar>
 
-      {/* Hero Section */}
       <Container maxWidth="lg" sx={{ pt: 8, pb: 6 }}>
         <Box sx={{ textAlign: 'center', mb: 8 }}>
-          <Chip 
-            label="Transform Your Business" 
-            sx={{ 
+          <Chip
+            label="Transform Your Business"
+            sx={{
               mb: 3,
               backgroundColor: alpha('#fff', 0.2),
               color: '#fff',
@@ -990,11 +798,11 @@ function MarketingLandingPage({ router }) {
               px: 1
             }}
           />
-          <Typography 
-            variant="h2" 
-            sx={{ 
-              fontWeight: 900, 
-              color: '#fff', 
+          <Typography
+            variant="h2"
+            sx={{
+              fontWeight: 900,
+              color: '#fff',
               mb: 3,
               letterSpacing: '-1px',
               textShadow: '0 2px 10px rgba(0,0,0,0.1)'
@@ -1002,21 +810,21 @@ function MarketingLandingPage({ router }) {
           >
             AI-Driven Taxi Financial Management
           </Typography>
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              color: alpha('#fff', 0.9), 
-              maxWidth: 800, 
+          <Typography
+            variant="h6"
+            sx={{
+              color: alpha('#fff', 0.9),
+              maxWidth: 800,
               mx: 'auto',
               fontWeight: 400,
               lineHeight: 1.8,
               mb: 4
             }}
           >
-            Revolutionize your taxi business with intelligent automation. Real-time reporting, 
+            Revolutionize your taxi business with intelligent automation. Real-time reporting,
             automated billing, and financial insights powered by artificial intelligence.
           </Typography>
-          
+
           <Button
             variant="contained"
             size="large"
@@ -1041,203 +849,6 @@ function MarketingLandingPage({ router }) {
           >
             Get Started for Free
           </Button>
-          <Typography 
-            variant="caption" 
-            sx={{ 
-              display: 'block', 
-              mt: 2, 
-              color: alpha('#fff', 0.7),
-              fontSize: '0.95rem'
-            }}
-          >
-            Join hundreds of taxi operators saving time and money
-          </Typography>
-        </Box>
-
-        {/* Features Grid */}
-        <Grid container spacing={3} sx={{ mb: 6 }}>
-          {[
-            {
-              icon: AutoAwesome,
-              title: "AI-Powered Analytics",
-              description: "Machine learning algorithms analyze your data to provide predictive insights and optimize operations",
-              gradient: 'linear-gradient(135deg, #FFD93D 0%, #F6A623 100%)'
-            },
-            {
-              icon: Speed,
-              title: "Real-Time Dashboard",
-              description: "Live visibility into trips, credit card transactions, driver shifts, and revenue as it happens",
-              gradient: 'linear-gradient(135deg, #6BCB77 0%, #4D96A9 100%)'
-            },
-            {
-              icon: Receipt,
-              title: "Automated Billing",
-              description: "Smart invoice generation with automatic lease calculations, expense tracking, and payment reconciliation",
-              gradient: 'linear-gradient(135deg, #FF6B9D 0%, #C06C84 100%)'
-            },
-            {
-              icon: TrendingUp,
-              title: "Financial Forecasting",
-              description: "Predictive models forecast revenue trends, identify profit opportunities, and optimize pricing strategies",
-              gradient: 'linear-gradient(135deg, #A78BFA 0%, #7C3AED 100%)'
-            },
-            {
-              icon: Timeline,
-              title: "Year-End Reports",
-              description: "Comprehensive tax-ready reports with automated categorization, expense summaries, and P&L statements",
-              gradient: 'linear-gradient(135deg, #60A5FA 0%, #3B82F6 100%)'
-            },
-            {
-              icon: Insights,
-              title: "Smart Recommendations",
-              description: "AI suggests cost-saving opportunities, driver performance improvements, and operational efficiencies",
-              gradient: 'linear-gradient(135deg, #F472B6 0%, #EC4899 100%)'
-            }
-          ].map((feature, index) => (
-            <Grid item xs={12} md={4} key={index}>
-              <Card
-                elevation={0}
-                sx={{
-                  height: '100%',
-                  background: '#fff',
-                  borderRadius: 3,
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                  border: '1px solid rgba(0,0,0,0.05)',
-                  '&:hover': {
-                    transform: 'translateY(-8px)',
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.15)',
-                  }
-                }}
-              >
-                <CardContent sx={{ p: 3 }}>
-                  <Box
-                    sx={{
-                      width: 56,
-                      height: 56,
-                      borderRadius: 2,
-                      background: feature.gradient,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      mb: 2
-                    }}
-                  >
-                    <feature.icon sx={{ fontSize: 28, color: '#fff' }} />
-                  </Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
-                    {feature.title}
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: '#666', lineHeight: 1.7 }}>
-                    {feature.description}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-          ))}
-        </Grid>
-
-        {/* Stats Section */}
-        <Paper
-          elevation={0}
-          sx={{
-            p: 4,
-            mb: 6,
-            background: alpha('#fff', 0.15),
-            backdropFilter: 'blur(20px)',
-            borderRadius: 3,
-            border: '1px solid rgba(255,255,255,0.2)'
-          }}
-        >
-          <Grid container spacing={4}>
-            {[
-              { label: "Time Saved", value: "95%", icon: Schedule, description: "Automated processing" },
-              { label: "Accuracy", value: "99.9%", icon: CheckCircle, description: "Error-free calculations" },
-              { label: "Cost Reduction", value: "60%", icon: AttachMoney, description: "Lower admin costs" },
-              { label: "Real-time Updates", value: "< 1s", icon: Speed, description: "Instant sync" }
-            ].map((stat, index) => (
-              <Grid item xs={12} sm={6} md={3} key={index}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <stat.icon sx={{ fontSize: 40, color: '#fff', mb: 1, opacity: 0.9 }} />
-                  <Typography variant="h3" sx={{ fontWeight: 900, color: '#fff', mb: 0.5 }}>
-                    {stat.value}
-                  </Typography>
-                  <Typography variant="body1" sx={{ fontWeight: 600, color: '#fff', mb: 0.5 }}>
-                    {stat.label}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: alpha('#fff', 0.7) }}>
-                    {stat.description}
-                  </Typography>
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
-        </Paper>
-
-        {/* Benefits Section */}
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h5" sx={{ fontWeight: 700, color: '#fff', mb: 3, textAlign: 'center' }}>
-            Why Drivers Love FareFlow
-          </Typography>
-          <Grid container spacing={3}>
-            {[
-              {
-                title: "Automated Lease Calculations",
-                description: "Smart algorithms calculate lease fees based on shift type, vehicle ownership, and historical rates",
-                icon: Analytics
-              },
-              {
-                title: "Instant Credit Card Reconciliation", 
-                description: "AI matches credit card transactions to drivers and shifts automatically with 99.9% accuracy",
-                icon: CreditCard
-              },
-              {
-                title: "Intelligent Expense Tracking",
-                description: "Categorizes and tracks all expenses automatically, from fuel to maintenance, with smart predictions",
-                icon: Description
-              },
-              {
-                title: "Real-Time Financial Health",
-                description: "Live dashboards show profitability, cash flow, and trends so you always know where you stand",
-                icon: TrendingUp
-              }
-            ].map((benefit, index) => (
-              <Grid item xs={12} md={6} key={index}>
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 3,
-                    background: alpha('#fff', 0.1),
-                    backdropFilter: 'blur(10px)',
-                    borderRadius: 2,
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    height: '100%'
-                  }}
-                >
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <benefit.icon sx={{ fontSize: 32, color: '#fff', opacity: 0.9 }} />
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#fff', mb: 1 }}>
-                        {benefit.title}
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: alpha('#fff', 0.8), lineHeight: 1.7 }}>
-                        {benefit.description}
-                      </Typography>
-                    </Box>
-                  </Box>
-                </Paper>
-              </Grid>
-            ))}
-          </Grid>
-        </Box>
-
-        {/* Footer */}
-        <Box sx={{ textAlign: 'center', py: 4, borderTop: `1px solid ${alpha('#fff', 0.2)}`, mt: 6 }}>
-          <Typography variant="body2" sx={{ color: alpha('#fff', 0.7) }}>
-            © 2025 FareFlow - AI-Powered Taxi Financial Management System
-          </Typography>
-          <Typography variant="caption" sx={{ color: alpha('#fff', 0.5), display: 'block', mt: 1 }}>
-            Saving taxi operators time and money through intelligent automation
-          </Typography>
         </Box>
       </Container>
     </Box>

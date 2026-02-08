@@ -105,6 +105,16 @@ export async function apiRequest(endpoint, options = {}) {
 
     return response;
   } catch (error) {
+    // Report API errors to New Relic if available
+    if (typeof window !== 'undefined' && window.newrelic) {
+      window.newrelic.noticeError(error, {
+        tenantId: getTenantId(),
+        tenantSchema: getTenantSchema(),
+        endpoint: endpoint,
+        method: options.method || 'GET',
+      });
+    }
+
     // Handle network errors
     if (error.message === 'Failed to fetch' || error.message.includes('NetworkError')) {
       throw new Error('Unable to connect to server. Please check your connection.');

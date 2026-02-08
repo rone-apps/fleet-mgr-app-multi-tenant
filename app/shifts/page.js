@@ -61,6 +61,7 @@ import {
   CheckCircle as CurrentIcon,
   Person as PersonIcon,
   AttachMoney as MoneyIcon,
+  Category as CategoryIcon,
 } from "@mui/icons-material";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
 
@@ -70,6 +71,7 @@ export default function ShiftsPage() {
   const [cabs, setCabs] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [shifts, setShifts] = useState([]);
+  const [shiftProfiles, setShiftProfiles] = useState([]);
   const [selectedCab, setSelectedCab] = useState(null);
   const [selectedOwner, setSelectedOwner] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,11 @@ export default function ShiftsPage() {
   const [cabFilter, setCabFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [viewMode, setViewMode] = useState("by-cab");
+  const [attributeFilters, setAttributeFilters] = useState({
+    cabType: "ALL",
+    shareType: "ALL",
+    airportLicense: "ALL",
+  });
   
   // Search states for lists
   const [cabSearchText, setCabSearchText] = useState("");
@@ -89,11 +96,30 @@ export default function ShiftsPage() {
   const [openCreateDialog, setOpenCreateDialog] = useState(false);
   const [openTransferDialog, setOpenTransferDialog] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [openStatusDialog, setOpenStatusDialog] = useState(false);
+  const [openProfileAssignmentDialog, setOpenProfileAssignmentDialog] = useState(false);
+  const [openProfileHistoryDialog, setOpenProfileHistoryDialog] = useState(false);
   const [selectedShift, setSelectedShift] = useState(null);
   const [ownershipHistory, setOwnershipHistory] = useState([]);
+  const [statusHistory, setStatusHistory] = useState([]);
+  const [profileAssignmentHistory, setProfileAssignmentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
-  
+  const [statusChangeFormData, setStatusChangeFormData] = useState({
+    effectiveFrom: new Date().toISOString().split("T")[0],
+    reason: "",
+  });
+
+  // Edit attributes dialog states
+  const [openEditAttributesDialog, setOpenEditAttributesDialog] = useState(false);
+  const [editAttributesFormData, setEditAttributesFormData] = useState({
+    cabType: "",
+    shareType: "",
+    hasAirportLicense: false,
+    airportLicenseNumber: "",
+    airportLicenseExpiry: "",
+  });
+
   // Tab state
   const [tabValue, setTabValue] = useState(0);
   
@@ -107,6 +133,11 @@ export default function ShiftsPage() {
     acquisitionType: "INITIAL_ASSIGNMENT",
     acquisitionPrice: "",
     notes: "",
+    cabType: "",
+    shareType: "",
+    hasAirportLicense: false,
+    airportLicenseNumber: "",
+    airportLicenseExpiry: "",
   });
 
   const [transferFormData, setTransferFormData] = useState({
@@ -116,6 +147,12 @@ export default function ShiftsPage() {
     salePrice: "",
     acquisitionPrice: "",
     notes: "",
+  });
+
+  const [profileAssignmentFormData, setProfileAssignmentFormData] = useState({
+    profileId: "",
+    startDate: new Date().toISOString().split("T")[0],
+    reason: "",
   });
 
   useEffect(() => {
@@ -137,7 +174,7 @@ export default function ShiftsPage() {
   }, [router]);
 
   const loadData = async () => {
-    await Promise.all([loadCabs(), loadDrivers()]);
+    await Promise.all([loadCabs(), loadDrivers(), loadShiftProfiles()]);
     setLoading(false);
   };
 
@@ -180,6 +217,24 @@ export default function ShiftsPage() {
       }
     } catch (err) {
       console.error("Error loading drivers:", err);
+    }
+  };
+
+  const loadShiftProfiles = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/shift-profiles`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShiftProfiles(data);
+      }
+    } catch (err) {
+      console.error("Error loading shift profiles:", err);
     }
   };
 
@@ -235,7 +290,7 @@ export default function ShiftsPage() {
     let filtered = [...shifts];
 
     if (viewMode === "by-owner" && cabFilter) {
-      filtered = filtered.filter(shift => 
+      filtered = filtered.filter(shift =>
         (shift.cabNumber && shift.cabNumber.toLowerCase().includes(cabFilter.toLowerCase())) ||
         (shift.cabRegistration && shift.cabRegistration.toLowerCase().includes(cabFilter.toLowerCase()))
       );
@@ -246,6 +301,21 @@ export default function ShiftsPage() {
         (shift.currentOwnerName && shift.currentOwnerName.toLowerCase().includes(ownerFilter.toLowerCase())) ||
         (shift.currentOwnerDriverNumber && shift.currentOwnerDriverNumber.toLowerCase().includes(ownerFilter.toLowerCase()))
       );
+    }
+
+    // Apply attribute filters
+    if (attributeFilters.cabType !== "ALL") {
+      filtered = filtered.filter(shift => shift.cabType === attributeFilters.cabType);
+    }
+
+    if (attributeFilters.shareType !== "ALL") {
+      filtered = filtered.filter(shift => shift.shareType === attributeFilters.shareType);
+    }
+
+    if (attributeFilters.airportLicense === "YES") {
+      filtered = filtered.filter(shift => shift.hasAirportLicense);
+    } else if (attributeFilters.airportLicense === "NO") {
+      filtered = filtered.filter(shift => !shift.hasAirportLicense);
     }
 
     return filtered;
@@ -291,6 +361,11 @@ export default function ShiftsPage() {
       acquisitionType: "INITIAL_ASSIGNMENT",
       acquisitionPrice: "",
       notes: "",
+      cabType: "",
+      shareType: "",
+      hasAirportLicense: false,
+      airportLicenseNumber: "",
+      airportLicenseExpiry: "",
     });
     setError("");
     setSuccess("");
@@ -424,6 +499,223 @@ export default function ShiftsPage() {
     setSelectedShift(null);
     setOwnershipHistory([]);
     setHistoryError("");
+  };
+
+  const handleOpenStatusDialog = (shift) => {
+    setSelectedShift(shift);
+    setStatusChangeFormData({
+      effectiveFrom: new Date().toISOString().split("T")[0],
+      reason: "",
+    });
+    setStatusHistory([]);
+    setError("");
+    setSuccess("");
+    setOpenStatusDialog(true);
+  };
+
+  const handleCloseStatusDialog = () => {
+    setOpenStatusDialog(false);
+    setSelectedShift(null);
+    setStatusHistory([]);
+  };
+
+  const handleOpenEditAttributesDialog = (shift) => {
+    setSelectedShift(shift);
+    setEditAttributesFormData({
+      cabType: shift.cabType || "",
+      shareType: shift.shareType || "",
+      hasAirportLicense: shift.hasAirportLicense || false,
+      airportLicenseNumber: shift.airportLicenseNumber || "",
+      airportLicenseExpiry: shift.airportLicenseExpiry || "",
+    });
+    setError("");
+    setSuccess("");
+    setOpenEditAttributesDialog(true);
+  };
+
+  const handleCloseEditAttributesDialog = () => {
+    setOpenEditAttributesDialog(false);
+    setSelectedShift(null);
+    setEditAttributesFormData({
+      cabType: "",
+      shareType: "",
+      hasAirportLicense: false,
+      airportLicenseNumber: "",
+      airportLicenseExpiry: "",
+    });
+  };
+
+  const handleOpenProfileAssignmentDialog = (shift) => {
+    setSelectedShift(shift);
+    setProfileAssignmentFormData({
+      profileId: "",
+      startDate: new Date().toISOString().split("T")[0],
+      reason: "",
+    });
+    setError("");
+    setSuccess("");
+    setOpenProfileAssignmentDialog(true);
+  };
+
+  const handleCloseProfileAssignmentDialog = () => {
+    setOpenProfileAssignmentDialog(false);
+    setSelectedShift(null);
+    setProfileAssignmentFormData({
+      profileId: "",
+      startDate: new Date().toISOString().split("T")[0],
+      reason: "",
+    });
+  };
+
+  const handleOpenProfileHistoryDialog = async (shift) => {
+    setSelectedShift(shift);
+    setProfileAssignmentHistory([]);
+    setHistoryLoading(true);
+    setHistoryError("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/shift-profiles/assignments/${shift.id}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setProfileAssignmentHistory(data);
+        setOpenProfileHistoryDialog(true);
+      } else {
+        setHistoryError("Failed to load profile assignment history");
+      }
+    } catch (err) {
+      console.error("Error loading profile history:", err);
+      setHistoryError("Failed to load profile assignment history");
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleCloseProfileHistoryDialog = () => {
+    setOpenProfileHistoryDialog(false);
+    setSelectedShift(null);
+    setProfileAssignmentHistory([]);
+  };
+
+  const handleAssignProfile = async () => {
+    if (!profileAssignmentFormData.profileId) {
+      setError("Please select a profile");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/shift-profiles/assign`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        body: JSON.stringify({
+          shiftId: selectedShift.id,
+          profileId: profileAssignmentFormData.profileId,
+          startDate: profileAssignmentFormData.startDate,
+          reason: profileAssignmentFormData.reason || "Profile assignment",
+        }),
+      });
+
+      if (response.ok) {
+        setSuccess("Profile assigned successfully");
+        handleCloseProfileAssignmentDialog();
+        // Reload shifts to get updated profile info
+        if (selectedCab) {
+          loadShiftsForCab(selectedCab.id);
+        } else if (selectedOwner) {
+          loadShiftsByOwner(selectedOwner.id);
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to assign profile");
+      }
+    } catch (err) {
+      console.error("Error assigning profile:", err);
+      setError("Failed to assign profile");
+    }
+  };
+
+  const handleUpdateShiftAttributes = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cab-shifts/${selectedShift.id}/attributes`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+          body: JSON.stringify({
+            cabType: editAttributesFormData.cabType || null,
+            shareType: editAttributesFormData.shareType || null,
+            hasAirportLicense: editAttributesFormData.hasAirportLicense,
+            airportLicenseNumber: editAttributesFormData.airportLicenseNumber || null,
+            airportLicenseExpiry: editAttributesFormData.airportLicenseExpiry || null,
+          }),
+        }
+      );
+
+      if (response.ok) {
+        setSuccess("Shift attributes updated successfully");
+        handleCloseEditAttributesDialog();
+        if (selectedCab) {
+          loadShiftsForCab(selectedCab.id);
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to update shift attributes");
+      }
+    } catch (err) {
+      console.error("Error updating shift attributes:", err);
+      setError("Failed to update shift attributes");
+    }
+  };
+
+  const handleChangeShiftStatus = async (action) => {
+    try {
+      const endpoint = action === "activate"
+        ? `/shift-status/${selectedShift.id}/activate`
+        : `/shift-status/${selectedShift.id}/deactivate`;
+
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        body: JSON.stringify({
+          effectiveFrom: statusChangeFormData.effectiveFrom,
+          reason: statusChangeFormData.reason,
+        }),
+      });
+
+      if (response.ok) {
+        setSuccess(`Shift ${action === "activate" ? "activated" : "deactivated"} successfully`);
+        handleCloseStatusDialog();
+        if (selectedCab) {
+          loadShiftsForCab(selectedCab.id);
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || `Failed to ${action} shift`);
+      }
+    } catch (err) {
+      console.error(`Error ${action}ing shift:`, err);
+      setError(`Failed to ${action} shift`);
+    }
   };
 
   // Helper functions for history display
@@ -816,6 +1108,58 @@ export default function ShiftsPage() {
                   </Box>
                 )}
 
+                {shifts.length > 0 && (
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                      Filter by Attributes
+                    </Typography>
+                    <Grid container spacing={1}>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Cab Type</InputLabel>
+                          <Select
+                            value={attributeFilters.cabType}
+                            label="Cab Type"
+                            onChange={(e) => setAttributeFilters({ ...attributeFilters, cabType: e.target.value })}
+                          >
+                            <MenuItem value="ALL">All Types</MenuItem>
+                            <MenuItem value="SEDAN">Sedan</MenuItem>
+                            <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Share Type</InputLabel>
+                          <Select
+                            value={attributeFilters.shareType}
+                            label="Share Type"
+                            onChange={(e) => setAttributeFilters({ ...attributeFilters, shareType: e.target.value })}
+                          >
+                            <MenuItem value="ALL">All Share Types</MenuItem>
+                            <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
+                            <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                      <Grid item xs={12}>
+                        <FormControl fullWidth size="small">
+                          <InputLabel>Airport License</InputLabel>
+                          <Select
+                            value={attributeFilters.airportLicense}
+                            label="Airport License"
+                            onChange={(e) => setAttributeFilters({ ...attributeFilters, airportLicense: e.target.value })}
+                          >
+                            <MenuItem value="ALL">All</MenuItem>
+                            <MenuItem value="YES">Has License</MenuItem>
+                            <MenuItem value="NO">No License</MenuItem>
+                          </Select>
+                        </FormControl>
+                      </Grid>
+                    </Grid>
+                  </Box>
+                )}
+
                 {filteredShifts.length === 0 ? (
                   <Alert severity="info">
                     {shifts.length === 0 
@@ -884,8 +1228,125 @@ export default function ShiftsPage() {
                               </Box>
                             )}
 
+                            <Divider sx={{ my: 2 }} />
+
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                                Shift Attributes
+                              </Typography>
+                              <Grid container spacing={1}>
+                                {shift.cabType && (
+                                  <Grid item xs={6}>
+                                    <Typography variant="caption" color="textSecondary">
+                                      Cab Type
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {shift.cabType === "HANDICAP_VAN" ? "Handicap Van" : "Sedan"}
+                                    </Typography>
+                                  </Grid>
+                                )}
+                                {shift.shareType && (
+                                  <Grid item xs={6}>
+                                    <Typography variant="caption" color="textSecondary">
+                                      Share Type
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {shift.shareType === "VOTING_SHARE" ? "Voting" : "Non-Voting"}
+                                    </Typography>
+                                  </Grid>
+                                )}
+                                {shift.hasAirportLicense !== undefined && (
+                                  <Grid item xs={6}>
+                                    <Typography variant="caption" color="textSecondary">
+                                      Airport License
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {shift.hasAirportLicense ? "Yes" : "No"}
+                                    </Typography>
+                                  </Grid>
+                                )}
+                                {shift.hasAirportLicense && shift.airportLicenseNumber && (
+                                  <Grid item xs={6}>
+                                    <Typography variant="caption" color="textSecondary">
+                                      License #
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {shift.airportLicenseNumber}
+                                    </Typography>
+                                  </Grid>
+                                )}
+                                {shift.hasAirportLicense && shift.airportLicenseExpiry && (
+                                  <Grid item xs={6}>
+                                    <Typography variant="caption" color="textSecondary">
+                                      Expires
+                                    </Typography>
+                                    <Typography variant="body2">
+                                      {new Date(shift.airportLicenseExpiry).toLocaleDateString()}
+                                    </Typography>
+                                  </Grid>
+                                )}
+                              </Grid>
+                            </Box>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            <Box sx={{ mb: 2 }}>
+                              <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                                Shift Profile
+                              </Typography>
+                              {shift.currentProfile ? (
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                                  <CategoryIcon fontSize="small" />
+                                  <Chip
+                                    label={shift.currentProfile.profileName}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                </Box>
+                              ) : (
+                                <Typography variant="body2" color="textSecondary">
+                                  No profile assigned
+                                </Typography>
+                              )}
+                            </Box>
+
                             {canEdit && (
-                              <Box sx={{ display: "flex", gap: 1 }}>
+                              <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+                                <Button
+                                  variant="outlined"
+                                  startIcon={<CategoryIcon />}
+                                  onClick={() => handleOpenProfileAssignmentDialog(shift)}
+                                  size="small"
+                                >
+                                  {shift.currentProfile ? "Change Profile" : "Assign Profile"}
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  onClick={() => handleOpenEditAttributesDialog(shift)}
+                                  size="small"
+                                >
+                                  Edit Attributes
+                                </Button>
+                                {!shift.isActive && (
+                                  <Button
+                                    variant="contained"
+                                    color="success"
+                                    onClick={() => handleOpenStatusDialog(shift)}
+                                    size="small"
+                                  >
+                                    Activate
+                                  </Button>
+                                )}
+                                {shift.isActive && (
+                                  <Button
+                                    variant="outlined"
+                                    color="warning"
+                                    onClick={() => handleOpenStatusDialog(shift)}
+                                    size="small"
+                                  >
+                                    Deactivate
+                                  </Button>
+                                )}
                                 <Button
                                   variant="outlined"
                                   startIcon={<TransferIcon />}
@@ -901,6 +1362,14 @@ export default function ShiftsPage() {
                                   size="small"
                                 >
                                   History
+                                </Button>
+                                <Button
+                                  variant="outlined"
+                                  startIcon={<CategoryIcon />}
+                                  onClick={() => handleOpenProfileHistoryDialog(shift)}
+                                  size="small"
+                                >
+                                  Profile History
                                 </Button>
                               </Box>
                             )}
@@ -1064,6 +1533,85 @@ export default function ShiftsPage() {
                 size="small"
               />
             </Grid>
+
+            <Grid item xs={12}>
+              <Divider />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Typography variant="subtitle2" gutterBottom>
+                Shift Attributes
+              </Typography>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Cab Type</InputLabel>
+                <Select
+                  value={createFormData.cabType || ""}
+                  label="Cab Type"
+                  onChange={(e) => setCreateFormData({ ...createFormData, cabType: e.target.value })}
+                >
+                  <MenuItem value="">Select Type</MenuItem>
+                  <MenuItem value="SEDAN">Sedan</MenuItem>
+                  <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Share Type</InputLabel>
+                <Select
+                  value={createFormData.shareType || ""}
+                  label="Share Type"
+                  onChange={(e) => setCreateFormData({ ...createFormData, shareType: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
+                  <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Airport License</InputLabel>
+                <Select
+                  value={createFormData.hasAirportLicense ? "YES" : "NO"}
+                  label="Airport License"
+                  onChange={(e) => setCreateFormData({ ...createFormData, hasAirportLicense: e.target.value === "YES" })}
+                >
+                  <MenuItem value="NO">No</MenuItem>
+                  <MenuItem value="YES">Yes</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {createFormData.hasAirportLicense && (
+              <>
+                <Grid item xs={6}>
+                  <TextField
+                    label="License Number"
+                    value={createFormData.airportLicenseNumber || ""}
+                    onChange={(e) => setCreateFormData({ ...createFormData, airportLicenseNumber: e.target.value })}
+                    fullWidth
+                    size="small"
+                  />
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField
+                    label="Expiry Date"
+                    type="date"
+                    value={createFormData.airportLicenseExpiry || ""}
+                    onChange={(e) => setCreateFormData({ ...createFormData, airportLicenseExpiry: e.target.value })}
+                    fullWidth
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
         <DialogActions>
@@ -1369,6 +1917,394 @@ export default function ShiftsPage() {
         <DialogActions sx={{ borderTop: 1, borderColor: "divider", px: 3, py: 2 }}>
           <Button onClick={handleCloseHistoryDialog} variant="contained">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Status Change Dialog */}
+      <Dialog open={openStatusDialog} onClose={handleCloseStatusDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">
+              {selectedShift?.isActive ? "Deactivate" : "Activate"} Shift
+            </Typography>
+            <IconButton onClick={handleCloseStatusDialog}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+          {selectedShift && (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                {selectedShift.isActive
+                  ? `You are about to deactivate the ${selectedShift.shiftTypeDisplay}`
+                  : `You are about to activate the ${selectedShift.shiftTypeDisplay}`
+                }
+              </Alert>
+
+              <TextField
+                fullWidth
+                label="Effective From"
+                type="date"
+                value={statusChangeFormData.effectiveFrom}
+                onChange={(e) =>
+                  setStatusChangeFormData({
+                    ...statusChangeFormData,
+                    effectiveFrom: e.target.value,
+                  })
+                }
+                InputLabelProps={{ shrink: true }}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Reason (optional)"
+                multiline
+                rows={3}
+                value={statusChangeFormData.reason}
+                onChange={(e) =>
+                  setStatusChangeFormData({
+                    ...statusChangeFormData,
+                    reason: e.target.value,
+                  })
+                }
+                placeholder={
+                  selectedShift.isActive
+                    ? "e.g., Maintenance, Lease ended, etc."
+                    : "e.g., Back from maintenance, New agreement, etc."
+                }
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseStatusDialog}>Cancel</Button>
+          <Button
+            onClick={() =>
+              handleChangeShiftStatus(selectedShift?.isActive ? "deactivate" : "activate")
+            }
+            variant="contained"
+            color={selectedShift?.isActive ? "warning" : "success"}
+          >
+            {selectedShift?.isActive ? "Deactivate" : "Activate"} Shift
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit Shift Attributes Dialog */}
+      <Dialog open={openEditAttributesDialog} onClose={handleCloseEditAttributesDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">
+              Edit Shift Attributes
+            </Typography>
+            <IconButton onClick={handleCloseEditAttributesDialog}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+          {selectedShift && (
+            <Box sx={{ pt: 2 }}>
+              <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
+                {selectedShift.shiftTypeDisplay} Shift - Cab {selectedShift.cabNumber}
+              </Typography>
+
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Cab Type</InputLabel>
+                <Select
+                  value={editAttributesFormData.cabType}
+                  onChange={(e) =>
+                    setEditAttributesFormData({
+                      ...editAttributesFormData,
+                      cabType: e.target.value,
+                    })
+                  }
+                  label="Cab Type"
+                >
+                  <MenuItem value="">Select Type</MenuItem>
+                  <MenuItem value="SEDAN">Sedan</MenuItem>
+                  <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Share Type</InputLabel>
+                <Select
+                  value={editAttributesFormData.shareType}
+                  onChange={(e) =>
+                    setEditAttributesFormData({
+                      ...editAttributesFormData,
+                      shareType: e.target.value,
+                    })
+                  }
+                  label="Share Type"
+                >
+                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
+                  <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
+                </Select>
+              </FormControl>
+
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Airport License</InputLabel>
+                <Select
+                  value={editAttributesFormData.hasAirportLicense ? "YES" : "NO"}
+                  onChange={(e) =>
+                    setEditAttributesFormData({
+                      ...editAttributesFormData,
+                      hasAirportLicense: e.target.value === "YES",
+                    })
+                  }
+                  label="Airport License"
+                >
+                  <MenuItem value="NO">No</MenuItem>
+                  <MenuItem value="YES">Yes</MenuItem>
+                </Select>
+              </FormControl>
+
+              {editAttributesFormData.hasAirportLicense && (
+                <>
+                  <TextField
+                    fullWidth
+                    label="License Number"
+                    value={editAttributesFormData.airportLicenseNumber}
+                    onChange={(e) =>
+                      setEditAttributesFormData({
+                        ...editAttributesFormData,
+                        airportLicenseNumber: e.target.value,
+                      })
+                    }
+                    placeholder="e.g., ALT-123456"
+                    sx={{ mb: 2 }}
+                  />
+                  <TextField
+                    fullWidth
+                    label="Expiry Date"
+                    type="date"
+                    value={editAttributesFormData.airportLicenseExpiry}
+                    onChange={(e) =>
+                      setEditAttributesFormData({
+                        ...editAttributesFormData,
+                        airportLicenseExpiry: e.target.value,
+                      })
+                    }
+                    InputLabelProps={{ shrink: true }}
+                    sx={{ mb: 2 }}
+                  />
+                </>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseEditAttributesDialog}>Cancel</Button>
+          <Button
+            onClick={handleUpdateShiftAttributes}
+            variant="contained"
+            color="primary"
+          >
+            Update Attributes
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Profile History Dialog */}
+      <Dialog open={openProfileHistoryDialog} onClose={handleCloseProfileHistoryDialog} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">
+              Profile Assignment History - {selectedShift?.shiftTypeDisplay}
+            </Typography>
+            <IconButton onClick={handleCloseProfileHistoryDialog}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {historyLoading && (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 5 }}>
+              <CircularProgress />
+            </Box>
+          )}
+
+          {historyError && <Alert severity="error" sx={{ mb: 2 }}>{historyError}</Alert>}
+
+          {!historyLoading && profileAssignmentHistory.length === 0 && (
+            <Alert severity="info">No profile assignment history</Alert>
+          )}
+
+          {!historyLoading && profileAssignmentHistory.length > 0 && (
+            <Timeline>
+              {profileAssignmentHistory.map((assignment, index) => (
+                <TimelineItem key={assignment.id}>
+                  <TimelineOppositeContent color="textSecondary" sx={{ maxWidth: "30%" }}>
+                    <Typography variant="body2" fontWeight="bold">
+                      {new Date(assignment.startDate).toLocaleDateString()}
+                    </Typography>
+                    {assignment.endDate && (
+                      <Typography variant="caption">
+                        to {new Date(assignment.endDate).toLocaleDateString()}
+                      </Typography>
+                    )}
+                  </TimelineOppositeContent>
+                  <TimelineSeparator>
+                    <TimelineDot
+                      sx={{
+                        bgcolor: assignment.isActive ? "#4caf50" : "#999",
+                      }}
+                    >
+                      {assignment.isActive && <CurrentIcon fontSize="small" />}
+                    </TimelineDot>
+                    {index < profileAssignmentHistory.length - 1 && <TimelineConnector />}
+                  </TimelineSeparator>
+                  <TimelineContent>
+                    <Card sx={{ mb: 2 }}>
+                      <CardContent>
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 1 }}>
+                          <CategoryIcon fontSize="small" />
+                          <Typography variant="h6" sx={{ mb: 0 }}>
+                            {assignment.profileName}
+                          </Typography>
+                          {assignment.isActive && (
+                            <Chip label="Current" size="small" color="success" />
+                          )}
+                        </Box>
+
+                        <Box sx={{ mb: 1 }}>
+                          <Typography variant="caption" color="textSecondary">
+                            Profile Code
+                          </Typography>
+                          <Typography variant="body2">
+                            {assignment.profileCode}
+                          </Typography>
+                        </Box>
+
+                        {assignment.reason && (
+                          <Box sx={{ mb: 1 }}>
+                            <Typography variant="caption" color="textSecondary">
+                              Reason
+                            </Typography>
+                            <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                              {assignment.reason}
+                            </Typography>
+                          </Box>
+                        )}
+
+                        <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: "divider" }}>
+                          <Typography variant="caption" color="textSecondary">
+                            Assigned by: {assignment.assignedBy}
+                          </Typography>
+                          <Typography variant="caption" color="textSecondary" sx={{ display: "block" }}>
+                            on {new Date(assignment.createdAt).toLocaleDateString()}
+                          </Typography>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </TimelineContent>
+                </TimelineItem>
+              ))}
+            </Timeline>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ borderTop: 1, borderColor: "divider", px: 3, py: 2 }}>
+          <Button onClick={handleCloseProfileHistoryDialog} variant="contained">
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Profile Assignment Dialog */}
+      <Dialog open={openProfileAssignmentDialog} onClose={handleCloseProfileAssignmentDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">
+              {selectedShift?.currentProfile ? "Change" : "Assign"} Shift Profile
+            </Typography>
+            <IconButton onClick={handleCloseProfileAssignmentDialog}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+          {selectedShift && (
+            <>
+              <Alert severity="info" sx={{ mb: 2 }}>
+                Assign a profile bundle to this shift. The profile will be active starting from the selected date.
+              </Alert>
+
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel>Shift Profile</InputLabel>
+                <Select
+                  value={profileAssignmentFormData.profileId}
+                  label="Shift Profile"
+                  onChange={(e) =>
+                    setProfileAssignmentFormData({
+                      ...profileAssignmentFormData,
+                      profileId: e.target.value,
+                    })
+                  }
+                >
+                  <MenuItem value="">Select a profile...</MenuItem>
+                  {shiftProfiles.map((profile) => (
+                    <MenuItem key={profile.id} value={profile.id}>
+                      {profile.profileName} ({profile.profileCode})
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Start Date"
+                type="date"
+                value={profileAssignmentFormData.startDate}
+                onChange={(e) =>
+                  setProfileAssignmentFormData({
+                    ...profileAssignmentFormData,
+                    startDate: e.target.value,
+                  })
+                }
+                InputLabelProps={{ shrink: true }}
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                fullWidth
+                label="Reason (optional)"
+                multiline
+                rows={3}
+                value={profileAssignmentFormData.reason}
+                onChange={(e) =>
+                  setProfileAssignmentFormData({
+                    ...profileAssignmentFormData,
+                    reason: e.target.value,
+                  })
+                }
+                placeholder="e.g., Customer request, Operational change, etc."
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseProfileAssignmentDialog}>Cancel</Button>
+          <Button
+            onClick={handleAssignProfile}
+            variant="contained"
+            color="primary"
+          >
+            Assign Profile
           </Button>
         </DialogActions>
       </Dialog>
