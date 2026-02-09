@@ -17,6 +17,7 @@ import {
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
 import RecurringExpenseDialogContent from "./components/RecurringExpenseDialogContent";
+import AttributeCostsTab from "./components/AttributeCostsTab";
 import { autoApplyExpenses, bulkCreateExpenses } from "../lib/expenseCategoryRuleService";
 
 export default function ExpensesRevenuesPage() {
@@ -33,6 +34,8 @@ export default function ExpensesRevenuesPage() {
   const [revenueCategories, setRevenueCategories] = useState([]);
   const [cabs, setCabs] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [shiftProfiles, setShiftProfiles] = useState([]);
+  const [shifts, setShifts] = useState([]);
 
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
@@ -50,15 +53,17 @@ export default function ExpensesRevenuesPage() {
   const [editingRevenue, setEditingRevenue] = useState(null);
 
   const [recurringFormData, setRecurringFormData] = useState({
-    expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+    expenseCategoryId: "", amount: "",
     billingMethod: "MONTHLY", effectiveFrom: "", effectiveTo: "", notes: "", isActive: true,
   });
   
   const [oneTimeFormData, setOneTimeFormData] = useState({
-    expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+    name: "", amount: "",
     expenseDate: new Date().toISOString().split('T')[0], paidBy: "COMPANY",
     responsibleParty: "COMPANY", description: "", vendor: "", receiptUrl: "",
     invoiceNumber: "", isReimbursable: false, notes: "",
+    applicationType: "ALL_ACTIVE_SHIFTS", shiftProfileId: null,
+    specificShiftId: null, specificOwnerId: null, specificDriverId: null,
   });
 
   const [revenueFormData, setRevenueFormData] = useState({
@@ -86,10 +91,12 @@ export default function ExpensesRevenuesPage() {
     setLoading(true);
     try {
       await Promise.all([
-        loadExpenseCategories(), 
-        loadRevenueCategories(), 
-        loadCabs(), 
-        loadDrivers(), 
+        loadExpenseCategories(),
+        loadRevenueCategories(),
+        loadCabs(),
+        loadDrivers(),
+        loadShiftProfiles(),
+        loadShifts(),
         loadRecurringExpenses()
       ]);
     } catch (err) {
@@ -151,6 +158,26 @@ export default function ExpensesRevenuesPage() {
     } catch (err) { console.error(err); }
   };
 
+  const loadShiftProfiles = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/shift-profiles`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"), },
+      });
+      if (response.ok) setShiftProfiles(await response.json());
+    } catch (err) { console.error(err); }
+  };
+
+  const loadShifts = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/shifts`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"), },
+      });
+      if (response.ok) setShifts(await response.json());
+    } catch (err) { console.error(err); }
+  };
+
   const loadRecurringExpenses = async () => {
     try {
       const endpoint = showActiveOnly ? `${API_BASE_URL}/recurring-expenses/active` : `${API_BASE_URL}/recurring-expenses`;
@@ -187,9 +214,6 @@ export default function ExpensesRevenuesPage() {
       setEditingRecurring(expense);
       setRecurringFormData({
         expenseCategoryId: expense.expenseCategory?.id || "",
-        entityType: expense.entityType,
-        entityId: expense.entityId,
-        shiftType: expense.shiftType || "",
         amount: expense.amount,
         billingMethod: expense.billingMethod,
         effectiveFrom: expense.effectiveFrom,
@@ -202,7 +226,7 @@ export default function ExpensesRevenuesPage() {
       const today = new Date();
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
       setRecurringFormData({
-        expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+        expenseCategoryId: "", amount: "",
         billingMethod: "MONTHLY", effectiveFrom: firstOfMonth, effectiveTo: "", notes: "", isActive: true,
       });
     }
@@ -212,80 +236,33 @@ export default function ExpensesRevenuesPage() {
   };
 
   const handleSaveRecurring = async () => {
-    // Determine the category configuration mode
-    const selectedCategory = expenseCategories.find(c => c.id === parseInt(recurringFormData.expenseCategoryId));
-
-    // For AUTO_MATCH mode, need amount and effective date
-    if (selectedCategory?.supportsAutoMatching && !editingRecurring) {
-      if (!recurringFormData.expenseCategoryId || !recurringFormData.amount || !recurringFormData.effectiveFrom) {
-        setError("Category, amount, and effective date are required");
-        return;
-      }
-
-      try {
-        // Call auto-apply endpoint
-        const result = await autoApplyExpenses(recurringFormData.expenseCategoryId, {
-          amount: parseFloat(recurringFormData.amount),
-          billingMethod: recurringFormData.billingMethod,
-          effectiveFrom: recurringFormData.effectiveFrom,
-          effectiveTo: recurringFormData.effectiveTo || null,
-        });
-
-        setSuccess(`Auto-applied expenses to ${result.createdExpenses?.length || 0} cabs. ${result.errors?.length > 0 ? `(${result.errors.length} errors)` : ""}`);
-        setOpenRecurringDialog(false);
-        loadRecurringExpenses();
-      } catch (err) {
-        setError(err.message);
-      }
+    // Validate required fields
+    if (!recurringFormData.expenseCategoryId || !recurringFormData.amount || !recurringFormData.effectiveFrom) {
+      setError("Category, amount, and effective date are required");
       return;
     }
 
-    // For INDIVIDUAL_CONFIG mode, need cab amounts
-    if (selectedCategory?.supportsIndividualConfig && !editingRecurring) {
-      if (!recurringFormData.expenseCategoryId || !recurringFormData.billingMethod || !recurringFormData.effectiveFrom) {
-        setError("Category, billing method, and effective date are required");
-        return;
-      }
-
-      const cabAmounts = recurringFormData.cabAmounts || {};
-      if (Object.keys(cabAmounts).length === 0) {
-        setError("Please select at least one cab with an amount");
-        return;
-      }
-
-      try {
-        // Call bulk-create endpoint
-        const result = await bulkCreateExpenses(recurringFormData.expenseCategoryId, {
-          cabIdToAmount: cabAmounts,
-          billingMethod: recurringFormData.billingMethod,
-          effectiveFrom: recurringFormData.effectiveFrom,
-          effectiveTo: recurringFormData.effectiveTo || null,
-        });
-
-        setSuccess(`Created expenses for ${result.createdExpenses?.length || 0} cabs. ${result.errors?.length > 0 ? `(${result.errors.length} errors)` : ""}`);
-        setOpenRecurringDialog(false);
-        loadRecurringExpenses();
-      } catch (err) {
-        setError(err.message);
-      }
-      return;
-    }
-
-    // For MANUAL mode or editing, use traditional method
-    if (!recurringFormData.expenseCategoryId || !recurringFormData.entityId || !recurringFormData.amount || !recurringFormData.effectiveFrom) {
-      setError("Category, entity, amount, and effective date are required");
-      return;
-    }
-    if (recurringFormData.entityType === "SHIFT" && !recurringFormData.shiftType) {
-      setError("Shift type required");
-      return;
-    }
     try {
+      // Build payload with correct field types
+      const payload = {
+        expenseCategoryId: parseInt(recurringFormData.expenseCategoryId),
+        amount: parseFloat(recurringFormData.amount),
+        billingMethod: recurringFormData.billingMethod,
+        effectiveFrom: recurringFormData.effectiveFrom,
+        effectiveTo: recurringFormData.effectiveTo || null,
+        notes: recurringFormData.notes,
+        isActive: recurringFormData.isActive !== undefined ? recurringFormData.isActive : true,
+      };
+
       const url = editingRecurring ? `${API_BASE_URL}/recurring-expenses/${editingRecurring.id}` : `${API_BASE_URL}/recurring-expenses`;
       const response = await fetch(url, {
         method: editingRecurring ? "PUT" : "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"), "Content-Type": "application/json" },
-        body: JSON.stringify(recurringFormData),
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
       });
       if (response.ok) {
         setSuccess(editingRecurring ? "Updated" : "Created");
@@ -319,10 +296,12 @@ export default function ExpensesRevenuesPage() {
     } else {
       setEditingOneTime(null);
       setOneTimeFormData({
-        expenseCategoryId: "", entityType: "CAB", entityId: "", shiftType: "", amount: "",
+        name: "", amount: "",
         expenseDate: new Date().toISOString().split('T')[0], paidBy: "COMPANY",
         responsibleParty: "COMPANY", description: "", vendor: "", receiptUrl: "",
         invoiceNumber: "", isReimbursable: false, notes: "",
+        applicationType: "ALL_ACTIVE_SHIFTS", shiftProfileId: null,
+        specificShiftId: null, specificOwnerId: null, specificDriverId: null,
       });
     }
     setError("");
@@ -331,25 +310,82 @@ export default function ExpensesRevenuesPage() {
   };
 
   const handleSaveOneTime = async () => {
-    if (!oneTimeFormData.expenseCategoryId || !oneTimeFormData.entityId || !oneTimeFormData.amount || !oneTimeFormData.expenseDate) {
-      setError("Required fields missing");
+    // Validate required fields
+    if (!oneTimeFormData.name || !oneTimeFormData.amount || !oneTimeFormData.expenseDate || !oneTimeFormData.paidBy) {
+      setError("Required fields missing: Name, Amount, Date, and Paid By");
       return;
     }
+
+    // Validate application type
+    if (!oneTimeFormData.applicationType) {
+      setError("Application type is required (who/what to charge this to)");
+      return;
+    }
+
+    // Validate based on application type
+    switch (oneTimeFormData.applicationType) {
+      case "SHIFT_PROFILE":
+        if (!oneTimeFormData.shiftProfileId) {
+          setError("Please select a shift profile");
+          return;
+        }
+        break;
+      case "SPECIFIC_SHIFT":
+        if (!oneTimeFormData.specificShiftId) {
+          setError("Please select a specific shift");
+          return;
+        }
+        break;
+      case "SPECIFIC_OWNER_DRIVER":
+        if (!oneTimeFormData.specificOwnerId && !oneTimeFormData.specificDriverId) {
+          setError("Please select an owner or driver");
+          return;
+        }
+        break;
+    }
+
     try {
+      // Build payload with correct field types and values
+      const payload = {
+        name: oneTimeFormData.name,
+        amount: parseFloat(oneTimeFormData.amount),
+        expenseDate: oneTimeFormData.expenseDate,
+        paidBy: oneTimeFormData.paidBy,
+        responsibleParty: oneTimeFormData.responsibleParty,
+        description: oneTimeFormData.description,
+        vendor: oneTimeFormData.vendor,
+        receiptUrl: oneTimeFormData.receiptUrl,
+        invoiceNumber: oneTimeFormData.invoiceNumber,
+        isReimbursable: oneTimeFormData.isReimbursable === true,
+        notes: oneTimeFormData.notes,
+        applicationType: oneTimeFormData.applicationType,
+        shiftProfileId: oneTimeFormData.shiftProfileId ? parseInt(oneTimeFormData.shiftProfileId) : null,
+        specificShiftId: oneTimeFormData.specificShiftId ? parseInt(oneTimeFormData.specificShiftId) : null,
+        specificOwnerId: oneTimeFormData.specificOwnerId ? parseInt(oneTimeFormData.specificOwnerId) : null,
+        specificDriverId: oneTimeFormData.specificDriverId ? parseInt(oneTimeFormData.specificDriverId) : null,
+      };
+
       const url = editingOneTime ? `${API_BASE_URL}/one-time-expenses/${editingOneTime.id}` : `${API_BASE_URL}/one-time-expenses`;
       const response = await fetch(url, {
         method: editingOneTime ? "PUT" : "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"), "Content-Type": "application/json" },
-        body: JSON.stringify(oneTimeFormData),
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload),
       });
       if (response.ok) {
         setSuccess(editingOneTime ? "Updated" : "Created");
         setOpenOneTimeDialog(false);
         loadOneTimeExpenses();
       } else {
-        setError(await response.text() || "Failed");
+        const errorText = await response.text();
+        setError(errorText || "Failed to save expense");
       }
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleOpenRevenueDialog = (revenue = null) => {
@@ -545,6 +581,7 @@ export default function ExpensesRevenuesPage() {
             <Tab label="Recurring Expenses" icon={<RecurringIcon />} iconPosition="start" />
             <Tab label="One-Time Expenses" icon={<OneTimeIcon />} iconPosition="start" />
             <Tab label="Other Revenues" icon={<RevenueIcon />} iconPosition="start" />
+            <Tab label="Attribute Costs" icon={<TrendingDownIcon />} iconPosition="start" />
           </Tabs>
 
           {currentTab === 0 && (
@@ -716,6 +753,10 @@ export default function ExpensesRevenuesPage() {
               </TableContainer>
             </Box>
           )}
+
+          {currentTab === 3 && (
+            <AttributeCostsTab canEdit={canEdit} />
+          )}
         </Paper>
 
         {/* Recurring Expense Dialog */}
@@ -747,77 +788,142 @@ export default function ExpensesRevenuesPage() {
             </Typography>
             <Grid container spacing={2} sx={{ pt: 2 }}>
               <Grid item xs={12} md={6}>
-                <TextField label="Expense Date" type="date" value={oneTimeFormData.expenseDate} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseDate: e.target.value })} 
+                <TextField label="Expense Name" value={oneTimeFormData.name} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, name: e.target.value })}
+                  fullWidth required placeholder="e.g., Emergency Repair, Fuel Surcharge" />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField label="Expense Date" type="date" value={oneTimeFormData.expenseDate} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseDate: e.target.value })}
                   fullWidth required InputLabelProps={{ shrink: true }} />
               </Grid>
+
+              {/* Charge To / Application Type */}
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
-                  <Select value={oneTimeFormData.expenseCategoryId} label="Category" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseCategoryId: e.target.value })}>
-                    {expenseCategories.filter(c => c.categoryType === "VARIABLE").map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
+                  <InputLabel>Charge To (Application Type)</InputLabel>
+                  <Select
+                    value={oneTimeFormData.applicationType}
+                    label="Charge To (Application Type)"
+                    onChange={(e) => setOneTimeFormData({
+                      ...oneTimeFormData,
+                      applicationType: e.target.value,
+                      shiftProfileId: null,
+                      specificShiftId: null,
+                      specificOwnerId: null,
+                      specificDriverId: null
+                    })}
+                  >
+                    <MenuItem value="SHIFT_PROFILE">Shift Profile (All Matching Shifts)</MenuItem>
+                    <MenuItem value="SPECIFIC_SHIFT">Specific Shift</MenuItem>
+                    <MenuItem value="SPECIFIC_OWNER_DRIVER">Specific Owner/Driver</MenuItem>
+                    <MenuItem value="ALL_ACTIVE_SHIFTS">All Active Shifts</MenuItem>
+                    <MenuItem value="ALL_NON_OWNER_DRIVERS">All Non-Owner Drivers</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Entity Type</InputLabel>
-                  <Select value={oneTimeFormData.entityType} label="Entity Type" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityType: e.target.value, entityId: "", shiftType: "" })}>
-                    <MenuItem value="CAB">Cab</MenuItem>
-                    <MenuItem value="DRIVER">Driver</MenuItem>
-                    <MenuItem value="SHIFT">Shift</MenuItem>
-                    <MenuItem value="COMPANY">Company</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              {oneTimeFormData.entityType === "SHIFT" ? (
+
+              {/* Conditional fields based on application type */}
+              {oneTimeFormData.applicationType === "SHIFT_PROFILE" && (
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth required>
-                    <InputLabel>Shift Type</InputLabel>
-                    <Select value={oneTimeFormData.shiftType} label="Shift Type" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })}>
-                      <MenuItem value="DAY">Day Shift</MenuItem>
-                      <MenuItem value="NIGHT">Night Shift</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : oneTimeFormData.entityType === "DRIVER" ? (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Driver</InputLabel>
+                    <InputLabel>Shift Profile</InputLabel>
                     <Select
-                      value={oneTimeFormData.entityId}
-                      label="Driver"
-                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityId: e.target.value })}
+                      value={oneTimeFormData.shiftProfileId || ""}
+                      label="Shift Profile"
+                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, shiftProfileId: e.target.value })}
                     >
-                      {drivers.map(driver => (
-                        <MenuItem key={driver.id} value={driver.id}>
-                          {driver.firstName} {driver.lastName} ({driver.driverNumber})
+                      <MenuItem value="">Select Profile</MenuItem>
+                      {shiftProfiles.map((profile) => (
+                        <MenuItem key={profile.id} value={profile.id}>
+                          {profile.profileName}
                         </MenuItem>
                       ))}
                     </Select>
                   </FormControl>
                 </Grid>
-              ) : oneTimeFormData.entityType === "CAB" ? (
+              )}
+
+              {oneTimeFormData.applicationType === "SPECIFIC_SHIFT" && (
                 <Grid item xs={12} md={6}>
                   <FormControl fullWidth required>
-                    <InputLabel>Cab</InputLabel>
-                    <Select value={oneTimeFormData.entityId} label="Cab" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityId: e.target.value })}>
-                      {cabs.map(cab => <MenuItem key={cab.id} value={cab.id}>Cab {cab.cabNumber}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Entity</InputLabel>
-                    <Select value={oneTimeFormData.entityId} label="Entity" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, entityId: e.target.value })}>
-                      <MenuItem value="1">Company</MenuItem>
+                    <InputLabel>Shift</InputLabel>
+                    <Select
+                      value={oneTimeFormData.specificShiftId || ""}
+                      label="Shift"
+                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, specificShiftId: e.target.value })}
+                    >
+                      <MenuItem value="">Select Shift</MenuItem>
+                      {shifts.map((shift) => (
+                        <MenuItem key={shift.id} value={shift.id}>
+                          Cab {shift.cabNumber} - {shift.shiftType}
+                        </MenuItem>
+                      ))}
                     </Select>
                   </FormControl>
                 </Grid>
               )}
+
+              {oneTimeFormData.applicationType === "SPECIFIC_OWNER_DRIVER" && (
+                <>
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Owner</InputLabel>
+                      <Select
+                        value={oneTimeFormData.specificOwnerId || ""}
+                        label="Owner"
+                        onChange={(e) => setOneTimeFormData({
+                          ...oneTimeFormData,
+                          specificOwnerId: e.target.value,
+                          specificDriverId: null
+                        })}
+                        disabled={oneTimeFormData.specificDriverId !== null}
+                      >
+                        <MenuItem value="">None</MenuItem>
+                        {drivers.map(driver => (
+                          <MenuItem key={driver.id} value={driver.id}>
+                            {driver.firstName} {driver.lastName}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Driver</InputLabel>
+                      <Select
+                        value={oneTimeFormData.specificDriverId || ""}
+                        label="Driver"
+                        onChange={(e) => setOneTimeFormData({
+                          ...oneTimeFormData,
+                          specificDriverId: e.target.value,
+                          specificOwnerId: null
+                        })}
+                        disabled={oneTimeFormData.specificOwnerId !== null}
+                      >
+                        <MenuItem value="">None</MenuItem>
+                        {drivers.map(driver => (
+                          <MenuItem key={driver.id} value={driver.id}>
+                            {driver.firstName} {driver.lastName}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </>
+              )}
               <Grid item xs={12} md={6}>
-                <TextField label="Amount" type="number" value={oneTimeFormData.amount} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, amount: e.target.value })} 
+                <TextField label="Amount" type="number" value={oneTimeFormData.amount} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, amount: e.target.value })}
                   fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Paid By</InputLabel>
+                  <Select value={oneTimeFormData.paidBy} label="Paid By" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, paidBy: e.target.value })}>
+                    <MenuItem value="DRIVER">Driver</MenuItem>
+                    <MenuItem value="OWNER">Owner</MenuItem>
+                    <MenuItem value="COMPANY">Company</MenuItem>
+                    <MenuItem value="THIRD_PARTY">Third Party</MenuItem>
+                  </Select>
+                </FormControl>
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField label="Vendor" value={oneTimeFormData.vendor} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, vendor: e.target.value })} fullWidth />

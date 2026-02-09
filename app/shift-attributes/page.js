@@ -190,23 +190,36 @@ export default function ShiftAttributesPage() {
 
   const loadShiftAttributes = async (shiftId) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/cab-shifts/${shiftId}/custom-attributes/current`,
-        {
+      const [currentRes, historyRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/cab-shifts/${shiftId}/custom-attributes/current`, {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
             "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           },
-        }
-      );
+        }),
+        fetch(`${API_BASE_URL}/cab-shifts/${shiftId}/custom-attributes/history`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }),
+      ]);
 
-      if (response.ok) {
-        const data = await response.json();
+      if (currentRes.ok) {
+        const data = await currentRes.json();
         setCurrentAttributes(data);
+      }
+
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        setAttributeHistory(data);
+      } else {
+        setAttributeHistory([]);
       }
     } catch (err) {
       console.error("Error loading shift attributes:", err);
       setCurrentAttributes([]);
+      setAttributeHistory([]);
     }
   };
 
@@ -402,6 +415,214 @@ export default function ShiftAttributesPage() {
               </Alert>
             )}
 
+            {selectedShift && (
+              <Box>
+                {/* Shift Information - Detailed View */}
+                <Paper sx={{ p: 3, mb: 3, backgroundColor: "#f0f7ff", border: "2px solid #2196f3" }}>
+                  {/* Header: Shift Type with Status */}
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", mb: 3 }}>
+                    <Box>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        <Typography variant="h6">
+                          {selectedShift.shiftTypeDisplay}
+                        </Typography>
+                      </Box>
+                      <Typography variant="body2" color="textSecondary">
+                        {selectedShift.shiftHours}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={selectedShift.status || "ACTIVE"}
+                      color={selectedShift.status === "ACTIVE" || selectedShift.isActive ? "success" : "default"}
+                      sx={{ fontWeight: "bold" }}
+                    />
+                  </Box>
+
+                  {/* Current Owner */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 0.5 }}>
+                      Current Owner
+                    </Typography>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Chip
+                        label={`${selectedShift.currentOwnerName} ${selectedShift.currentOwnerDriverNumber || ""}`}
+                        variant="outlined"
+                      />
+                    </Box>
+                  </Box>
+
+                  {/* Shift Attributes */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: "bold" }}>
+                      Shift Attributes
+                    </Typography>
+                    <Grid container spacing={3}>
+                      <Grid item xs={12} sm={6}>
+                        <Box>
+                          <Typography variant="caption" color="textSecondary">
+                            Cab Type
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {selectedShift.cabType || "-"}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Box>
+                          <Typography variant="caption" color="textSecondary">
+                            Share Type
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {selectedShift.shareType ? selectedShift.shareType.replace(/_/g, " ") : "-"}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      <Grid item xs={12} sm={6}>
+                        <Box>
+                          <Typography variant="caption" color="textSecondary">
+                            Airport License
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {selectedShift.hasAirportLicense ? "Yes" : "No"}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                      {selectedShift.hasAirportLicense && (
+                        <>
+                          <Grid item xs={12} sm={6}>
+                            <Box>
+                              <Typography variant="caption" color="textSecondary">
+                                License #
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500, fontFamily: "monospace" }}>
+                                {selectedShift.airportLicenseNumber || "-"}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                          <Grid item xs={12} sm={6}>
+                            <Box>
+                              <Typography variant="caption" color="textSecondary">
+                                Expires
+                              </Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {selectedShift.airportLicenseExpiry || "-"}
+                              </Typography>
+                            </Box>
+                          </Grid>
+                        </>
+                      )}
+                    </Grid>
+                  </Box>
+
+                  {/* Shift Profile */}
+                  {selectedShift.currentProfile && (
+                    <Box sx={{ mb: 3, pb: 3, borderBottom: "1px solid #e0e0e0" }}>
+                      <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 1 }}>
+                        Shift Profile
+                      </Typography>
+                      <Chip
+                        label={selectedShift.currentProfile.profileName}
+                        size="small"
+                        sx={{
+                          backgroundColor: selectedShift.currentProfile.colorCode || "#2196f3",
+                          color: "#fff",
+                        }}
+                      />
+                    </Box>
+                  )}
+
+                  {/* Manage Attributes Button */}
+                  {canEdit && (
+                    <Button
+                      variant="contained"
+                      startIcon={<AddIcon />}
+                      onClick={() => {
+                        setAssignFormData({
+                          attributeTypeId: "",
+                          attributeValue: "",
+                          startDate: new Date().toISOString().split("T")[0],
+                          endDate: "",
+                          notes: "",
+                        });
+                        setOpenAssignDialog(true);
+                      }}
+                    >
+                      Manage Attributes
+                    </Button>
+                  )}
+                </Paper>
+
+                {/* Active Attributes */}
+                <Paper sx={{ p: 3, mb: 3 }}>
+                  <Typography variant="subtitle2" color="textSecondary" sx={{ mb: 2 }}>
+                    Active Attributes:
+                  </Typography>
+                  {currentAttributes.length === 0 ? (
+                    <Typography variant="body2" color="textSecondary">
+                      No active attributes assigned to this shift
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", alignItems: "center" }}>
+                      {currentAttributes.map((attr) => (
+                        <Chip
+                          key={attr.id}
+                          label={
+                            attr.attributeValue
+                              ? `${attr.attributeCode}: ${attr.attributeValue}`
+                              : attr.attributeCode
+                          }
+                          onDelete={canEdit ? () => handleDeleteAttribute(attr.id) : undefined}
+                          color="primary"
+                          variant="outlined"
+                        />
+                      ))}
+                    </Box>
+                  )}
+                </Paper>
+
+                {/* Attribute History */}
+                {attributeHistory && attributeHistory.length > 0 && (
+                  <Paper sx={{ p: 3 }}>
+                    <Typography variant="h6" sx={{ mb: 2 }}>
+                      Other Attributes
+                    </Typography>
+                    <TableContainer>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                            <TableCell>Attribute</TableCell>
+                            <TableCell>Value</TableCell>
+                            <TableCell>Start Date</TableCell>
+                            <TableCell>End Date</TableCell>
+                            <TableCell>Notes</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {attributeHistory.map((attr) => (
+                            <TableRow key={attr.id}>
+                              <TableCell>
+                                <Chip label={attr.attributeCode} size="small" />
+                              </TableCell>
+                              <TableCell>{attr.attributeValue || "-"}</TableCell>
+                              <TableCell>{attr.startDate}</TableCell>
+                              <TableCell>{attr.endDate || "-"}</TableCell>
+                              <TableCell>{attr.notes || "-"}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                )}
+              </Box>
+            )}
+
+            {!selectedShift && (
+              <Alert severity="info" sx={{ mb: 3 }}>
+                Select a shift below to view and manage its attributes
+              </Alert>
+            )}
+
             <Paper sx={{ p: 3, mb: 3 }}>
               <Typography variant="h6" sx={{ mb: 2 }}>
                 Select a Shift
@@ -440,81 +661,6 @@ export default function ShiftAttributesPage() {
               </Grid>
               )}
             </Paper>
-
-            {selectedShift && (
-              <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                  <Box>
-                    <Typography variant="h6">
-                      Attributes for {selectedShift.cabNumber} - {selectedShift.shiftTypeDisplay}
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      Owner: {selectedShift.currentOwnerName} | Hours: {selectedShift.shiftHours}
-                    </Typography>
-                  </Box>
-                  {canEdit && (
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={() => {
-                        setAssignFormData({
-                          attributeTypeId: "",
-                          attributeValue: "",
-                          startDate: new Date().toISOString().split("T")[0],
-                          endDate: "",
-                          notes: "",
-                        });
-                        setOpenAssignDialog(true);
-                      }}
-                    >
-                      Assign Attribute
-                    </Button>
-                  )}
-                </Box>
-
-                {currentAttributes.length === 0 ? (
-                  <Alert severity="info">No custom attributes assigned to this shift</Alert>
-                ) : (
-                  <TableContainer>
-                    <Table>
-                      <TableHead>
-                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                          <TableCell>Attribute</TableCell>
-                          <TableCell>Value</TableCell>
-                          <TableCell>Start Date</TableCell>
-                          <TableCell>End Date</TableCell>
-                          <TableCell>Notes</TableCell>
-                          {canEdit && <TableCell>Actions</TableCell>}
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {currentAttributes.map((attr) => (
-                          <TableRow key={attr.id}>
-                            <TableCell>
-                              <Chip label={attr.attributeCode} size="small" />
-                            </TableCell>
-                            <TableCell>{attr.attributeValue || "-"}</TableCell>
-                            <TableCell>{attr.startDate}</TableCell>
-                            <TableCell>{attr.endDate || "Active"}</TableCell>
-                            <TableCell>{attr.notes || "-"}</TableCell>
-                            {canEdit && (
-                              <TableCell>
-                                <IconButton
-                                  size="small"
-                                  onClick={() => handleDeleteAttribute(attr.id)}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </TableCell>
-                            )}
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                )}
-              </Paper>
-            )}
           </Box>
         )}
 

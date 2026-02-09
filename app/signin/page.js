@@ -43,7 +43,9 @@ const theme = createTheme({
 // The schema is the actual MySQL database name that will be used
 const KNOWN_COMPANIES = [
   { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'fareflow' },
-  { id: 'bonny-taxi', name: "Bonny's Taxi", schema: 'fareflow_bonny' },
+  { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'fareflow_bonny' },
+  // Add your actual company mappings here
+  // { id: 'your-company', name: 'Your Company', schema: 'your_schema' },
 ];
 
 export default function SignInPage() {
@@ -359,21 +361,39 @@ export default function SignInPage() {
               <Box
                 sx={{
                   mt: 3,
-                  p: 2,
-                  backgroundColor: "#e8f5e9",
-                  borderRadius: 1,
+                  p: 2.5,
+                  backgroundColor: "#fff3e0",
+                  borderRadius: 2,
                   textAlign: "center",
-                  border: '1px solid #c8e6c9'
+                  border: '2px solid #ffb74d',
+                  position: 'relative'
                 }}
               >
-                <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 1, fontWeight: 600 }}>
-                  🚕 Maclures Cabs
+                <Chip
+                  label="DEMO ACCOUNT"
+                  size="small"
+                  sx={{
+                    position: 'absolute',
+                    top: -12,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: '#ff9800',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: '0.7rem'
+                  }}
+                />
+                <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 2, fontWeight: 700, fontSize: '0.9rem' }}>
+                  🚕 Yellow Cab NYC (Demo)
                 </Typography>
-                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 0.5 }}>
-                  Company: <strong>mac-cabs</strong>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 0.5, color: '#333' }}>
+                  Company: <strong>yellow-cab-demo</strong>
                 </Typography>
-                <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 1.5, color: '#333' }}>
                   User: <strong>admin2</strong> / <strong>admin123</strong>
+                </Typography>
+                <Typography variant="caption" sx={{ color: '#666', fontSize: '0.8rem', fontStyle: 'italic' }}>
+                  ℹ️ For testing and demonstrations only
                 </Typography>
               </Box>
             </Box>

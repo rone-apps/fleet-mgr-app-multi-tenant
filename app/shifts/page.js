@@ -105,6 +105,8 @@ export default function ShiftsPage() {
   const [profileAssignmentHistory, setProfileAssignmentHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState("");
+  const [customAttributes, setCustomAttributes] = useState([]);
+  const [attributeHistory, setAttributeHistory] = useState([]);
   const [statusChangeFormData, setStatusChangeFormData] = useState({
     effectiveFrom: new Date().toISOString().split("T")[0],
     reason: "",
@@ -283,6 +285,43 @@ export default function ShiftsPage() {
     } catch (err) {
       console.error("Error loading shifts:", err);
       setShifts([]);
+    }
+  };
+
+  const loadCustomAttributes = async (shiftId) => {
+    try {
+      const [currentRes, historyRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/cab-shifts/${shiftId}/custom-attributes/current`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }),
+        fetch(`${API_BASE_URL}/cab-shifts/${shiftId}/custom-attributes/history`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }),
+      ]);
+
+      if (currentRes.ok) {
+        const data = await currentRes.json();
+        setCustomAttributes(data);
+      } else {
+        setCustomAttributes([]);
+      }
+
+      if (historyRes.ok) {
+        const data = await historyRes.json();
+        setAttributeHistory(data);
+      } else {
+        setAttributeHistory([]);
+      }
+    } catch (err) {
+      console.error("Error loading custom attributes:", err);
+      setCustomAttributes([]);
+      setAttributeHistory([]);
     }
   };
 
@@ -1301,12 +1340,93 @@ export default function ShiftsPage() {
                                     label={shift.currentProfile.profileName}
                                     size="small"
                                     variant="outlined"
+                                    sx={{
+                                      backgroundColor: shift.currentProfile.colorCode || "#2196f3",
+                                      color: "#fff",
+                                      fontWeight: "bold",
+                                    }}
                                   />
                                 </Box>
                               ) : (
                                 <Typography variant="body2" color="textSecondary">
                                   No profile assigned
                                 </Typography>
+                              )}
+                            </Box>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            {/* Custom Attributes Section */}
+                            <Box sx={{ mb: 2 }}>
+                              <Button
+                                fullWidth
+                                onClick={() => loadCustomAttributes(shift.id)}
+                                size="small"
+                                sx={{ mb: 1 }}
+                              >
+                                View Attributes & History
+                              </Button>
+
+                              {/* Active Attributes */}
+                              {customAttributes.length > 0 && (
+                                <Box sx={{ mb: 2 }}>
+                                  <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 1 }}>
+                                    Active Attributes:
+                                  </Typography>
+                                  <Box sx={{ display: "flex", gap: 0.5, flexWrap: "wrap" }}>
+                                    {customAttributes.map((attr) => (
+                                      <Chip
+                                        key={attr.id}
+                                        label={
+                                          attr.attributeValue
+                                            ? `${attr.attributeCode}: ${attr.attributeValue}`
+                                            : attr.attributeCode
+                                        }
+                                        size="small"
+                                        color="primary"
+                                        variant="outlined"
+                                      />
+                                    ))}
+                                  </Box>
+                                </Box>
+                              )}
+
+                              {/* Attribute History */}
+                              {attributeHistory.length > 0 && attributeHistory.some(a => a.endDate) && (
+                                <Box>
+                                  <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 1 }}>
+                                    Other Attributes ({attributeHistory.filter(a => a.endDate).length}):
+                                  </Typography>
+                                  <Box sx={{ maxHeight: 200, overflowY: "auto" }}>
+                                    <Table size="small">
+                                      <TableHead>
+                                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                                          <TableCell sx={{ py: 0.5, px: 1 }}>Attribute</TableCell>
+                                          <TableCell sx={{ py: 0.5, px: 1 }}>Value</TableCell>
+                                          <TableCell sx={{ py: 0.5, px: 1 }}>End Date</TableCell>
+                                        </TableRow>
+                                      </TableHead>
+                                      <TableBody>
+                                        {attributeHistory
+                                          .filter(a => a.endDate)
+                                          .slice(0, 5)
+                                          .map((attr) => (
+                                            <TableRow key={attr.id} sx={{ "&:hover": { backgroundColor: "#fafafa" } }}>
+                                              <TableCell sx={{ py: 0.5, px: 1, fontSize: "0.75rem" }}>
+                                                <Chip label={attr.attributeCode} size="small" />
+                                              </TableCell>
+                                              <TableCell sx={{ py: 0.5, px: 1, fontSize: "0.75rem" }}>
+                                                {attr.attributeValue || "-"}
+                                              </TableCell>
+                                              <TableCell sx={{ py: 0.5, px: 1, fontSize: "0.75rem" }}>
+                                                {attr.endDate}
+                                              </TableCell>
+                                            </TableRow>
+                                          ))}
+                                      </TableBody>
+                                    </Table>
+                                  </Box>
+                                </Box>
                               )}
                             </Box>
 
