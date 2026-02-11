@@ -318,6 +318,19 @@ export default function HomePage() {
                 </Grid>
               )}
 
+              {/* Users Management - SUPER_ADMIN ONLY */}
+              {user.role === 'SUPER_ADMIN' && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Users"
+                    description="Manage system users & access control"
+                    icon={People}
+                    gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    onClick={() => router.push('/users')}
+                  />
+                </Grid>
+              )}
+
               {/* Reports */}
               {user.role !== 'VIEWER' && (
                 <Grid item xs={12} sm={6} md={4}>
