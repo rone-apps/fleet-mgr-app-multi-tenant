@@ -561,6 +561,16 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
             badge: 'Templates',
             gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
             accent: '#38f9d7'
+          },
+          {
+            title: 'Users',
+            description: 'Manage system users, roles & permissions',
+            icon: People,
+            path: '/users',
+            roles: ['ADMIN', 'SUPER_ADMIN'],
+            badge: 'Admin Only',
+            gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            accent: '#fa709a'
           }
         ];
 
