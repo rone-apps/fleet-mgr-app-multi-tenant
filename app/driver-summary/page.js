@@ -1,17 +1,18 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import GlobalNav from "../components/GlobalNav";
 import {
   Box, Container, Typography, Paper, TextField, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TableSortLabel, CircularProgress, Alert, Grid, Pagination,
+  Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab, Card, CardContent,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { Assessment, Download } from "@mui/icons-material";
+import { Assessment, Download, Close } from "@mui/icons-material";
 import axios from "axios";
 import { API_BASE_URL } from "../lib/api";
 
@@ -41,29 +42,31 @@ export default function DriverSummaryPage() {
   });
   const [endDate, setEndDate] = useState(new Date());
   
-  // Pagination state
-  const [page, setPage] = useState(0);
-  const [pageSize] = useState(10);
-  const [totalPages, setTotalPages] = useState(0);
-  const [totalElements, setTotalElements] = useState(0);
-  
+  // Local Pagination state - all records cached locally
+  const [page, setPage] = useState(1); // UI page is 1-indexed
+  const [pageSize] = useState(50);
+  const [allRecords, setAllRecords] = useState([]);  // ✅ Cache all records locally
+  const [isAllRecordsLoaded, setIsAllRecordsLoaded] = useState(false);  // ✅ Track if fully loaded
+  const [loadingProgress, setLoadingProgress] = useState(0);  // ✅ Progress for loading all records
+
   // Search/filter state
   const [searchDriverNumber, setSearchDriverNumber] = useState("");
   const [searchDriverName, setSearchDriverName] = useState("");
-  
+
   // Sort state
   const [orderBy, setOrderBy] = useState("driverName");
   const [order, setOrder] = useState("asc");
-  
+
   // Report data
   const [reportData, setReportData] = useState(null);
-  const [filteredData, setFilteredData] = useState([]);
-  
-  // ✅ NEW: Track which pages we've loaded to calculate cumulative correctly
-  const [loadedPages, setLoadedPages] = useState(new Map());
-  
-  // ✅ NEW: Store grand totals from backend (available on last page)
-  const [grandTotals, setGrandTotals] = useState(null);
+
+  // Driver detail modal state
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [driverDetailReport, setDriverDetailReport] = useState(null);
+  const [detailLoadingMessage, setDetailLoadingMessage] = useState("");
+  const [revenueTabIndex, setRevenueTabIndex] = useState(0);
+  const [expenseTabIndex, setExpenseTabIndex] = useState(0);
 
   const getCurrentUser = async () => {
     try {
@@ -99,224 +102,86 @@ export default function DriverSummaryPage() {
     checkAuth();
   }, [router]);
 
-  // Fetch report data with pagination (uses current orderBy and order from state)
-  const fetchReport = async (pageNum = 0) => {
-    await fetchReportWithSort(pageNum, orderBy, order);
-  };
-
-  // Handle page change
-  const handlePageChange = (newPage) => {
-    setPage(newPage);
-    fetchReport(newPage);
-  };
-
-  // Handle sort change - refetch with new sort
-  const handleSortChange = (property) => {
-    const isAsc = orderBy === property && order === "asc";
-    const newOrder = isAsc ? "desc" : "asc";
-    setOrder(newOrder);
-    setOrderBy(property);
-    
-    // Reset loaded pages when sorting changes
-    setLoadedPages(new Map());
-    setGrandTotals(null);
-    
-    // Fetch from page 0 with new sort
-    fetchReportWithSort(0, property, newOrder);
-  };
-
-  // ✅ NEW: Calculate cumulative totals from all loaded pages
-  const calculateCumulativeTotals = (currentPageData, pageNumber) => {
-    // Update loaded pages map with current page data
-    const newLoadedPages = new Map(loadedPages);
-    newLoadedPages.set(pageNumber, {
-      revenue: currentPageData.pageTotalRevenue || 0,
-      expense: currentPageData.pageTotalExpense || 0,
-      netOwed: currentPageData.pageNetOwed || 0,
-      driverCount: currentPageData.driverSummaries.length,
-      leaseRevenue: currentPageData.pageLeaseRevenue || 0,
-      creditCardRevenue: currentPageData.pageCreditCardRevenue || 0,
-      chargesRevenue: currentPageData.pageChargesRevenue || 0,
-      otherRevenue: currentPageData.pageOtherRevenue || 0,
-      fixedExpense: currentPageData.pageFixedExpense || 0,
-      leaseExpense: currentPageData.pageLeaseExpense || 0,
-      variableExpense: currentPageData.pageVariableExpense || 0,
-      otherExpense: currentPageData.pageOtherExpense || 0
-    });
-    
-    setLoadedPages(newLoadedPages);
-    
-    // Sum up all loaded pages (no duplicates because Map keys are unique)
-    let cumulative = {
-      revenue: 0,
-      expense: 0,
-      netOwed: 0,
-      driverCount: 0,
-      leaseRevenue: 0,
-      creditCardRevenue: 0,
-      chargesRevenue: 0,
-      otherRevenue: 0,
-      fixedExpense: 0,
-      leaseExpense: 0,
-      variableExpense: 0,
-      otherExpense: 0
-    };
-    
-    // Get array of page numbers and sort them
-    const pageNumbers = Array.from(newLoadedPages.keys()).sort((a, b) => a - b);
-    
-    // Sum only consecutive pages from 0 to current
-    for (let i = 0; i <= pageNumber; i++) {
-      if (newLoadedPages.has(i)) {
-        const pageData = newLoadedPages.get(i);
-        cumulative.revenue += pageData.revenue;
-        cumulative.expense += pageData.expense;
-        cumulative.netOwed += pageData.netOwed;
-        cumulative.driverCount += pageData.driverCount;
-        cumulative.leaseRevenue += pageData.leaseRevenue;
-        cumulative.creditCardRevenue += pageData.creditCardRevenue;
-        cumulative.chargesRevenue += pageData.chargesRevenue;
-        cumulative.otherRevenue += pageData.otherRevenue;
-        cumulative.fixedExpense += pageData.fixedExpense;
-        cumulative.leaseExpense += pageData.leaseExpense;
-        cumulative.variableExpense += pageData.variableExpense;
-        cumulative.otherExpense += pageData.otherExpense;
-      }
-    }
-    
-    return cumulative;
-  };
-
-  // Modified fetch that accepts sort parameters directly
-  const fetchReportWithSort = async (pageNum, sortField, sortDirection) => {
+  // ✅ Load ALL records with pagination, cache locally, then handle pagination locally
+  const fetchAllRecords = async (sortField = "lastName", sortDirection = "asc") => {
     if (!startDate || !endDate) {
       setError("Please select both start and end dates");
       return;
     }
 
-    // Validate dates are valid Date objects
-    if (!(startDate instanceof Date) || isNaN(startDate.getTime())) {
-      setError("Invalid start date");
-      return;
-    }
-    
-    if (!(endDate instanceof Date) || isNaN(endDate.getTime())) {
-      setError("Invalid end date");
-      return;
-    }
-
     setLoading(true);
-    setLoadingMessage("Generating driver summary report...");
+    setLoadingMessage("Loading all driver records...");
     setError("");
+    setAllRecords([]);
+    setIsAllRecordsLoaded(false);
+    setLoadingProgress(0);
 
     try {
       const token = localStorage.getItem("token");
-      
-      // ✅ FIXED: Use proper date formatting
       const formattedStart = formatDateForAPI(startDate);
       const formattedEnd = formatDateForAPI(endDate);
-      
-      console.log('📅 Fetching driver summary report');
-      console.log('   Start Date (selected):', startDate);
-      console.log('   End Date (selected):', endDate);
-      console.log('   Start Date (formatted):', formattedStart);
-      console.log('   End Date (formatted):', formattedEnd);
-      console.log('   Page:', pageNum, 'Size:', pageSize);
-      console.log('   Sort:', sortField, 'Direction:', sortDirection);
 
-      // Update loading message after 5 seconds
-      const messageTimer1 = setTimeout(() => {
-        setLoadingMessage("Calculating financial metrics for active drivers...");
-      }, 5000);
+      let allData = [];
+      let pageNum = 0;
+      let totalPages = 1;
 
-      // Update loading message after 15 seconds
-      const messageTimer2 = setTimeout(() => {
-        setLoadingMessage("Processing lease revenue and expenses...");
-      }, 15000);
+      // ✅ Fetch ALL pages and cache locally
+      while (pageNum < totalPages) {
+        setLoadingMessage(`Loading all driver records... (Page ${pageNum + 1})`);
 
-      // Update loading message after 30 seconds
-      const messageTimer3 = setTimeout(() => {
-        setLoadingMessage("Almost done, finalizing calculations...");
-      }, 30000);
+        const response = await axios.get(
+          `${API_BASE_URL}/reports/driver-summary`,
+          {
+            params: {
+              startDate: formattedStart,
+              endDate: formattedEnd,
+              page: pageNum,
+              size: 25, // Fetch 25 at a time to be efficient
+              sort: sortField,
+              direction: sortDirection,
+            },
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+            timeout: 300000, // 5 minutes to allow large report calculations
+          }
+        );
 
-      const response = await axios.get(
-        `${API_BASE_URL}/reports/driver-summary`,
-        {
-          params: {
-            startDate: formattedStart,
-            endDate: formattedEnd,
-            page: pageNum,
-            size: pageSize,
-            sort: sortField,
-            direction: sortDirection,
-          },
-          headers: { 
-            Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-          },
-          timeout: 120000, // 120 seconds timeout (2 minutes)
+        const pageData = response.data.driverSummaries || [];
+        allData = [...allData, ...pageData];
+        totalPages = response.data.totalPages;
+        pageNum++;
+
+        // ✅ Update progress
+        const progress = Math.round((pageNum / totalPages) * 100);
+        setLoadingProgress(progress);
+
+        // Store report data from last page (has grand totals)
+        if (pageNum === totalPages) {
+          setReportData(response.data);
         }
-      );
-
-      // Clear all timers
-      clearTimeout(messageTimer1);
-      clearTimeout(messageTimer2);
-      clearTimeout(messageTimer3);
-
-      console.log('✅ Driver summary report received');
-      console.log('   Start Date from backend:', response.data.startDate);
-      console.log('   End Date from backend:', response.data.endDate);
-      console.log('   Drivers on this page:', response.data.driverSummaries.length);
-      console.log('   Page:', response.data.currentPage, 'of', response.data.totalPages);
-
-      setReportData(response.data);
-      setFilteredData(response.data.driverSummaries);
-      setPage(response.data.currentPage);
-      setTotalPages(response.data.totalPages);
-      setTotalElements(response.data.totalElements);
-      
-      // ✅ Store grand totals if on last page
-      if (response.data.currentPage + 1 === response.data.totalPages && response.data.grandTotalRevenue !== undefined) {
-        setGrandTotals({
-          revenue: response.data.grandTotalRevenue || 0,
-          expense: response.data.grandTotalExpense || 0,
-          netOwed: response.data.grandNetOwed || 0,
-          driverCount: response.data.totalElements,
-          leaseRevenue: response.data.grandTotalLeaseRevenue || 0,
-          creditCardRevenue: response.data.grandTotalCreditCardRevenue || 0,
-          chargesRevenue: response.data.grandTotalChargesRevenue || 0,
-          otherRevenue: response.data.grandTotalOtherRevenue || 0,
-          fixedExpense: response.data.grandTotalFixedExpense || 0,
-          leaseExpense: response.data.grandTotalLeaseExpense || 0,
-          variableExpense: response.data.grandTotalVariableExpense || 0,
-          otherExpense: response.data.grandTotalOtherExpense || 0
-        });
       }
-      
-      // ✅ Calculate cumulative totals from loaded pages (no double counting)
-      calculateCumulativeTotals(response.data, pageNum);
-      
+
+      console.log(`✅ Loaded ${allData.length} total driver records from ${totalPages} pages`);
+
+      // ✅ Cache all records locally
+      setAllRecords(allData);
+      setIsAllRecordsLoaded(true);
+      setPage(1); // Reset to page 1
       setLoadingMessage("");
+
     } catch (err) {
-      console.error("Error fetching driver summary:", err);
-      console.error("Error details:", {
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data,
-        headers: err.response?.headers
-      });
-      
-      if (err.code === 'ECONNABORTED') {
-        setError("Request timed out. The report is taking longer than expected. Please try a shorter date range or contact support.");
+      console.error("Error loading all records:", err);
+      if (err.code === "ECONNABORTED") {
+        setError("Request timed out. Please try a shorter date range.");
       } else if (err.response?.status === 403) {
-        setError("Access denied. You don't have permission to view this report. Please check with your administrator or try signing in again.");
+        setError("Access denied.");
       } else if (err.response?.status === 401) {
         setError("Session expired. Please sign in again.");
-        setTimeout(() => {
-          router.push("/signin");
-        }, 2000);
+        setTimeout(() => router.push("/signin"), 2000);
       } else {
-        setError(err.response?.data?.message || `Failed to fetch driver summary report (Error ${err.response?.status || 'Unknown'})`);
+        setError(err.response?.data?.message || "Failed to load driver summary report");
       }
       setLoadingMessage("");
     } finally {
@@ -324,11 +189,89 @@ export default function DriverSummaryPage() {
     }
   };
 
-  // Filter data based on search terms (client-side filtering on current page)
-  useEffect(() => {
-    if (!reportData) return;
+  // ✅ Handle page change - LOCAL pagination (no API call)
+  const handlePageChange = (event, newPage) => {
+    setPage(newPage);
+    window.scrollTo(0, 0); // Scroll to top
+  };
 
-    let filtered = [...reportData.driverSummaries];
+  // ✅ Handle sort change - reload all records with new sort
+  const handleSortChange = (property) => {
+    const isAsc = orderBy === property && order === "asc";
+    const newOrder = isAsc ? "desc" : "asc";
+    setOrder(newOrder);
+    setOrderBy(property);
+
+    // Map frontend property names to backend sort fields
+    let sortField = property;
+    if (property === "driverName") {
+      sortField = "lastName";
+    }
+
+    // Refetch with new sort order
+    fetchAllRecords(sortField, newOrder);
+  };
+
+
+
+  // ✅ Filter data based on search terms (from cached records on current page)
+  // ✅ Calculate pagination from cached records FIRST (before useEffect)
+  const totalPages = allRecords.length > 0 ? Math.ceil(allRecords.length / pageSize) : 0;
+
+  // ✅ Memoize currentPageData to prevent infinite loop
+  const currentPageData = useMemo(() => {
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return allRecords.slice(startIndex, endIndex);
+  }, [page, pageSize, allRecords]);
+
+  // ✅ Get display totals from grand totals (all records cached)
+  const getDisplayTotals = () => {
+    if (!isAllRecordsLoaded || !reportData) {
+      return {
+        revenue: 0,
+        expense: 0,
+        netOwed: 0,
+        paid: 0,
+        driverCount: 0,
+        leaseRevenue: 0,
+        creditCardRevenue: 0,
+        chargesRevenue: 0,
+        otherRevenue: 0,
+        fixedExpense: 0,
+        leaseExpense: 0,
+        variableExpense: 0,
+        otherExpense: 0
+      };
+    }
+
+    // ✅ Use grand totals from reportData (all records)
+    return {
+      revenue: reportData.grandTotalRevenue || 0,
+      expense: reportData.grandTotalExpense || 0,
+      netOwed: reportData.grandNetOwed || 0,
+      paid: reportData.grandTotalPaid || 0,
+      driverCount: reportData.totalElements || 0,
+      leaseRevenue: reportData.grandTotalLeaseRevenue || 0,
+      creditCardRevenue: reportData.grandTotalCreditCardRevenue || 0,
+      chargesRevenue: reportData.grandTotalChargesRevenue || 0,
+      otherRevenue: reportData.grandTotalOtherRevenue || 0,
+      fixedExpense: reportData.grandTotalFixedExpense || 0,
+      leaseExpense: reportData.grandTotalLeaseExpense || 0,
+      variableExpense: reportData.grandTotalVariableExpense || 0,
+      otherExpense: reportData.grandTotalOtherExpense || 0
+    };
+  };
+
+  const displayTotals = getDisplayTotals();
+
+  // ✅ Compute filtered data directly (no useEffect to avoid infinite loop)
+  const filteredDataComputed = useMemo(() => {
+    if (currentPageData.length === 0) {
+      return [];
+    }
+
+    let filtered = [...currentPageData];
 
     if (searchDriverNumber) {
       filtered = filtered.filter((driver) =>
@@ -342,54 +285,8 @@ export default function DriverSummaryPage() {
       );
     }
 
-    setFilteredData(filtered);
-  }, [searchDriverNumber, searchDriverName, reportData]);
-
-  // ✅ Get display totals (use grand totals if available, otherwise cumulative)
-  const getDisplayTotals = () => {
-    if (grandTotals) {
-      return grandTotals;
-    }
-    
-    // Calculate from loaded pages
-    let totals = {
-      revenue: 0,
-      expense: 0,
-      netOwed: 0,
-      driverCount: 0,
-      leaseRevenue: 0,
-      creditCardRevenue: 0,
-      chargesRevenue: 0,
-      otherRevenue: 0,
-      fixedExpense: 0,
-      leaseExpense: 0,
-      variableExpense: 0,
-      otherExpense: 0
-    };
-    
-    // Sum only consecutive pages from 0 to current page
-    for (let i = 0; i <= page; i++) {
-      if (loadedPages.has(i)) {
-        const pageData = loadedPages.get(i);
-        totals.revenue += pageData.revenue;
-        totals.expense += pageData.expense;
-        totals.netOwed += pageData.netOwed;
-        totals.driverCount += pageData.driverCount;
-        totals.leaseRevenue += pageData.leaseRevenue;
-        totals.creditCardRevenue += pageData.creditCardRevenue;
-        totals.chargesRevenue += pageData.chargesRevenue;
-        totals.otherRevenue += pageData.otherRevenue;
-        totals.fixedExpense += pageData.fixedExpense;
-        totals.leaseExpense += pageData.leaseExpense;
-        totals.variableExpense += pageData.variableExpense;
-        totals.otherExpense += pageData.otherExpense;
-      }
-    }
-    
-    return totals;
-  };
-  
-  const displayTotals = getDisplayTotals();
+    return filtered;
+  }, [searchDriverNumber, searchDriverName, currentPageData]);
 
   // Format currency
   const formatCurrency = (value) => {
@@ -400,9 +297,44 @@ export default function DriverSummaryPage() {
     }).format(value);
   };
 
-  // Export to CSV
+  // ✅ Fetch detailed driver report for modal
+  const openDriverDetailModal = async (driver) => {
+    setSelectedDriver(driver);
+    setDetailModalOpen(true);
+    setDetailLoadingMessage("Loading driver details...");
+
+    try {
+      const token = localStorage.getItem("token");
+      const tenantId = localStorage.getItem("tenantSchema");
+
+      // ✅ Fetch the detailed report using driver number
+      const response = await axios.get(
+        `${API_BASE_URL}/financial-statements/owner-report/by-number/${driver.driverNumber}`,
+        {
+          params: {
+            from: formatDateForAPI(startDate),
+            to: formatDateForAPI(endDate),
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Tenant-ID": tenantId,
+          },
+        }
+      );
+      setDriverDetailReport(response.data);
+      setDetailLoadingMessage("");
+    } catch (err) {
+      console.error("Error fetching driver details:", err);
+      setDetailLoadingMessage(`Error loading driver details: ${err.response?.status === 403 ? "Access denied" : err.message}`);
+    }
+  };
+
+  // ✅ Export ALL cached records to CSV (not just current page)
   const exportToCSV = () => {
-    if (!filteredData || filteredData.length === 0) return;
+    if (!isAllRecordsLoaded || allRecords.length === 0) {
+      setError("No data to export. Please load all records first.");
+      return;
+    }
 
     const headers = [
       "Driver Number",
@@ -411,32 +343,48 @@ export default function DriverSummaryPage() {
       "Lease Revenue",
       "Credit Card Revenue",
       "Charges Revenue",
+      "Other Revenue",
       "Total Revenue",
       "Fixed Expense",
       "Lease Expense",
       "Variable Expense",
+      "Other Expense",
       "Total Expense",
       "Net Owed",
       "Paid",
       "Outstanding",
     ];
 
-    const rows = filteredData.map((driver) => [
-      driver.driverNumber,
-      driver.driverName,
-      driver.isOwner ? "Yes" : "No",
-      driver.leaseRevenue || 0,
-      driver.creditCardRevenue || 0,
-      driver.chargesRevenue || 0,
-      driver.totalRevenue || 0,
-      driver.fixedExpense || 0,
-      driver.leaseExpense || 0,
-      driver.variableExpense || 0,
-      driver.totalExpense || 0,
-      driver.netOwed || 0,
-      driver.paid || 0,
-      driver.outstanding || 0,
-    ]);
+    // ✅ Export ALL records, not just filtered page
+    const rows = allRecords.map((driver) => {
+      const totalRevenue = (driver.leaseRevenue || 0) +
+                         (driver.creditCardRevenue || 0) +
+                         (driver.chargesRevenue || 0) +
+                         (driver.otherRevenue || 0);
+      const totalExpense = (driver.fixedExpense || 0) +
+                         (driver.leaseExpense || 0) +
+                         (driver.variableExpense || 0) +
+                         (driver.otherExpense || 0);
+
+      return [
+        driver.driverNumber,
+        driver.driverName,
+        driver.isOwner ? "Yes" : "No",
+        driver.leaseRevenue || 0,
+        driver.creditCardRevenue || 0,
+        driver.chargesRevenue || 0,
+        driver.otherRevenue || 0,
+        totalRevenue,
+        driver.fixedExpense || 0,
+        driver.leaseExpense || 0,
+        driver.variableExpense || 0,
+        driver.otherExpense || 0,
+        totalExpense,
+        driver.netOwed || 0,
+        driver.paid || 0,
+        driver.outstanding || 0,
+      ];
+    });
 
     const csvContent = [
       headers.join(","),
@@ -447,8 +395,10 @@ export default function DriverSummaryPage() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `driver-summary-${formatDateForAPI(startDate)}-to-${formatDateForAPI(endDate)}.csv`;
+    a.download = `driver-summary-${formatDateForAPI(startDate)}-to-${formatDateForAPI(endDate)}-${allRecords.length}-records.csv`;
     a.click();
+
+    setError(""); // Clear any previous errors
   };
 
   return (
@@ -496,16 +446,19 @@ export default function DriverSummaryPage() {
                   <Button
                     variant="contained"
                     onClick={() => {
-                      // Reset tracking when generating new report
-                      setLoadedPages(new Map());
-                      setGrandTotals(null);
-                      fetchReport(0);
+                      // ✅ Load ALL records with current sort
+                      let sortField = orderBy;
+                      if (orderBy === "driverName") {
+                        sortField = "lastName";
+                      }
+                      fetchAllRecords(sortField, order);
                     }}
                     disabled={loading}
                     fullWidth
                     size="large"
                   >
-                    {loading ? <CircularProgress size={24} /> : "Generate Report"}
+                    {loading ? <CircularProgress size={24} sx={{ mr: 1 }} /> : "Generate Report"}
+                    {loadingProgress > 0 && !loading && <Typography variant="caption" sx={{ ml: 1 }}>({loadingProgress}%)</Typography>}
                   </Button>
                 </Grid>
               </Grid>
@@ -542,9 +495,10 @@ export default function DriverSummaryPage() {
                       startIcon={<Download />}
                       onClick={exportToCSV}
                       fullWidth
-                      disabled={!filteredData || filteredData.length === 0}
+                      disabled={!isAllRecordsLoaded}
+                      title={isAllRecordsLoaded ? `Export all ${allRecords.length} records` : "Generate report and load all records first"}
                     >
-                      Export to CSV
+                      {isAllRecordsLoaded ? `Export All (${allRecords.length})` : "Export to CSV"}
                     </Button>
                   </Grid>
                 </Grid>
@@ -566,64 +520,76 @@ export default function DriverSummaryPage() {
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "Total Drivers with Activity"
                           : "Drivers Loaded So Far"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold">
-                        {displayTotals.driverCount} {totalElements > 0 ? `/ ${totalElements}` : ''}
+                        {displayTotals.driverCount}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Page {page + 1} of {totalPages} ({reportData.driverSummaries.length} on this page)
+                        {isAllRecordsLoaded
+                          ? "✓ All records cached"
+                          : `Page ${page} of ${totalPages} (${currentPageData.length} on this page)`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "Grand Total Revenue"
-                          : "Revenue (Pages 1-" + (page + 1) + ")"}
+                          : "Revenue (All Loaded)"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold" color="success.main">
                         {formatCurrency(displayTotals.revenue)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "✓ All drivers"
-                          : `Loaded ${loadedPages.size} page(s)`}
+                          : `Cached locally`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "Grand Total Expense"
-                          : "Expense (Pages 1-" + (page + 1) + ")"}
+                          : "Expense (All Loaded)"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold" color="error.main">
                         {formatCurrency(displayTotals.expense)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "✓ All drivers"
-                          : `Loaded ${loadedPages.size} page(s)`}
+                          : `Cached locally`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "Grand Net Owed"
-                          : "Net Owed (Pages 1-" + (page + 1) + ")"}
+                          : "Net Owed (All Loaded)"}
                       </Typography>
-                      <Typography variant="h5" fontWeight="bold" color="primary.main">
-                        {formatCurrency(displayTotals.netOwed)}
+                      <Typography
+                        variant="h5"
+                        fontWeight="bold"
+                        color={
+                          displayTotals.netOwed > 0
+                            ? "error.main" // ❌ Red: Driver owes company money
+                            : displayTotals.netOwed < 0
+                            ? "success.main" // ✅ Green: Company owes driver money
+                            : "text.primary" // Neutral: Zero balance
+                        }
+                      >
+                        {formatCurrency(-displayTotals.netOwed)} {/* Negate: show driver's perspective */}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {grandTotals 
+                        {isAllRecordsLoaded
                           ? "✓ Final totals"
                           : `Running total`}
                       </Typography>
@@ -634,7 +600,7 @@ export default function DriverSummaryPage() {
                 {/* Detailed Revenue Breakdown */}
                 <Paper sx={{ p: 2, mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    Revenue Breakdown {grandTotals ? "(Grand Total)" : "(Loaded Pages)"}
+                    Revenue Breakdown {isAllRecordsLoaded ? "(Grand Total)" : "(Loaded Pages)"}
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6} sm={3}>
@@ -683,7 +649,7 @@ export default function DriverSummaryPage() {
                 {/* Detailed Expense Breakdown */}
                 <Paper sx={{ p: 2, mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
-                    Expense Breakdown {grandTotals ? "(Grand Total)" : "(Loaded Pages)"}
+                    Expense Breakdown {isAllRecordsLoaded ? "(Grand Total)" : "(Loaded Pages)"}
                   </Typography>
                   <Grid container spacing={2}>
                     <Grid item xs={6} sm={3}>
@@ -729,9 +695,9 @@ export default function DriverSummaryPage() {
                   </Grid>
                 </Paper>
 
-                {/* Driver Summary Table - same as before, keeping existing table implementation */}
+                {/* Driver Summary Table - Enhanced with Total Revenue and Total Expense columns */}
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-                  <Table size="small" sx={{ minWidth: 1400 }}>
+                  <Table size="small" sx={{ minWidth: 1600 }}>
                     <TableHead>
                       <TableRow sx={{ bgcolor: "grey.100" }}>
                         <TableCell sx={{ minWidth: 70 }}>
@@ -740,7 +706,7 @@ export default function DriverSummaryPage() {
                             direction={orderBy === "driverNumber" ? order : "asc"}
                             onClick={() => handleSortChange("driverNumber")}
                           >
-                            <Typography variant="caption">Driver #</Typography>
+                            <Typography variant="caption" fontWeight="bold">Driver #</Typography>
                           </TableSortLabel>
                         </TableCell>
                         <TableCell sx={{ minWidth: 120 }}>
@@ -749,172 +715,317 @@ export default function DriverSummaryPage() {
                             direction={orderBy === "driverName" ? order : "asc"}
                             onClick={() => handleSortChange("driverName")}
                           >
-                            <Typography variant="caption">Name</Typography>
+                            <Typography variant="caption" fontWeight="bold">Name</Typography>
                           </TableSortLabel>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Lease</Typography>
+
+                        {/* Revenue Section */}
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Lease</Typography>
                           <Typography variant="caption" display="block">Rev</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">CC</Typography>
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">CC</Typography>
                           <Typography variant="caption" display="block">Rev</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Chrg</Typography>
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Charges</Typography>
                           <Typography variant="caption" display="block">Rev</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Other</Typography>
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Other</Typography>
                           <Typography variant="caption" display="block">Rev</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Fixed</Typography>
+                        <TableCell align="right" sx={{ minWidth: 75, bgcolor: "#e8f5e9" }}>
+                          <TableSortLabel
+                            active={orderBy === "totalRevenue"}
+                            direction={orderBy === "totalRevenue" ? order : "asc"}
+                            onClick={() => handleSortChange("totalRevenue")}
+                          >
+                            <Typography variant="caption" fontWeight="bold" color="success.main">Total Rev</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+
+                        {/* Expense Section */}
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Fixed</Typography>
                           <Typography variant="caption" display="block">Exp</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Lease</Typography>
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Lease</Typography>
                           <Typography variant="caption" display="block">Exp</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Var</Typography>
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Var</Typography>
                           <Typography variant="caption" display="block">Exp</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption" display="block">Other</Typography>
+                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
+                          <Typography variant="caption" display="block" fontWeight="bold">Other</Typography>
                           <Typography variant="caption" display="block">Exp</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 80 }}>
+                        <TableCell align="right" sx={{ minWidth: 75, bgcolor: "#ffebee" }}>
+                          <TableSortLabel
+                            active={orderBy === "totalExpense"}
+                            direction={orderBy === "totalExpense" ? order : "asc"}
+                            onClick={() => handleSortChange("totalExpense")}
+                          >
+                            <Typography variant="caption" fontWeight="bold" color="error.main">Total Exp</Typography>
+                          </TableSortLabel>
+                        </TableCell>
+
+                        {/* Summary Section */}
+                        <TableCell align="right" sx={{ minWidth: 80, bgcolor: "#fff3e0" }}>
                           <TableSortLabel
                             active={orderBy === "netOwed"}
                             direction={orderBy === "netOwed" ? order : "asc"}
                             onClick={() => handleSortChange("netOwed")}
                           >
-                            <Typography variant="caption">Net Owed</Typography>
+                            <Typography variant="caption" fontWeight="bold">Net Owed</Typography>
                           </TableSortLabel>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70 }}>
-                          <Typography variant="caption">Paid</Typography>
+                        <TableCell align="right" sx={{ minWidth: 70, bgcolor: "#fff3e0" }}>
+                          <Typography variant="caption" fontWeight="bold">Paid</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 80 }}>
+                        <TableCell align="right" sx={{ minWidth: 85, bgcolor: "#fff3e0" }}>
                           <TableSortLabel
                             active={orderBy === "outstanding"}
                             direction={orderBy === "outstanding" ? order : "asc"}
                             onClick={() => handleSortChange("outstanding")}
                           >
-                            <Typography variant="caption">Outstanding</Typography>
+                            <Typography variant="caption" fontWeight="bold">Outstanding</Typography>
                           </TableSortLabel>
+                        </TableCell>
+                        <TableCell align="right" sx={{ minWidth: 85, bgcolor: "#fff3e0" }}>
+                          <Typography variant="caption" fontWeight="bold">Due/Owed</Typography>
                         </TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {filteredData.map((driver) => (
-                        <TableRow
-                          key={driver.driverNumber}
-                          hover
-                          sx={{
-                            "&:hover": { bgcolor: "action.hover" },
-                            bgcolor: driver.isOwner ? "info.light" : "inherit",
-                          }}
-                        >
-                          <TableCell>
-                            <Typography variant="body2" fontWeight="medium">
-                              {driver.driverNumber}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2">
-                              {driver.driverName}
-                              {driver.isOwner && (
-                                <Typography
-                                  component="span"
-                                  variant="caption"
-                                  sx={{ ml: 1, color: "primary.main" }}
-                                >
-                                  (Owner)
-                                </Typography>
-                              )}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.leaseRevenue)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.creditCardRevenue)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.chargesRevenue)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.otherRevenue || 0)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.fixedExpense)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.leaseExpense)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.variableExpense)}
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.otherExpense || 0)}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography
-                              variant="body2"
-                              fontWeight="bold"
-                              color={
-                                driver.netOwed > 0
-                                  ? "success.main"
-                                  : driver.netOwed < 0
-                                  ? "error.main"
-                                  : "text.primary"
-                              }
-                            >
-                              {formatCurrency(driver.netOwed)}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            {formatCurrency(driver.paid)}
-                          </TableCell>
-                          <TableCell align="right">
-                            <Typography
-                              variant="body2"
-                              fontWeight="bold"
-                              color={
-                                driver.outstanding > 0
-                                  ? "warning.main"
-                                  : "text.primary"
-                              }
-                            >
-                              {formatCurrency(driver.outstanding)}
-                            </Typography>
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {filteredDataComputed.map((driver) => {
+                        const totalRevenue = (driver.leaseRevenue || 0) +
+                                           (driver.creditCardRevenue || 0) +
+                                           (driver.chargesRevenue || 0) +
+                                           (driver.otherRevenue || 0);
+                        const totalExpense = (driver.fixedExpense || 0) +
+                                           (driver.leaseExpense || 0) +
+                                           (driver.variableExpense || 0) +
+                                           (driver.otherExpense || 0);
+
+                        return (
+                          <TableRow
+                            key={driver.driverNumber}
+                            hover
+                            onClick={() => openDriverDetailModal(driver)}
+                            sx={{
+                              "&:hover": { bgcolor: "action.hover", cursor: "pointer" },
+                              bgcolor: driver.isOwner ? "info.light" : "inherit",
+                            }}
+                          >
+                            <TableCell>
+                              <Typography variant="body2" fontWeight="medium">
+                                {driver.driverNumber}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {driver.driverName}
+                                {driver.isOwner && (
+                                  <Typography
+                                    component="span"
+                                    variant="caption"
+                                    sx={{ ml: 1, color: "primary.main" }}
+                                  >
+                                    (Owner)
+                                  </Typography>
+                                )}
+                              </Typography>
+                            </TableCell>
+
+                            {/* Revenue Columns */}
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.leaseRevenue)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.creditCardRevenue)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.chargesRevenue)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.otherRevenue || 0)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" color="success.main">
+                                {formatCurrency(totalRevenue)}
+                              </Typography>
+                            </TableCell>
+
+                            {/* Expense Columns */}
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.fixedExpense)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.leaseExpense)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.variableExpense)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                              {formatCurrency(driver.otherExpense || 0)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" color="error.main">
+                                {formatCurrency(totalExpense)}
+                              </Typography>
+                            </TableCell>
+
+                            {/* Summary Columns */}
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={
+                                  driver.netOwed > 0
+                                    ? "success.main" // ✅ Green: Company owes driver money
+                                    : driver.netOwed < 0
+                                    ? "error.main" // ❌ Red: Driver owes company money
+                                    : "text.primary" // Neutral: Zero balance
+                                }
+                              >
+                                {formatCurrency(driver.netOwed)} {/* Show as-is: positive = company owes, negative = driver owes */}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              {formatCurrency(driver.paid)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={
+                                  driver.outstanding > 0
+                                    ? "success.main" // ✅ Green: Company owes driver money
+                                    : driver.outstanding < 0
+                                    ? "error.main" // ❌ Red: Driver owes company money
+                                    : "text.primary" // Neutral: Zero balance
+                                }
+                              >
+                                {formatCurrency(driver.outstanding)} {/* Show as-is: positive = company owes, negative = driver owes */}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={
+                                  driver.netOwed - driver.paid > 0
+                                    ? "success.main" // ✅ Green: Company owes driver money
+                                    : driver.netOwed - driver.paid < 0
+                                    ? "error.main" // ❌ Red: Driver owes company money
+                                    : "text.primary" // Neutral: Zero balance
+                                }
+                              >
+                                {formatCurrency(driver.netOwed - driver.paid)} {/* Due: netOwed - paid, show as-is */}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                       {/* Totals Row */}
-                      <TableRow sx={{ bgcolor: grandTotals ? "success.light" : "info.light" }}>
+                      <TableRow sx={{ bgcolor: isAllRecordsLoaded ? "success.light" : "info.light", fontWeight: "bold" }}>
                         <TableCell colSpan={2}>
                           <Typography variant="body2" fontWeight="bold">
-                            {grandTotals 
-                              ? "GRAND TOTALS (ALL DRIVERS)" 
-                              : `TOTALS (${displayTotals.driverCount} drivers loaded)`}
+                            {isAllRecordsLoaded
+                              ? "GRAND TOTALS (ALL DRIVERS)"
+                              : `TOTALS (${displayTotals.driverCount} drivers cached)`}
                           </Typography>
                         </TableCell>
-                        <TableCell align="right" colSpan={8}>
-                          <Typography variant="body2" color="text.secondary">
-                            Detailed breakdown shown in cards above
+                        {/* Revenue Totals */}
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.leaseRevenue)}
                           </Typography>
                         </TableCell>
-                        <TableCell align="right">
-                          <Typography variant="body2" fontWeight="bold" color="primary.main">
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.creditCardRevenue)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.chargesRevenue)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.otherRevenue)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                            {formatCurrency(displayTotals.revenue)}
+                          </Typography>
+                        </TableCell>
+                        {/* Expense Totals */}
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.fixedExpense)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.leaseExpense)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.variableExpense)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold">
+                            {formatCurrency(displayTotals.otherExpense)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold" color="error.main">
+                            {formatCurrency(displayTotals.expense)}
+                          </Typography>
+                        </TableCell>
+                        {/* Summary Totals */}
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight="bold"
+                            color={
+                              displayTotals.netOwed > 0
+                                ? "success.main"
+                                : displayTotals.netOwed < 0
+                                ? "error.main"
+                                : "text.primary"
+                            }
+                          >
                             {formatCurrency(displayTotals.netOwed)}
                           </Typography>
                         </TableCell>
-                        <TableCell align="right" colSpan={2}>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
                           <Typography variant="caption" color="text.secondary">
-                            {grandTotals ? "✓ Final" : `Pages 1-${page + 1}`}
+                            {formatCurrency(displayTotals.paid)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight="bold"
+                            color={
+                              displayTotals.netOwed - displayTotals.paid > 0
+                                ? "success.main"
+                                : displayTotals.netOwed - displayTotals.paid < 0
+                                ? "error.main"
+                                : "text.primary"
+                            }
+                          >
+                            {formatCurrency(displayTotals.netOwed - displayTotals.paid)}
                           </Typography>
                         </TableCell>
                       </TableRow>
@@ -922,13 +1033,13 @@ export default function DriverSummaryPage() {
                   </Table>
                 </TableContainer>
 
-                {/* Pagination Controls */}
-                {totalPages > 1 && (
+                {/* Pagination Controls - ✅ LOCAL pagination (no API calls) */}
+                {isAllRecordsLoaded && totalPages > 1 && (
                   <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
                     <Pagination
                       count={totalPages}
-                      page={page + 1}
-                      onChange={(e, value) => handlePageChange(value - 1)}
+                      page={page}
+                      onChange={handlePageChange}
                       color="primary"
                       size="large"
                       showFirstButton
@@ -957,10 +1068,411 @@ export default function DriverSummaryPage() {
                   {loadingMessage || "Generating report..."}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  This may take up to 2 minutes for large date ranges
+                  This may take up to 5 minutes for large date ranges
                 </Typography>
               </Paper>
             )}
+
+            {/* Driver Detail Modal */}
+            <Dialog
+              open={detailModalOpen}
+              onClose={() => setDetailModalOpen(false)}
+              maxWidth="lg"
+              fullWidth
+              PaperProps={{
+                sx: { maxHeight: "90vh", borderRadius: 2 }
+              }}
+            >
+              <DialogTitle sx={{ fontSize: "1.3rem", fontWeight: "bold" }}>
+                {selectedDriver?.driverName} - Financial Details
+                <Button
+                  onClick={() => setDetailModalOpen(false)}
+                  sx={{ position: "absolute", right: 8, top: 8 }}
+                  size="small"
+                >
+                  <Close />
+                </Button>
+              </DialogTitle>
+
+              <DialogContent dividers sx={{ p: 3 }}>
+                {detailLoadingMessage ? (
+                  <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 4 }}>
+                    <CircularProgress size={50} sx={{ mb: 2 }} />
+                    <Typography variant="body1">{detailLoadingMessage}</Typography>
+                  </Box>
+                ) : driverDetailReport ? (
+                  <Box>
+                    {/* Period and Summary Info */}
+                    <Box sx={{ mb: 3, p: 2, bgcolor: "#f5f5f5", borderRadius: 1 }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">Period</Typography>
+                          <Typography variant="body1" fontWeight="bold">
+                            {driverDetailReport.periodFrom} to {driverDetailReport.periodTo}
+                          </Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="caption" color="text.secondary">Type</Typography>
+                          <Typography variant="body1" fontWeight="bold">
+                            {driverDetailReport.personType || (driverDetailReport.isOwner ? "OWNER" : "DRIVER")}
+                          </Typography>
+                        </Grid>
+                      </Grid>
+                    </Box>
+
+                    {/* Revenue Tabs */}
+                    <Typography variant="h6" gutterBottom sx={{ mt: 3, fontWeight: "bold" }}>Revenue Details</Typography>
+                    <Tabs value={revenueTabIndex} onChange={(e, val) => setRevenueTabIndex(val)} sx={{ mb: 2 }}>
+                      <Tab label="All Revenues" />
+                      <Tab label="Lease Income" />
+                      <Tab label="Card Revenue" />
+                      <Tab label="Account Charges" />
+                      <Tab label="Other Revenue" />
+                    </Tabs>
+
+                    {revenueTabIndex === 0 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.revenues && driverDetailReport.revenues.length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Category</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.revenues.map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.categoryName || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      {formatCurrency(rev.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No revenues found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {revenueTabIndex === 1 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.revenues && driverDetailReport.revenues.filter(r => r.revenueSubType === "LEASE_INCOME").length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "LEASE_INCOME").map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      {formatCurrency(rev.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No lease income found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {revenueTabIndex === 2 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.revenues && driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE").length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE").map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      {formatCurrency(rev.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No card revenue found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {revenueTabIndex === 3 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.revenues && driverDetailReport.revenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE").length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Account</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE").map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.accountName || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      {formatCurrency(rev.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No account charges found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {revenueTabIndex === 4 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.revenues && driverDetailReport.revenues.filter(r => r.revenueSubType === "OTHER_REVENUE").length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "OTHER_REVENUE").map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      {formatCurrency(rev.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No other revenue found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Expense Tabs */}
+                    <Typography variant="h6" gutterBottom sx={{ mt: 3, fontWeight: "bold" }}>Expense Details</Typography>
+                    <Tabs value={expenseTabIndex} onChange={(e, val) => setExpenseTabIndex(val)} sx={{ mb: 2 }}>
+                      <Tab label="All Expenses" />
+                      <Tab label="Recurring Expenses" />
+                      <Tab label="One-Time Expenses" />
+                    </Tabs>
+
+                    {expenseTabIndex === 0 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.recurringExpenses && driverDetailReport.recurringExpenses.length > 0 ? (
+                          <Box sx={{ mb: 3 }}>
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Recurring Expenses</Typography>
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                    <TableCell><strong>Category</strong></TableCell>
+                                    <TableCell><strong>Description</strong></TableCell>
+                                    <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {driverDetailReport.recurringExpenses.map((exp, idx) => (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{exp.categoryName || "-"}</TableCell>
+                                      <TableCell>{exp.description || exp.entityDescription || "-"}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                        {formatCurrency(exp.amount)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </Box>
+                        ) : null}
+
+                        {driverDetailReport.oneTimeExpenses && driverDetailReport.oneTimeExpenses.length > 0 ? (
+                          <Box sx={{ mb: 3 }}>
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>One-Time Expenses</Typography>
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                    <TableCell><strong>Date</strong></TableCell>
+                                    <TableCell><strong>Category</strong></TableCell>
+                                    <TableCell><strong>Description</strong></TableCell>
+                                    <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {driverDetailReport.oneTimeExpenses.map((exp, idx) => (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{exp.date || "-"}</TableCell>
+                                      <TableCell>{exp.categoryName || "-"}</TableCell>
+                                      <TableCell>{exp.description || "-"}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                        {formatCurrency(exp.amount)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </Box>
+                        ) : null}
+
+                        {(!driverDetailReport.recurringExpenses || driverDetailReport.recurringExpenses.length === 0) &&
+                         (!driverDetailReport.oneTimeExpenses || driverDetailReport.oneTimeExpenses.length === 0) && (
+                          <Typography color="textSecondary">No expenses found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {expenseTabIndex === 1 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.recurringExpenses && driverDetailReport.recurringExpenses.length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                  <TableCell><strong>Category</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.recurringExpenses.map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.categoryName || "-"}</TableCell>
+                                    <TableCell>{exp.description || exp.entityDescription || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      {formatCurrency(exp.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No recurring expenses found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {expenseTabIndex === 2 && (
+                      <Box sx={{ mb: 3 }}>
+                        {driverDetailReport.oneTimeExpenses && driverDetailReport.oneTimeExpenses.length > 0 ? (
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Category</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {driverDetailReport.oneTimeExpenses.map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.date || "-"}</TableCell>
+                                    <TableCell>{exp.categoryName || "-"}</TableCell>
+                                    <TableCell>{exp.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      {formatCurrency(exp.amount)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No one-time expenses found</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Summary Footer */}
+                    {driverDetailReport && (
+                      <Box sx={{ mt: 3, p: 2, bgcolor: "#f5f5f5", borderRadius: 1 }}>
+                        <Grid container spacing={2}>
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Total Revenue</Typography>
+                            <Typography variant="body2" fontWeight="bold" sx={{ color: "#388e3c" }}>
+                              {formatCurrency(driverDetailReport.totalRevenues)}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Total Expenses</Typography>
+                            <Typography variant="body2" fontWeight="bold" sx={{ color: "#d32f2f" }}>
+                              {formatCurrency(driverDetailReport.totalExpenses)}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Net Due</Typography>
+                            <Typography
+                              variant="body2"
+                              fontWeight="bold"
+                              sx={{ color: driverDetailReport.netDue > 0 ? "#d32f2f" : "#388e3c" }}
+                            >
+                              {formatCurrency(-driverDetailReport.netDue)}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Paid</Typography>
+                            <Typography variant="body2" fontWeight="bold">
+                              {formatCurrency(driverDetailReport.paidAmount)}
+                            </Typography>
+                          </Grid>
+                        </Grid>
+                      </Box>
+                    )}
+                  </Box>
+                ) : (
+                  <Typography color="textSecondary">No data available</Typography>
+                )}
+              </DialogContent>
+
+              <DialogActions sx={{ p: 2 }}>
+                <Button onClick={() => setDetailModalOpen(false)} variant="outlined">Close</Button>
+              </DialogActions>
+            </Dialog>
         </Container>
       </Box>
     </LocalizationProvider>

@@ -45,6 +45,7 @@ const APPLICATION_TYPES = {
   SPECIFIC_OWNER_DRIVER: { label: "Specific Owner/Driver", description: "Apply to a specific owner or driver" },
   ALL_ACTIVE_SHIFTS: { label: "All Active Shifts", description: "Apply to all currently active shifts" },
   ALL_NON_OWNER_DRIVERS: { label: "All Non-Owner Drivers", description: "Apply to all drivers who are not owners" },
+  SHIFTS_WITH_ATTRIBUTE: { label: "Shifts with Attribute", description: "Apply to all shifts with a specific attribute" },
 };
 
 export default function ExpenseCategoriesTab({
@@ -68,6 +69,7 @@ export default function ExpenseCategoriesTab({
     specificShiftId: null,
     specificOwnerId: null,
     specificDriverId: null,
+    attributeTypeId: null,
     isActive: true,
   });
 
@@ -75,6 +77,7 @@ export default function ExpenseCategoriesTab({
   const [shiftProfiles, setShiftProfiles] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [attributeTypes, setAttributeTypes] = useState([]);
 
   // Preview state
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -133,6 +136,12 @@ export default function ExpenseCategoriesTab({
       if (driversRes.ok) {
         setDrivers(await driversRes.json());
       }
+
+      // Load attribute types
+      const attributesRes = await fetch(`${API_BASE_URL}/cab-attribute-types`, { headers });
+      if (attributesRes.ok) {
+        setAttributeTypes(await attributesRes.json());
+      }
     } catch (err) {
       console.error("Error loading dropdown options:", err);
       // Don't fail the entire component if dropdowns fail
@@ -153,6 +162,7 @@ export default function ExpenseCategoriesTab({
         specificShiftId: category.specificShiftId || null,
         specificOwnerId: category.specificOwnerId || null,
         specificDriverId: category.specificDriverId || null,
+        attributeTypeId: category.attributeTypeId || null,
         isActive: category.isActive,
       });
     } else {
@@ -168,6 +178,7 @@ export default function ExpenseCategoriesTab({
         specificShiftId: null,
         specificOwnerId: null,
         specificDriverId: null,
+        attributeTypeId: null,
         isActive: true,
       });
     }
@@ -201,6 +212,7 @@ export default function ExpenseCategoriesTab({
         specificShiftId: formData.specificShiftId,
         specificOwnerId: formData.specificOwnerId,
         specificDriverId: formData.specificDriverId,
+        attributeTypeId: formData.attributeTypeId,
         isActive: formData.isActive,
       };
 
@@ -252,6 +264,12 @@ export default function ExpenseCategoriesTab({
           return false;
         }
         break;
+      case "SHIFTS_WITH_ATTRIBUTE":
+        if (!formData.attributeTypeId) {
+          setError("Please select an attribute type");
+          return false;
+        }
+        break;
       case "ALL_ACTIVE_SHIFTS":
       case "ALL_NON_OWNER_DRIVERS":
         // No validation needed
@@ -272,6 +290,7 @@ export default function ExpenseCategoriesTab({
       specificShiftId: null,
       specificOwnerId: null,
       specificDriverId: null,
+      attributeTypeId: null,
     });
   };
 
@@ -594,6 +613,7 @@ export default function ExpenseCategoriesTab({
                   <MenuItem value="SPECIFIC_OWNER_DRIVER">Specific Owner/Driver</MenuItem>
                   <MenuItem value="ALL_ACTIVE_SHIFTS">All Active Shifts</MenuItem>
                   <MenuItem value="ALL_NON_OWNER_DRIVERS">All Non-Owner Drivers</MenuItem>
+                  <MenuItem value="SHIFTS_WITH_ATTRIBUTE">Shifts with Attribute</MenuItem>
                 </Select>
               </FormControl>
 
@@ -705,6 +725,29 @@ export default function ExpenseCategoriesTab({
                       </Grid>
                     </Grid>
                   </Box>
+                )}
+
+                {formData.applicationType === "SHIFTS_WITH_ATTRIBUTE" && (
+                  <FormControl fullWidth required>
+                    <InputLabel>Attribute Type</InputLabel>
+                    <Select
+                      value={formData.attributeTypeId || ""}
+                      label="Attribute Type"
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          attributeTypeId: e.target.value,
+                        })
+                      }
+                    >
+                      <MenuItem value="">-- Select Attribute --</MenuItem>
+                      {attributeTypes.map((attr) => (
+                        <MenuItem key={attr.id} value={attr.id}>
+                          {attr.attributeName}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 )}
 
                 {(formData.applicationType === "ALL_ACTIVE_SHIFTS" ||

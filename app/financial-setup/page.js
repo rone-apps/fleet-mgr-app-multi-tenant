@@ -13,6 +13,7 @@ import RevenueCategoriesTab from "./tabs/RevenueCategoriesTab";
 import LeasePlansRatesTab from "./tabs/LeasePlansRatesTab";
 import LeaseRateOverridesTab from "./tabs/LeaseRateOverridesTab";
 import MerchantMappingsTab from "./tabs/MerchantMappingsTab";
+import AttributeCostsTab from "../expenses/components/AttributeCostsTab";
 
 // Statistics Component
 import FinancialStats from "./components/FinancialStats";
@@ -24,6 +25,7 @@ import {
   Receipt as ReceiptIcon,
   AttachMoney as MoneyIcon,
   CreditCard as MerchantIcon,
+  Settings as AttributeIcon,
 } from "@mui/icons-material";
 
 export default function FinancialSetupPage() {
@@ -41,6 +43,7 @@ export default function FinancialSetupPage() {
     leaseRates: 0,
     leaseRateOverrides: 0,
     merchantMappings: 0,
+    attributeCosts: 0,
   });
 
   const canEdit = currentUser?.role === "ADMIN" || currentUser?.role === "MANAGER";
@@ -72,7 +75,7 @@ export default function FinancialSetupPage() {
             Financial Configuration
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Manage expense categories, revenue categories, lease plans, rates, overrides, and merchant mappings
+            Manage expense categories, revenue categories, lease plans, rates, overrides, merchant mappings, and attribute costs
           </Typography>
 
           {error && (
@@ -97,6 +100,7 @@ export default function FinancialSetupPage() {
               <Tab label="Lease Plans & Rates" icon={<ReceiptIcon />} iconPosition="start" />
               <Tab label="Lease Rate Overrides" icon={<MoneyIcon />} iconPosition="start" />
               <Tab label="Merchant Mappings" icon={<MerchantIcon />} iconPosition="start" />
+              <Tab label="Attribute Costs" icon={<AttributeIcon />} iconPosition="start" />
             </Tabs>
 
             {/* Tab Content */}
@@ -147,6 +151,12 @@ export default function FinancialSetupPage() {
                 setError={setError}
                 setSuccess={setSuccess}
                 updateStats={updateStats}
+              />
+            )}
+
+            {currentTab === 5 && (
+              <AttributeCostsTab
+                canEdit={canEdit}
               />
             )}
           </Paper>

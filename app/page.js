@@ -591,17 +591,17 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
       case 'reports':
         return [
           {
-            title: 'Analytics Dashboard',
-            description: 'AI-powered financial insights & forecasting',
+            title: 'Driver Reports',
+            description: 'Generate and manage financial statements for drivers and owners',
             icon: BarChart,
             path: '/reports',
-            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
-            badge: 'Predictive',
-            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            accent: '#667eea'
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DRIVER'],
+            badge: 'Financial',
+            gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+            accent: '#00f2fe'
           },
           {
-            title: 'Driver Performance',
+            title: 'All Driver Summary',
             description: 'Individual earnings, efficiency & metrics',
             icon: TrendingUpOutlined,
             path: '/driver-summary',

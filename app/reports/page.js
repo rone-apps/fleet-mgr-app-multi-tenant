@@ -5,919 +5,1549 @@ import { useRouter } from "next/navigation";
 import GlobalNav from "../components/GlobalNav";
 import {
   Box, Container, Typography, Button, Paper, Grid, TextField,
-  Tabs, Tab, Autocomplete, Card, CardContent, CircularProgress,
-  Dialog, DialogTitle, DialogContent, DialogActions, Divider,
+  Tabs, Tab, Card, CardContent, CircularProgress, Alert, Dialog, DialogTitle,
+  DialogContent, DialogActions, Autocomplete,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
 import {
-  Assessment, TrendingUp, TrendingDown, AccountBalance, CheckCircle,
-  Visibility, Download, Print, Email,
+  Assessment, TrendingUp, Download, Print, Close,
 } from "@mui/icons-material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import axios from "axios";
-
-import RevenueTab from "./components/RevenueTab";
-import ExpenseTab from "./components/ExpenseTab";
-import { API_BASE_URL } from "../lib/api";
-
-// ✅ FIXED: Proper date formatting function that handles timezones correctly
-const formatDateForAPI = (date) => {
-  if (!date || !(date instanceof Date)) return null;
-  
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  return `${year}-${month}-${day}`;
-};
+import { API_BASE_URL, getCurrentUser } from "../lib/api";
 
 export default function ReportsPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState(null);
   const [drivers, setDrivers] = useState([]);
+  const [selectedDriverId, setSelectedDriverId] = useState("");
   const [selectedDriver, setSelectedDriver] = useState(null);
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
   const [activeTab, setActiveTab] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState("");
-  
-  // ✅ Driver-specific state
-  const [isDriverRole, setIsDriverRole] = useState(false);
-  const [currentDriverNumber, setCurrentDriverNumber] = useState(null);
-  
-  // ✅ ALL report data cached here - fetched ONCE
   const [reportData, setReportData] = useState(null);
 
-  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  // New state for banner/statement functionality
+  const [paidAmount, setPaidAmount] = useState("0");
+  const [activeBanner, setActiveBanner] = useState(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
+  const [savedStatements, setSavedStatements] = useState([]);
+  const [emailAddress, setEmailAddress] = useState("");
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [loadingSavedStatements, setLoadingSavedStatements] = useState(false);
 
-  const getCurrentUser = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return null;
-      const response = await axios.get(`${API_BASE_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-      });
-      return response.data;
-    } catch (error) {
-      console.error("Error getting current user:", error);
-      return null;
-    }
-  };
+  // Revenue and Expense Tabs
+  const [revenueTabIndex, setRevenueTabIndex] = useState(0);
+  const [expenseTabIndex, setExpenseTabIndex] = useState(0);
+
+  // Filters for revenue details
+  const [revenueFilters, setRevenueFilters] = useState({
+    creditCardDateFrom: "",
+    creditCardDateTo: "",
+    creditCardAmountMin: "",
+    creditCardAmountMax: "",
+    chargesDateFrom: "",
+    chargesDateTo: "",
+    chargesAmountMin: "",
+    chargesAmountMax: "",
+    chargesAccountName: "",
+    leaseRevenueDriverName: "",
+    leaseRevenueDateFrom: "",
+    leaseRevenueDateTo: "",
+    leaseRevenueAmountMin: "",
+    leaseRevenueAmountMax: "",
+    othersDateFrom: "",
+    othersDateTo: "",
+    othersAmountMin: "",
+    othersAmountMax: "",
+  });
+
+  // Filters for expense details
+  const [expenseFilters, setExpenseFilters] = useState({
+    recurringCategoryFilter: "",
+    oneTimeDateFrom: "",
+    oneTimeDateTo: "",
+    oneTimeAmountMin: "",
+    oneTimeAmountMax: "",
+  });
 
   useEffect(() => {
-    const checkAuth = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        router.push("/signin");
-        return;
-      }
-      const user = await getCurrentUser();
+    const initializeUser = async () => {
+      const user = getCurrentUser();
       if (!user) {
         router.push("/signin");
         return;
       }
       setCurrentUser(user);
-      
-      // ✅ CHECK IF USER IS DRIVER
-      if (user.role === 'DRIVER') {
-        setIsDriverRole(true);
-        // ✅ Auto-select current driver
-        const driverId = user.driverId;
-        if (driverId) {
-          try {
-            const driverResponse = await axios.get(`${API_BASE_URL}/drivers/${driverId}`, {
-              headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-            });
-            const driver = driverResponse.data;
-            setCurrentDriverNumber(driver.driverNumber);
+
+      // Set default date range to current month
+      const today = new Date();
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1)
+        .toISOString()
+        .split("T")[0];
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        .toISOString()
+        .split("T")[0];
+      setStartDate(monthStart);
+      setEndDate(monthEnd);
+
+      // Load drivers
+      await fetchDrivers();
+
+      // If user is a driver, auto-select them and generate report
+      if (user.role === "DRIVER" && user.driverId) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/drivers/${user.driverId}`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+          });
+          if (response.ok) {
+            const driver = await response.json();
+            setSelectedDriverId(driver.id);
             setSelectedDriver(driver);
-            setDrivers([driver]); // Only show this driver
-          } catch (error) {
-            console.error("Error fetching driver info:", error);
-            setError("Failed to load your driver information");
           }
+        } catch (err) {
+          console.error("Error fetching driver:", err);
         }
-      } else {
-        setIsDriverRole(false);
-        fetchDrivers(); // Load all drivers for admin/manager/accountant
+      }
+
+      setLoading(false);
+    };
+
+    initializeUser();
+  }, [router]);
+
+  // Auto-generate report for drivers on load
+  useEffect(() => {
+    const autoGenerateForDriver = async () => {
+      if (currentUser?.role === "DRIVER" && selectedDriverId && startDate && endDate && !reportData) {
+        const url = `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}?from=${startDate}&to=${endDate}`;
+        console.log("Auto-generating report for driver:", {
+          driverId: selectedDriverId,
+          startDate,
+          endDate,
+          url,
+          token: !!localStorage.getItem("token"),
+          tenantId: localStorage.getItem("tenantSchema")
+        });
+        setLoadingReport(true);
+        setError("");
+        try {
+          const response = await fetch(url, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+                "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+              },
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            setReportData(data);
+            setPaidAmount(data.paidAmount ? data.paidAmount.toString() : "0");
+            console.log("Report auto-generated successfully:", data);
+          } else {
+            const errorText = await response.text();
+            console.error(`Failed to auto-generate report. Status: ${response.status}`, errorText);
+            setError(`Error ${response.status}: ${errorText || "Failed to generate report"}`);
+          }
+        } catch (err) {
+          console.error("Error auto-generating report:", err);
+          setError(`Error: ${err.message}`);
+        } finally {
+          setLoadingReport(false);
+        }
       }
     };
-    checkAuth();
-  }, [router]);
+
+    autoGenerateForDriver();
+  }, [selectedDriverId, startDate, endDate, currentUser?.role]);
 
   const fetchDrivers = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_BASE_URL}/drivers`, {
-        headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
+      const response = await fetch(`${API_BASE_URL}/drivers`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
       });
-      const allDrivers = response.data.sort((a, b) => {
-        const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
-        const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-      setDrivers(allDrivers);
-    } catch (error) {
-      console.error("Error fetching drivers:", error);
+      if (response.ok) {
+        const data = await response.json();
+        const sorted = data.sort((a, b) => {
+          const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+          const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setDrivers(sorted);
+      }
+    } catch (err) {
+      console.error("Error fetching drivers:", err);
       setError("Failed to fetch drivers");
     }
   };
 
-  // ✅ Fetch ALL data ONCE when Generate Report is clicked
-  const fetchAllReportData = async () => {
-    if (!selectedDriver || !startDate || !endDate) return;
-
-    setLoading(true);
-    setError("");
-    
-    try {
-      const token = localStorage.getItem("token");
-      
-      // ✅ FIXED: Use proper date formatting
-      const formattedStartDate = formatDateForAPI(startDate);
-      const formattedEndDate = formatDateForAPI(endDate);
-
-      console.log('🚀 Fetching ALL report data for driver:', selectedDriver.driverNumber);
-      console.log('📅 Date Range:', formattedStartDate, 'to', formattedEndDate);
-
-      // ✅ Fetch ALL revenue and expense types in PARALLEL
-      const [leaseRevenueRes, creditCardRes, chargesRes, otherRevenueRes, fixedExpensesRes, leaseExpenseRes, oneTimeExpensesRes] = 
-        await Promise.allSettled([
-          axios.get(`${API_BASE_URL}/reports/lease-revenue`, {
-            params: { 
-              ownerDriverNumber: selectedDriver.driverNumber,
-              startDate: formattedStartDate, 
-              endDate: formattedEndDate 
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-          axios.get(`${API_BASE_URL}/reports/credit-card-revenue`, {
-            params: { 
-              driverNumber: selectedDriver.driverNumber,
-              startDate: formattedStartDate, 
-              endDate: formattedEndDate 
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-          axios.get(`${API_BASE_URL}/reports/charges-revenue`, {
-            params: { 
-              driverNumber: selectedDriver.driverNumber,
-              startDate: formattedStartDate, 
-              endDate: formattedEndDate 
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-          axios.get(`${API_BASE_URL}/other-revenues`, {
-            params: {
-               driverNumber: selectedDriver.driverNumber,
-              startDate: formattedStartDate,
-              endDate: formattedEndDate,
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-          axios.get(`${API_BASE_URL}/reports/fixed-expenses`, {
-            params: { 
-              driverNumber: selectedDriver.driverNumber,
-              startDate: formattedStartDate, 
-              endDate: formattedEndDate 
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-          axios.get(`${API_BASE_URL}/reports/lease-expense`, {
-            params: {
-              driverNumber: selectedDriver.driverNumber,
-              startDate: formattedStartDate,
-              endDate: formattedEndDate,
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-          axios.get(`${API_BASE_URL}/one-time-expenses/between`, {
-            params: {
-              startDate: formattedStartDate,
-              endDate: formattedEndDate,
-            },
-            headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
-          }),
-        ]);
-
-      // ✅ Extract data (handle failures gracefully)
-      const leaseRevenue = leaseRevenueRes.status === 'fulfilled' ? leaseRevenueRes.value.data : null;
-      const creditCardRevenue = creditCardRes.status === 'fulfilled' ? creditCardRes.value.data : null;
-      const chargesRevenue = chargesRes.status === 'fulfilled' ? chargesRes.value.data : null;
-      const otherRevenueAll = otherRevenueRes.status === 'fulfilled' ? otherRevenueRes.value.data : [];
-      const fixedExpenses = fixedExpensesRes.status === 'fulfilled' ? fixedExpensesRes.value.data : null;
-      const leaseExpense = leaseExpenseRes.status === 'fulfilled' ? leaseExpenseRes.value.data : null;
-      const oneTimeExpensesAll = oneTimeExpensesRes.status === 'fulfilled' ? oneTimeExpensesRes.value.data : [];
-
-      if (otherRevenueRes.status !== 'fulfilled') {
-        console.error('❌ Other revenue request failed:', otherRevenueRes.reason);
-      } else {
-        console.log('✅ Other revenue fetched (raw count):', Array.isArray(otherRevenueAll) ? otherRevenueAll.length : 0);
-        // Debug: log the actual data structure
-        if (Array.isArray(otherRevenueAll) && otherRevenueAll.length > 0) {
-          console.log('✅ Other revenue first item structure:', JSON.stringify(otherRevenueAll[0], null, 2));
-        }
-      }
-
-      // ✅ DEBUG: Log what we're filtering with
-      console.log('🔍 Selected driver for filtering:', {
-        id: selectedDriver?.id,
-        driverNumber: selectedDriver?.driverNumber
-      });
-
-      const fixedOneTimeExpenses = Array.isArray(fixedExpenses?.expenseItems)
-        ? fixedExpenses.expenseItems.filter((item) => item?.expenseType === "ONE_TIME")
-        : [];
-
-      const selectedDriverNumberStr = selectedDriver?.driverNumber != null ? String(selectedDriver.driverNumber) : "";
-
-      const oneTimeExpenses = Array.isArray(oneTimeExpensesAll)
-        ? oneTimeExpensesAll.filter((expense) => {
-          const expenseDriverNumberStr = expense?.driver?.driverNumber != null ? String(expense.driver.driverNumber) : null;
-          const expenseOwnerNumberStr = expense?.owner?.driverNumber != null ? String(expense.owner.driverNumber) : null;
-          const directDriverNumberStr = expense?.driverNumber != null ? String(expense.driverNumber) : null;
-          const directOwnerNumberStr = expense?.ownerDriverNumber != null ? String(expense.ownerDriverNumber) : null;
-
-          if (expense?.entityType === "DRIVER") {
-            return (
-              expenseDriverNumberStr === selectedDriverNumberStr ||
-              directDriverNumberStr === selectedDriverNumberStr
-            );
-          }
-
-          if (expense?.entityType === "OWNER") {
-            return (
-              expenseOwnerNumberStr === selectedDriverNumberStr ||
-              directOwnerNumberStr === selectedDriverNumberStr
-            );
-          }
-
-          return false;
-        })
-        : [];
-
-      const reportOneTimeExpenses = fixedOneTimeExpenses.length > 0 ? fixedOneTimeExpenses : oneTimeExpenses;
-
-      // ✅ FIXED: Updated filtering logic to work with new DTO flat structure
-      // The DTO now has flat properties: driverId, driverNumber, ownerId, ownerNumber
-      // Also check entityId against both driver.id AND driverNumber (since entityId might store either)
-      const otherRevenue = Array.isArray(otherRevenueAll)
-        ? otherRevenueAll.filter((rev) => {
-          const selectedDriverIdStr = selectedDriver?.id != null ? String(selectedDriver.id) : "";
-          const selectedDriverNumberStr = selectedDriver?.driverNumber != null ? String(selectedDriver.driverNumber) : "";
-
-          // ✅ NEW DTO flat structure
-          const revDriverIdStr = rev?.driverId != null ? String(rev.driverId) : null;
-          const revOwnerIdStr = rev?.ownerId != null ? String(rev.ownerId) : null;
-          const revDriverNumberStr = rev?.driverNumber != null ? String(rev.driverNumber) : null;
-          const revOwnerNumberStr = rev?.ownerNumber != null ? String(rev.ownerNumber) : null;
-          const revEntityIdStr = rev?.entityId != null ? String(rev.entityId) : null;
-
-          // Also support legacy nested structure for backwards compatibility
-          const legacyDriverIdStr = rev?.driver?.id != null ? String(rev.driver.id) : null;
-          const legacyOwnerIdStr = rev?.owner?.id != null ? String(rev.owner.id) : null;
-          const legacyDriverNumberStr = rev?.driver?.driverNumber != null ? String(rev.driver.driverNumber) : null;
-          const legacyOwnerNumberStr = rev?.owner?.driverNumber != null ? String(rev.owner.driverNumber) : null;
-
-          // Debug logging
-          console.log('🔍 Filtering revenue item:', {
-            id: rev?.id,
-            entityType: rev?.entityType,
-            entityId: revEntityIdStr,
-            driverId: revDriverIdStr,
-            driverNumber: revDriverNumberStr,
-            ownerId: revOwnerIdStr,
-            ownerNumber: revOwnerNumberStr,
-            selectedDriverId: selectedDriverIdStr,
-            selectedDriverNumber: selectedDriverNumberStr
-          });
-
-          if (rev?.entityType === "DRIVER") {
-            const match = (
-              // Match entityId to driver.id
-              (revEntityIdStr != null && revEntityIdStr === selectedDriverIdStr) ||
-              // Match entityId to driverNumber (in case entityId stores the driver number)
-              (revEntityIdStr != null && revEntityIdStr === selectedDriverNumberStr) ||
-              // Match driverId from DTO
-              (revDriverIdStr != null && revDriverIdStr === selectedDriverIdStr) ||
-              // Match driverNumber from DTO
-              (revDriverNumberStr != null && revDriverNumberStr === selectedDriverNumberStr) ||
-              // Legacy support
-              (legacyDriverIdStr != null && legacyDriverIdStr === selectedDriverIdStr) ||
-              (legacyDriverNumberStr != null && legacyDriverNumberStr === selectedDriverNumberStr)
-            );
-            console.log('🔍 DRIVER match result:', match);
-            return match;
-          }
-
-          if (rev?.entityType === "OWNER") {
-            const match = (
-              // Match entityId to driver.id (owner is also a driver)
-              (revEntityIdStr != null && revEntityIdStr === selectedDriverIdStr) ||
-              // Match entityId to driverNumber
-              (revEntityIdStr != null && revEntityIdStr === selectedDriverNumberStr) ||
-              // Match ownerId from DTO
-              (revOwnerIdStr != null && revOwnerIdStr === selectedDriverIdStr) ||
-              // Match ownerNumber from DTO
-              (revOwnerNumberStr != null && revOwnerNumberStr === selectedDriverNumberStr) ||
-              // Legacy support
-              (legacyOwnerIdStr != null && legacyOwnerIdStr === selectedDriverIdStr) ||
-              (legacyOwnerNumberStr != null && legacyOwnerNumberStr === selectedDriverNumberStr)
-            );
-            console.log('🔍 OWNER match result:', match);
-            return match;
-          }
-
-          // For other entity types (CAB/SHIFT/COMPANY/etc.), include if there's an explicit
-          // association to the selected driver (by id or driverNumber).
-          if (revDriverIdStr != null && revDriverIdStr === selectedDriverIdStr) return true;
-          if (revOwnerIdStr != null && revOwnerIdStr === selectedDriverIdStr) return true;
-          if (revDriverNumberStr != null && revDriverNumberStr === selectedDriverNumberStr) return true;
-          if (revOwnerNumberStr != null && revOwnerNumberStr === selectedDriverNumberStr) return true;
-          // Legacy support
-          if (legacyDriverIdStr != null && legacyDriverIdStr === selectedDriverIdStr) return true;
-          if (legacyOwnerIdStr != null && legacyOwnerIdStr === selectedDriverIdStr) return true;
-          if (legacyDriverNumberStr != null && legacyDriverNumberStr === selectedDriverNumberStr) return true;
-          if (legacyOwnerNumberStr != null && legacyOwnerNumberStr === selectedDriverNumberStr) return true;
-
-          return false;
-        })
-        : [];
-      
-      console.log('✅ Other revenue after filtering:', otherRevenue.length, 'of', otherRevenueAll?.length || 0);
-
-      console.log('✅ Lease Revenue Total:', leaseRevenue?.totalRevenue || leaseRevenue?.grandTotalLease || 0);
-      console.log('✅ Credit Card Total:', creditCardRevenue?.grandTotal || 0);
-      console.log('✅ Charges Total:', chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0);
-      console.log('✅ Other Revenue Total:', otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0));
-      console.log('✅ Fixed Expenses Total:', fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
-      console.log('✅ Lease Expense Total:', leaseExpense?.grandTotalLease || leaseExpense?.totalLeaseExpense || 0);
-      console.log('✅ One-Time Expenses Total:', reportOneTimeExpenses.reduce((sum, exp) => sum + parseFloat(exp?.amount ?? exp?.chargedAmount ?? 0), 0));
-
-      // ✅ Calculate totals
-      const totalRevenue = 
-        parseFloat(leaseRevenue?.totalRevenue || leaseRevenue?.grandTotalLease || 0) +
-        parseFloat(creditCardRevenue?.grandTotal || 0) +
-        parseFloat(chargesRevenue?.grandTotal || chargesRevenue?.totalAmount || 0) +
-        otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0);
-
-      const fixedExpensesTotal = parseFloat(fixedExpenses?.totalAmount || fixedExpenses?.totalExpenses || 0);
-      const leaseExpenseTotal = parseFloat(leaseExpense?.grandTotalLease || leaseExpense?.totalLeaseExpense || 0);
-      const oneTimeExpensesTotal = reportOneTimeExpenses.reduce((sum, exp) => sum + parseFloat(exp?.amount ?? exp?.chargedAmount ?? 0), 0);
-      const totalExpenses = fixedExpensesTotal + leaseExpenseTotal + oneTimeExpensesTotal;
-      const netAmount = totalRevenue - totalExpenses;
-      const amountDue = netAmount;
-
-      console.log('📊 CALCULATED TOTALS:');
-      console.log('Total Revenue:', totalRevenue);
-      console.log('Total Expenses:', totalExpenses);
-      console.log('Amount Due/Owing:', amountDue);
-
-      // ✅ Store EVERYTHING in cache
-      const data = {
-        leaseRevenue,
-        creditCardRevenue,
-        chargesRevenue,
-        otherRevenue,
-        fixedExpenses,
-        leaseExpense,
-        oneTimeExpenses: reportOneTimeExpenses,
-        totalRevenue,
-        totalExpenses,
-        amountPaid: 0,
-        amountDue,
-      };
-
-      setReportData(data);
-      console.log('✅ All data cached successfully');
-
-    } catch (error) {
-      console.error("Error fetching report data:", error);
-      setError(`Failed to fetch report data: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
+  const handleSelectDriver = (driverId) => {
+    setSelectedDriverId(driverId);
+    const driver = drivers.find((d) => d.id == driverId);
+    setSelectedDriver(driver);
+    setReportData(null); // Clear previous report
+    setPaidAmount("0");
+    setActiveBanner(null);
   };
 
-  const handleGenerateReport = () => {
-    if (!selectedDriver || !startDate || !endDate) {
+  const generateReport = async () => {
+    if (!selectedDriverId || !startDate || !endDate) {
       setError("Please select a driver and date range");
       return;
     }
+
+    setLoadingReport(true);
     setError("");
-    setReportData(null); // Clear old data
-    fetchAllReportData(); // ✅ Fetch everything ONCE
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}?from=${startDate}&to=${endDate}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setReportData(data);
+        setPaidAmount(data.paidAmount ? data.paidAmount.toString() : "0");
+        console.log("Report generated:", data);
+      } else {
+        const errorText = await response.text();
+        setError(errorText || "Failed to generate report");
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error("Error generating report:", err);
+    } finally {
+      setLoadingReport(false);
+    }
   };
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
+  const finalizeStatement = async () => {
+    if (!reportData) {
+      setError("No report data to finalize");
+      return;
+    }
+
+    try {
+      const reportWithPaidAmount = {
+        ...reportData,
+        paidAmount: parseFloat(paidAmount),
+      };
+
+      const response = await fetch(
+        `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}/finalize`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+          body: JSON.stringify(reportWithPaidAmount),
+        }
+      );
+
+      if (response.ok) {
+        const statement = await response.json();
+        setError("");
+        alert(`Statement finalized successfully! Statement ID: ${statement.id}`);
+        setReportData(null); // Clear report
+        await fetchSavedStatements(selectedDriverId); // Refresh saved statements
+      } else {
+        const errorText = await response.text();
+        setError(errorText || "Failed to finalize statement");
+      }
+    } catch (err) {
+      setError(err.message);
+      console.error("Error finalizing statement:", err);
+    }
   };
 
-  const handleOpenDetails = () => setDetailsDialogOpen(true);
-  const handleCloseDetails = () => setDetailsDialogOpen(false);
+  const fetchSavedStatements = async (personId) => {
+    if (!personId) return;
+    setLoadingSavedStatements(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/financial-statements/statements/${personId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        }
+      );
 
-  const handleDownloadPdf = () => {
-    window.print();
+      if (response.ok) {
+        const data = await response.json();
+        setSavedStatements(data);
+      }
+    } catch (err) {
+      console.error("Error fetching saved statements:", err);
+    } finally {
+      setLoadingSavedStatements(false);
+    }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const handleEmailClick = () => {
+    setEmailDialogOpen(true);
   };
 
-  const handleEmail = () => {
-    if (!selectedDriver || !reportData) return;
-
-    const leaseRevenueTotal = parseFloat(
-      reportData?.leaseRevenue?.totalRevenue || reportData?.leaseRevenue?.grandTotalLease || 0
-    );
-    const creditCardTotal = parseFloat(reportData?.creditCardRevenue?.grandTotal || 0);
-    const chargesTotal = parseFloat(reportData?.chargesRevenue?.grandTotal || reportData?.chargesRevenue?.totalAmount || 0);
-    const fixedExpensesTotal = parseFloat(reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0);
-
-    const subject = `Financial Report - ${selectedDriver.firstName} ${selectedDriver.lastName}`;
-    const amountDueValue = parseFloat(reportData.amountDue || 0);
-    const amountDueDisplay = amountDueValue < 0
-      ? `($${Math.abs(amountDueValue).toFixed(2)})`
-      : `$${Math.abs(amountDueValue).toFixed(2)}`;
-    const body = [
-      `Driver: ${selectedDriver.firstName} ${selectedDriver.lastName} (${selectedDriver.driverNumber})`,
-      `Period: ${startDate?.toLocaleDateString()} - ${endDate?.toLocaleDateString()}`,
-      "",
-      `Lease Revenue: $${leaseRevenueTotal.toFixed(2)}`,
-      `Credit Card Revenue: $${creditCardTotal.toFixed(2)}`,
-      `Charges Revenue: $${chargesTotal.toFixed(2)}`,
-      "",
-      `Total Revenue: $${(reportData.totalRevenue || 0).toFixed(2)}`,
-      `Total Expenses: $${(reportData.totalExpenses || 0).toFixed(2)}`,
-      `Amount Paid: $${(reportData.amountPaid || 0).toFixed(2)}`,
-      `Amount Due/Owing: ${amountDueDisplay}`,
-      "",
-      `Fixed Expenses (details total): $${fixedExpensesTotal.toFixed(2)}`,
-    ].join("\n");
-
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const handleSendEmail = () => {
+    if (!emailAddress) {
+      setError("Please enter an email address");
+      return;
+    }
+    const subject = `Financial Statement ${reportData?.periodFrom} to ${reportData?.periodTo}`;
+    const body = generateEmailBody();
+    window.location.href = `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setEmailDialogOpen(false);
+    setEmailAddress("");
   };
 
-  const isReportReady = reportData !== null;
+  const generateEmailBody = () => {
+    if (!reportData) return "";
+    return `
+Financial Statement
+${reportData.ownerName}
+Period: ${reportData.periodFrom} to ${reportData.periodTo}
 
-  if (!currentUser) {
+Revenues: $${parseFloat(reportData.totalRevenues || 0).toFixed(2)}
+Recurring Expenses: $${parseFloat(reportData.totalRecurringExpenses || 0).toFixed(2)}
+One-Time Expenses: $${parseFloat(reportData.totalOneTimeExpenses || 0).toFixed(2)}
+Total Expenses: $${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
+Previous Balance: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
+Paid Amount: $${parseFloat(paidAmount || 0).toFixed(2)}
+Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
+    `.trim();
+  };
+
+  // Helper functions to filter revenue data by type
+  const getRevenuesByType = (type) => {
+    if (!reportData?.revenues) return [];
+    return reportData.revenues.filter((rev) => rev.revenueSubType === type);
+  };
+
+  // Filter credit card revenues
+  const getFilteredCreditCards = () => {
+    let filtered = getRevenuesByType("CARD_REVENUE");
+    const f = revenueFilters;
+    if (f.creditCardDateFrom) {
+      filtered = filtered.filter((r) => r.revenueDate >= f.creditCardDateFrom);
+    }
+    if (f.creditCardDateTo) {
+      filtered = filtered.filter((r) => r.revenueDate <= f.creditCardDateTo);
+    }
+    if (f.creditCardAmountMin) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) >= parseFloat(f.creditCardAmountMin));
+    }
+    if (f.creditCardAmountMax) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) <= parseFloat(f.creditCardAmountMax));
+    }
+    return filtered;
+  };
+
+  // Filter charge revenues
+  const getFilteredCharges = () => {
+    let filtered = getRevenuesByType("ACCOUNT_REVENUE");
+    const f = revenueFilters;
+    if (f.chargesDateFrom) {
+      filtered = filtered.filter((r) => r.revenueDate >= f.chargesDateFrom);
+    }
+    if (f.chargesDateTo) {
+      filtered = filtered.filter((r) => r.revenueDate <= f.chargesDateTo);
+    }
+    if (f.chargesAmountMin) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) >= parseFloat(f.chargesAmountMin));
+    }
+    if (f.chargesAmountMax) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) <= parseFloat(f.chargesAmountMax));
+    }
+    if (f.chargesAccountName) {
+      filtered = filtered.filter((r) =>
+        (r.categoryName || "").toLowerCase().includes(f.chargesAccountName.toLowerCase())
+      );
+    }
+    return filtered;
+  };
+
+  // Filter lease revenue
+  const getFilteredLeaseRevenue = () => {
+    let filtered = getRevenuesByType("LEASE_INCOME");
+    const f = revenueFilters;
+    if (f.leaseRevenueDateFrom) {
+      filtered = filtered.filter((r) => r.revenueDate >= f.leaseRevenueDateFrom);
+    }
+    if (f.leaseRevenueDateTo) {
+      filtered = filtered.filter((r) => r.revenueDate <= f.leaseRevenueDateTo);
+    }
+    if (f.leaseRevenueAmountMin) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) >= parseFloat(f.leaseRevenueAmountMin));
+    }
+    if (f.leaseRevenueAmountMax) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) <= parseFloat(f.leaseRevenueAmountMax));
+    }
+    if (f.leaseRevenueDriverName) {
+      filtered = filtered.filter((r) =>
+        (r.description || "").toLowerCase().includes(f.leaseRevenueDriverName.toLowerCase())
+      );
+    }
+    return filtered;
+  };
+
+  // Filter other revenues
+  const getFilteredOtherRevenues = () => {
+    let filtered = reportData?.revenues?.filter(
+      (r) => !["CARD_REVENUE", "ACCOUNT_REVENUE", "LEASE_INCOME"].includes(r.revenueSubType)
+    ) || [];
+    const f = revenueFilters;
+    if (f.othersDateFrom) {
+      filtered = filtered.filter((r) => r.revenueDate >= f.othersDateFrom);
+    }
+    if (f.othersDateTo) {
+      filtered = filtered.filter((r) => r.revenueDate <= f.othersDateTo);
+    }
+    if (f.othersAmountMin) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) >= parseFloat(f.othersAmountMin));
+    }
+    if (f.othersAmountMax) {
+      filtered = filtered.filter((r) => parseFloat(r.amount) <= parseFloat(f.othersAmountMax));
+    }
+    return filtered;
+  };
+
+  if (loading) {
     return (
-      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "100vh" }}>
-        <Typography>Loading...</Typography>
+      <Box>
+        <GlobalNav currentUser={currentUser} title="Reports" />
+        <Box sx={{ p: 3, textAlign: "center" }}>
+          <CircularProgress />
+        </Box>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} />
-      
-      <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
-        <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: "#3e5244", mb: 1 }}>
-            <Assessment sx={{ mr: 1, verticalAlign: "middle", fontSize: 32 }} />
+    <Box>
+      <GlobalNav currentUser={currentUser} title="Reports" />
+      <Container maxWidth="xl" sx={{ mt: 2, mb: 2, px: { xs: 1, sm: 2, md: 3 } }}>
+        <Box sx={{ mb: { xs: 2, md: 4 } }}>
+          <Typography variant={{ xs: 'h5', md: 'h4' }} fontWeight="bold" gutterBottom>
             Financial Reports
           </Typography>
-          <Typography variant="body1" color="text.secondary">
-            {isDriverRole ? "View your financial reports and earnings" : "Generate detailed revenue and expense reports for drivers"}
+          <Typography variant={{ xs: 'caption', md: 'body2' }} color="textSecondary">
+            Generate and manage financial statements for drivers and owners
           </Typography>
         </Box>
 
-        {/* Filter Controls */}
-        <Paper sx={{ p: 3, mb: 3 }}>
-          <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
-            Report Parameters
-          </Typography>
+        {/* Debug Info */}
+        {process.env.NODE_ENV === "development" && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            <Typography variant="caption">
+              DEBUG: Role={currentUser?.role}, SelectedDriver={selectedDriver?.firstName}, Loading={loadingReport}, HasReport={!!reportData}
+            </Typography>
+          </Alert>
+        )}
 
-          {error && (
-            <Box sx={{ mb: 2 }}>
-              <Typography color="error">{error}</Typography>
-            </Box>
-          )}
+        {error && (
+          <Alert severity="error" onClose={() => setError("")} sx={{ mb: 2 }}>
+            {error}
+          </Alert>
+        )}
 
-          <Grid container spacing={2}>
-            {/* ✅ DRIVER DROPDOWN - Hidden for drivers */}
-            {!isDriverRole && (
-              <Grid item xs={12} md={3}>
-                <Autocomplete
-                  options={drivers}
-                  getOptionLabel={(option) => 
-                    `${option.firstName} ${option.lastName} (${option.driverNumber})`
-                  }
-                  value={selectedDriver}
-                  onChange={(event, newValue) => {
-                    setSelectedDriver(newValue);
-                    setReportData(null);
-                  }}
-                  renderInput={(params) => (
-                    <TextField {...params} label="Search Driver" placeholder="Type to search..." />
-                  )}
-                  isOptionEqualToValue={(option, value) => 
-                    option.driverNumber === value.driverNumber
-                  }
-                  noOptionsText="No drivers found"
-                />
-              </Grid>
-            )}
-
-            {/* ✅ DRIVER INFO CARD - Shown for drivers */}
-            {isDriverRole && (
-              <Grid item xs={12} md={3}>
-                <Card sx={{ p: 2, backgroundColor: '#e8f4f8', height: '100%' }}>
-                  <Typography variant="body2" color="textSecondary" sx={{ mb: 0.5 }}>
-                    Driver
-                  </Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    {selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName}` : 'Loading...'}
-                  </Typography>
-                  <Typography variant="body2" color="textSecondary">
-                    {currentDriverNumber || 'Loading...'}
-                  </Typography>
-                </Card>
-              </Grid>
-            )}
-
-            <Grid item xs={12} md={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DatePicker
-                  label="Start Date"
-                  value={startDate}
-                  onChange={(newValue) => setStartDate(newValue)}
-                  slotProps={{ textField: { fullWidth: true } }}
-                />
-              </LocalizationProvider>
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DatePicker
-                  label="End Date"
-                  value={endDate}
-                  onChange={(newValue) => setEndDate(newValue)}
-                  slotProps={{ textField: { fullWidth: true } }}
-                />
-              </LocalizationProvider>
-            </Grid>
-
-            <Grid item xs={12} md={3}>
-              <Button
-                variant="contained"
-                fullWidth
-                onClick={handleGenerateReport}
-                disabled={!selectedDriver || !startDate || !endDate || loading}
-                startIcon={loading ? <CircularProgress size={20} /> : <Assessment />}
-                sx={{ 
-                  height: 56,
-                  backgroundColor: "#3e5244",
-                  "&:hover": { backgroundColor: "#2d3d32" }
-                }}
-              >
-                {loading ? "Loading..." : "Generate Report"}
-              </Button>
-            </Grid>
-          </Grid>
+        {/* Tabs for Generate vs History */}
+        <Paper sx={{ mb: 3 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(e, newValue) => {
+              setActiveTab(newValue);
+              if (newValue === 1 && selectedDriverId) {
+                fetchSavedStatements(selectedDriverId);
+              }
+            }}
+            sx={{ borderBottom: 1, borderColor: "divider" }}
+          >
+            <Tab icon={<Assessment />} iconPosition="start" label="Generate Draft" />
+            <Tab icon={<Download />} iconPosition="start" label="History" />
+          </Tabs>
         </Paper>
 
-        {/* Summary Cards */}
-        {isReportReady && (
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%', bgcolor: '#e8f5e9' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <TrendingUp sx={{ color: '#2e7d32', mr: 1 }} />
-                    <Typography variant="caption" color="textSecondary">
-                      Total Revenue
-                    </Typography>
-                  </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#2e7d32' }}>
-                    ${(reportData?.totalRevenue ?? 0).toFixed(2)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%', bgcolor: '#ffebee' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <TrendingDown sx={{ color: '#c62828', mr: 1 }} />
-                    <Typography variant="caption" color="textSecondary">
-                      Total Expenses
-                    </Typography>
-                  </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#c62828' }}>
-                    ${(reportData?.totalExpenses ?? 0).toFixed(2)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%', bgcolor: '#e3f2fd' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <CheckCircle sx={{ color: '#1565c0', mr: 1 }} />
-                    <Typography variant="caption" color="textSecondary">
-                      Amount Paid
-                    </Typography>
-                  </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#1565c0' }}>
-                    ${(reportData?.amountPaid ?? 0).toFixed(2)}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%', bgcolor: (reportData?.amountDue ?? 0) < 0 ? '#ffebee' : '#e8f5e9' }}>
-                <CardContent>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <AccountBalance sx={{ color: (reportData?.amountDue ?? 0) < 0 ? '#c62828' : '#2e7d32', mr: 1 }} />
-                    <Typography variant="caption" color="textSecondary">
-                      Amount Due/Owing
-                    </Typography>
-                  </Box>
-                  <Typography
-                    variant="h5"
-                    sx={{ fontWeight: 700, color: (reportData?.amountDue ?? 0) < 0 ? '#c62828' : '#2e7d32' }}
-                  >
-                    {(reportData?.amountDue ?? 0) < 0
-                            ? `($${Math.abs(reportData?.amountDue ?? 0).toFixed(2)})`
-                            : `$${Math.abs(reportData?.amountDue ?? 0).toFixed(2)}`}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            <Grid item xs={12} sm={6} md={2.4}>
-              <Card sx={{ height: '100%' }}>
-                <CardContent sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {/* Tab 0: Generate Draft */}
+        {activeTab === 0 && (
+          <>
+            {/* Selection and Date Range */}
+            <Paper sx={{ p: { xs: 1.5, md: 3 }, mb: 3, backgroundColor: "#f5f5f5" }}>
+              <Grid container spacing={{ xs: 1, md: 2 }} alignItems="flex-end">
+                <Grid item xs={12} md={4}>
+                  {currentUser?.role === "DRIVER" ? (
+                    <TextField
+                      fullWidth
+                      disabled
+                      label="Your Reports"
+                      value={selectedDriver ? `${selectedDriver.firstName} ${selectedDriver.lastName} (${selectedDriver.driverNumber})` : "Loading your information..."}
+                      variant="outlined"
+                    />
+                  ) : (
+                    <Autocomplete
+                      fullWidth
+                      disabled={currentUser?.role === "DRIVER"}
+                      options={drivers}
+                      getOptionLabel={(option) => {
+                        if (!option || typeof option === 'string') return '';
+                        return `${option.firstName} ${option.lastName} (${option.driverNumber})${option.isOwner ? ' - Owner' : ''}`;
+                      }}
+                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                      value={selectedDriver || null}
+                      onChange={(event, newValue) => {
+                        if (newValue) {
+                          handleSelectDriver(newValue.id);
+                        } else {
+                          setSelectedDriverId("");
+                          setSelectedDriver(null);
+                          setReportData(null);
+                          setPaidAmount("0");
+                          setActiveBanner(null);
+                        }
+                      }}
+                      filterOptions={(options, state) => {
+                        const inputValue = state.inputValue.toLowerCase();
+                        return options.filter((option) => {
+                          const fullName = `${option.firstName} ${option.lastName}`.toLowerCase();
+                          const firstName = option.firstName.toLowerCase();
+                          const lastName = option.lastName.toLowerCase();
+                          const driverNumber = option.driverNumber.toLowerCase();
+                          return (
+                            firstName.includes(inputValue) ||
+                            lastName.includes(inputValue) ||
+                            fullName.includes(inputValue) ||
+                            driverNumber.includes(inputValue)
+                          );
+                        });
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Search Driver or Owner"
+                          placeholder="Type name or ID..."
+                        />
+                      )}
+                    />
+                  )}
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <TextField
+                    label="From"
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    fullWidth
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
+                  <TextField
+                    label="To"
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    fullWidth
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={12} md={4}>
                   <Button
                     variant="contained"
-                    onClick={handleOpenDetails}
-                    startIcon={<Visibility />}
-                    sx={{ backgroundColor: "#3e5244", "&:hover": { backgroundColor: "#2d3d32" } }}
+                    fullWidth
+                    onClick={generateReport}
+                    disabled={loadingReport || !selectedDriverId}
+                    sx={{ height: "56px" }}
                   >
-                    See Details
+                    {loadingReport ? (
+                      <CircularProgress size={20} sx={{ mr: 1 }} />
+                    ) : (
+                      <Assessment sx={{ mr: 1 }} />
+                    )}
+                    Generate Report
                   </Button>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            {/* Selected Driver Info */}
+            {selectedDriver && (
+              <Paper sx={{ p: 2, mb: 3, backgroundColor: "#e3f2fd", border: "1px solid #90caf9" }}>
+                <Typography variant="subtitle1" fontWeight="bold">
+                  {selectedDriver.firstName} {selectedDriver.lastName}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {selectedDriver.isOwner ? "Owner" : "Driver"} • Driver #: {selectedDriver.driverNumber}
+                </Typography>
+              </Paper>
+            )}
+
+            {/* Loading Report Indicator */}
+            {selectedDriverId && loadingReport && !reportData && (
+              <Paper sx={{ p: 3, textAlign: "center", mb: 3, backgroundColor: "#f5f5f5" }}>
+                <CircularProgress sx={{ mr: 2 }} />
+                <Typography variant="body2" display="inline">
+                  Generating report...
+                </Typography>
+              </Paper>
+            )}
+
+            {/* Draft Report with Banner Row */}
+            {reportData && (
+              <>
+                {/* Banner Row - 5 Clickable Cards */}
+                <Paper sx={{ p: { xs: 1.5, md: 3 }, mb: 3 }}>
+                  <Grid container spacing={{ xs: 1, md: 2 }}>
+                    {/* Revenues Banner */}
+                    <Grid item xs={6} sm={6} md={2.4}>
+                      <Card
+                        onClick={() => setActiveBanner(activeBanner === "revenues" ? null : "revenues")}
+                        sx={{
+                          backgroundColor: "#e8f5e9",
+                          cursor: "pointer",
+                          border: activeBanner === "revenues" ? "3px solid #388e3c" : "1px solid #c8e6c9",
+                          transition: "all 0.3s",
+                          "&:hover": { boxShadow: 3 },
+                        }}
+                      >
+                        <CardContent>
+                          <Typography color="textSecondary" variant="body2" gutterBottom>
+                            Revenues
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                            ${parseFloat(reportData.totalRevenues || 0).toFixed(2)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Expenses Banner */}
+                    <Grid item xs={6} sm={6} md={2.4}>
+                      <Card
+                        onClick={() => setActiveBanner(activeBanner === "expenses" ? null : "expenses")}
+                        sx={{
+                          backgroundColor: "#ffebee",
+                          cursor: "pointer",
+                          border: activeBanner === "expenses" ? "3px solid #d32f2f" : "1px solid #ffcdd2",
+                          transition: "all 0.3s",
+                          "&:hover": { boxShadow: 3 },
+                        }}
+                      >
+                        <CardContent>
+                          <Typography color="textSecondary" variant="body2" gutterBottom>
+                            Expenses
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                            ${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Previous Owed Banner */}
+                    <Grid item xs={6} sm={6} md={2.4}>
+                      <Card
+                        onClick={() => setActiveBanner(activeBanner === "prevOwed" ? null : "prevOwed")}
+                        sx={{
+                          backgroundColor: "#fff3e0",
+                          cursor: "pointer",
+                          border: activeBanner === "prevOwed" ? "3px solid #e65100" : "1px solid #ffe0b2",
+                          transition: "all 0.3s",
+                          "&:hover": { boxShadow: 3 },
+                        }}
+                      >
+                        <CardContent>
+                          <Typography color="textSecondary" variant="body2" gutterBottom>
+                            Prev Owed
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: "#e65100", fontWeight: "bold" }}>
+                            ${parseFloat(reportData.previousBalance || 0).toFixed(2)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Paid Banner */}
+                    <Grid item xs={6} sm={6} md={2.4}>
+                      <Card
+                        onClick={() => setActiveBanner(activeBanner === "paid" ? null : "paid")}
+                        sx={{
+                          backgroundColor: "#e3f2fd",
+                          cursor: "pointer",
+                          border: activeBanner === "paid" ? "3px solid #1976d2" : "1px solid #bbdefb",
+                          transition: "all 0.3s",
+                          "&:hover": { boxShadow: 3 },
+                        }}
+                      >
+                        <CardContent>
+                          <Typography color="textSecondary" variant="body2" gutterBottom>
+                            Paid
+                          </Typography>
+                          <Typography variant="h6" sx={{ color: "#1976d2", fontWeight: "bold" }}>
+                            ${parseFloat(paidAmount || 0).toFixed(2)}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+
+                    {/* Net Due Banner (Bold/Highlighted) */}
+                    <Grid item xs={6} sm={6} md={2.4}>
+                      <Card
+                        onClick={() => setActiveBanner(activeBanner === "netDue" ? null : "netDue")}
+                        sx={{
+                          backgroundColor: reportData.netDue > 0 ? "#ffebee" : "#e8f5e9", // ❌ Red if driver owes, ✅ Green if company owes
+                          border: `3px solid ${reportData.netDue > 0 ? "#d32f2f" : "#388e3c"}`,
+                          cursor: "pointer",
+                          transition: "all 0.3s",
+                          "&:hover": { boxShadow: 4 },
+                        }}
+                      >
+                        <CardContent>
+                          <Typography color="textSecondary" variant="body2" gutterBottom>
+                            <strong>Net Due</strong>
+                          </Typography>
+                          <Typography
+                            variant="h6"
+                            sx={{
+                              color: reportData.netDue > 0 ? "#d32f2f" : "#388e3c", // ❌ Red if driver owes, ✅ Green if company owes
+                              fontWeight: "bold",
+                            }}
+                          >
+                            ${parseFloat(-reportData.netDue || 0).toFixed(2)} {/* Negate to show from driver's perspective */}
+                          </Typography>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
+                {/* Action Buttons - Moved to top */}
+                {reportData && (
+                  <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      onClick={finalizeStatement}
+                    >
+                      Finalize & Save Statement
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<Print />}
+                      onClick={() => setDetailModalOpen(true)}
+                    >
+                      Open Detail Modal
+                    </Button>
+                  </Box>
+                )}
+
+                {/* Revenue Details - Tabbed View */}
+                {reportData?.revenues && reportData.revenues.length > 0 && (
+                  <Paper sx={{ mb: 3 }}>
+                    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+                      <Tabs
+                        value={revenueTabIndex}
+                        onChange={(e, newValue) => setRevenueTabIndex(newValue)}
+                      >
+                        <Tab label={`Credit Cards (${getRevenuesByType("CARD_REVENUE").length})`} />
+                        <Tab label={`Charges (${getRevenuesByType("ACCOUNT_REVENUE").length})`} />
+                        <Tab label={`Lease Revenue (${getRevenuesByType("LEASE_INCOME").length})`} />
+                        <Tab label={`Others (${reportData.revenues.filter(r => !["CARD_REVENUE", "ACCOUNT_REVENUE", "LEASE_INCOME"].includes(r.revenueSubType)).length})`} />
+                      </Tabs>
+                    </Box>
+
+                    {/* Credit Cards Tab */}
+                    {revenueTabIndex === 0 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#388e3c" }}>
+                          Filters
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="From"
+                              type="date"
+                              value={revenueFilters.creditCardDateFrom}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, creditCardDateFrom: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="To"
+                              type="date"
+                              value={revenueFilters.creditCardDateTo}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, creditCardDateTo: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="Min Amount"
+                              type="number"
+                              value={revenueFilters.creditCardAmountMin}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, creditCardAmountMin: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="Max Amount"
+                              type="number"
+                              value={revenueFilters.creditCardAmountMax}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, creditCardAmountMax: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                        </Grid>
+
+                        {getFilteredCreditCards().length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
+                                  <TableCell><strong>Transaction Date</strong></TableCell>
+                                  <TableCell><strong>Card Type</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {getFilteredCreditCards().map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.categoryName || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      ${parseFloat(rev.amount).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No credit card revenues match the filters</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Charges Tab */}
+                    {revenueTabIndex === 1 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#388e3c" }}>
+                          Filters
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                          <Grid item xs={6} sm={2.4}>
+                            <TextField
+                              label="From"
+                              type="date"
+                              value={revenueFilters.chargesDateFrom}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, chargesDateFrom: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={2.4}>
+                            <TextField
+                              label="To"
+                              type="date"
+                              value={revenueFilters.chargesDateTo}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, chargesDateTo: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={2.4}>
+                            <TextField
+                              label="Min Amount"
+                              type="number"
+                              value={revenueFilters.chargesAmountMin}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, chargesAmountMin: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={2.4}>
+                            <TextField
+                              label="Max Amount"
+                              type="number"
+                              value={revenueFilters.chargesAmountMax}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, chargesAmountMax: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={2.4}>
+                            <TextField
+                              label="Account Name"
+                              value={revenueFilters.chargesAccountName}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, chargesAccountName: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                        </Grid>
+
+                        {getFilteredCharges().length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Account Name</strong></TableCell>
+                                  <TableCell><strong>From</strong></TableCell>
+                                  <TableCell><strong>To</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Tip</strong></TableCell>
+                                  <TableCell align="right"><strong>Total</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {getFilteredCharges().map((rev, idx) => {
+                                  const tip = rev.tipAmount ? parseFloat(rev.tipAmount) : 0;
+                                  const amount = rev.fareAmount ? parseFloat(rev.fareAmount) : parseFloat(rev.amount) || 0;
+                                  const total = amount + tip;
+                                  return (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                      <TableCell><strong>{rev.accountName || "-"}</strong></TableCell>
+                                      <TableCell>{rev.pickupAddress || "-"}</TableCell>
+                                      <TableCell>{rev.dropoffAddress || "-"}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                        ${amount.toFixed(2)}
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        ${tip.toFixed(2)}
+                                      </TableCell>
+                                      <TableCell align="right" sx={{ fontWeight: "bold", color: "#1976d2" }}>
+                                        ${total.toFixed(2)}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No charge revenues match the filters</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Lease Revenue Tab */}
+                    {revenueTabIndex === 2 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#388e3c" }}>
+                          Filters
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                          <Grid item xs={12} sm={2}>
+                            <TextField
+                              label="From"
+                              type="date"
+                              value={revenueFilters.leaseRevenueDateFrom}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, leaseRevenueDateFrom: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={2}>
+                            <TextField
+                              label="To"
+                              type="date"
+                              value={revenueFilters.leaseRevenueDateTo}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, leaseRevenueDateTo: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={2}>
+                            <TextField
+                              label="Min Amount"
+                              type="number"
+                              value={revenueFilters.leaseRevenueAmountMin}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, leaseRevenueAmountMin: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={2}>
+                            <TextField
+                              label="Max Amount"
+                              type="number"
+                              value={revenueFilters.leaseRevenueAmountMax}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, leaseRevenueAmountMax: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={12} sm={4}>
+                            <TextField
+                              label="Driver Name"
+                              value={revenueFilters.leaseRevenueDriverName}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, leaseRevenueDriverName: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                        </Grid>
+
+                        {getFilteredLeaseRevenue().length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
+                                  <TableCell><strong>Shift Date</strong></TableCell>
+                                  <TableCell><strong>Driver Name</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {getFilteredLeaseRevenue().map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell>{rev.categoryName || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      ${parseFloat(rev.amount).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No lease revenue match the filters</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Others Tab */}
+                    {revenueTabIndex === 3 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#388e3c" }}>
+                          Filters
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="From"
+                              type="date"
+                              value={revenueFilters.othersDateFrom}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, othersDateFrom: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="To"
+                              type="date"
+                              value={revenueFilters.othersDateTo}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, othersDateTo: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="Min Amount"
+                              type="number"
+                              value={revenueFilters.othersAmountMin}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, othersAmountMin: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="Max Amount"
+                              type="number"
+                              value={revenueFilters.othersAmountMax}
+                              onChange={(e) => setRevenueFilters({ ...revenueFilters, othersAmountMax: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                        </Grid>
+
+                        {getFilteredOtherRevenues().length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Category</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {getFilteredOtherRevenues().map((rev, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.categoryName || "-"}</TableCell>
+                                    <TableCell>{rev.description || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      ${parseFloat(rev.amount).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No other revenues match the filters</Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Paper>
+                )}
+
+                {/* Expense Details - Tabbed View */}
+                {(reportData?.recurringExpenses?.length > 0 || reportData?.oneTimeExpenses?.length > 0) && (
+                  <Paper sx={{ mb: 3 }}>
+                    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+                      <Tabs
+                        value={expenseTabIndex}
+                        onChange={(e, newValue) => setExpenseTabIndex(newValue)}
+                      >
+                        <Tab label={`Recurring Expenses (${reportData?.recurringExpenses?.length || 0})`} />
+                        <Tab label={`One-Time Expenses (${reportData?.oneTimeExpenses?.length || 0})`} />
+                      </Tabs>
+                    </Box>
+
+                    {/* Recurring Expenses Tab */}
+                    {expenseTabIndex === 0 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {reportData?.recurringExpenses?.length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#fff3e0" }}>
+                                  <TableCell><strong>Category</strong></TableCell>
+                                  <TableCell><strong>Target</strong></TableCell>
+                                  <TableCell><strong>Billing Method</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {reportData.recurringExpenses.map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.categoryName || "-"}</TableCell>
+                                    <TableCell>{exp.entityDescription || "-"}</TableCell>
+                                    <TableCell>{exp.billingMethod || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      ${parseFloat(exp.amount).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No recurring expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* One-Time Expenses Tab */}
+                    {expenseTabIndex === 1 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#d32f2f" }}>
+                          Filters
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 3 }}>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="From"
+                              type="date"
+                              value={expenseFilters.oneTimeDateFrom}
+                              onChange={(e) => setExpenseFilters({ ...expenseFilters, oneTimeDateFrom: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="To"
+                              type="date"
+                              value={expenseFilters.oneTimeDateTo}
+                              onChange={(e) => setExpenseFilters({ ...expenseFilters, oneTimeDateTo: e.target.value })}
+                              fullWidth
+                              InputLabelProps={{ shrink: true }}
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="Min Amount"
+                              type="number"
+                              value={expenseFilters.oneTimeAmountMin}
+                              onChange={(e) => setExpenseFilters({ ...expenseFilters, oneTimeAmountMin: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            <TextField
+                              label="Max Amount"
+                              type="number"
+                              value={expenseFilters.oneTimeAmountMax}
+                              onChange={(e) => setExpenseFilters({ ...expenseFilters, oneTimeAmountMax: e.target.value })}
+                              fullWidth
+                              size="small"
+                            />
+                          </Grid>
+                        </Grid>
+
+                        {reportData?.oneTimeExpenses?.length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#fce4ec" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Category</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {reportData.oneTimeExpenses
+                                  .filter((exp) => {
+                                    if (expenseFilters.oneTimeDateFrom && exp.date < expenseFilters.oneTimeDateFrom) return false;
+                                    if (expenseFilters.oneTimeDateTo && exp.date > expenseFilters.oneTimeDateTo) return false;
+                                    if (expenseFilters.oneTimeAmountMin && parseFloat(exp.amount) < parseFloat(expenseFilters.oneTimeAmountMin)) return false;
+                                    if (expenseFilters.oneTimeAmountMax && parseFloat(exp.amount) > parseFloat(expenseFilters.oneTimeAmountMax)) return false;
+                                    return true;
+                                  })
+                                  .map((exp, idx) => (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{exp.date || "-"}</TableCell>
+                                      <TableCell>{exp.categoryName || "-"}</TableCell>
+                                      <TableCell>{exp.description || "-"}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                        ${parseFloat(exp.amount).toFixed(2)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No one-time expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+                  </Paper>
+                )}
+              </>
+            )}
+
+            {!reportData && selectedDriver && !loadingReport && (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <Assessment sx={{ fontSize: 48, color: "textSecondary", mb: 2 }} />
+                <Typography color="textSecondary">
+                  Click "Generate Report" to view financial details
+                </Typography>
+              </Paper>
+            )}
+          </>
         )}
 
-        {/* Report Tabs - Pass cached data */}
-        {isReportReady && (
-          <Paper sx={{ mb: 3 }}>
-            <Tabs
-              value={activeTab}
-              onChange={handleTabChange}
-              sx={{ borderBottom: 1, borderColor: "divider" }}
-            >
-              <Tab icon={<TrendingUp />} iconPosition="start" label="Revenue" sx={{ minHeight: 64 }} />
-              <Tab icon={<TrendingDown />} iconPosition="start" label="Expenses" sx={{ minHeight: 64 }} />
-            </Tabs>
-
-            <Box sx={{ p: 3 }}>
-              {activeTab === 0 && (
-                <RevenueTab
-                  driverNumber={selectedDriver?.driverNumber}
-                  startDate={startDate}
-                  endDate={endDate}
-                  reportData={reportData}
-                />
-              )}
-              {activeTab === 1 && (
-                <ExpenseTab
-                  driverNumber={selectedDriver?.driverNumber}
-                  startDate={startDate}
-                  endDate={endDate}
-                  reportData={reportData}
-                />
-              )}
-            </Box>
-          </Paper>
-        )}
-
-        {/* Empty/Loading States */}
-        {!isReportReady && !loading && (
-          <Paper sx={{ p: 6, textAlign: "center" }}>
-            <Assessment sx={{ fontSize: 80, color: "#3e5244", opacity: 0.3, mb: 2 }} />
-            <Typography variant="h6" color="text.secondary" gutterBottom sx={{ fontWeight: 600 }}>
-              {isDriverRole ? "Select Date Range to View Your Reports" : "Select Parameters to Generate Reports"}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {isDriverRole ? "Choose a date range to view your financial reports" : "Choose a driver and date range to view financial reports"}
-            </Typography>
-          </Paper>
-        )}
-
-        {loading && (
-          <Paper sx={{ p: 6, textAlign: "center" }}>
-            <CircularProgress size={60} sx={{ mb: 2 }} />
-            <Typography variant="h6" color="text.secondary">
-              Loading financial data...
-            </Typography>
-          </Paper>
+        {/* Tab 1: History */}
+        {activeTab === 1 && (
+          <>
+            {!selectedDriverId ? (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <Typography color="textSecondary">
+                  Please select a driver or owner from the Generate Draft tab to view history.
+                </Typography>
+              </Paper>
+            ) : (
+              <>
+                {loadingSavedStatements ? (
+                  <Box sx={{ textAlign: "center", p: { xs: 2, md: 4 } }}>
+                    <CircularProgress />
+                  </Box>
+                ) : savedStatements.length > 0 ? (
+                  <Paper sx={{ p: { xs: 1.5, md: 3 } }}>
+                    <Typography variant="h6" fontWeight="bold" sx={{ mb: 3 }}>
+                      Finalized Statements
+                    </Typography>
+                    <TableContainer sx={{ overflowX: 'auto' }}>
+                      <Table size="small">
+                        <TableHead>
+                          <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                            <TableCell><strong>Period</strong></TableCell>
+                            <TableCell align="right"><strong>Total Revenues</strong></TableCell>
+                            <TableCell align="right"><strong>Total Expenses</strong></TableCell>
+                            <TableCell align="right"><strong>Net Due</strong></TableCell>
+                            <TableCell><strong>Status</strong></TableCell>
+                            <TableCell align="center"><strong>Actions</strong></TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {savedStatements.map((stmt) => (
+                            <TableRow key={stmt.id} hover>
+                              <TableCell>
+                                {stmt.periodFrom} to {stmt.periodTo}
+                              </TableCell>
+                              <TableCell align="right">
+                                ${parseFloat(stmt.totalRevenues || 0).toFixed(2)}
+                              </TableCell>
+                              <TableCell align="right">
+                                ${parseFloat(stmt.totalExpenses || 0).toFixed(2)}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: "bold", color: stmt.netDue > 0 ? "#d32f2f" : "#388e3c" }}>
+                                ${parseFloat(-stmt.netDue || 0).toFixed(2)} {/* Negate to show from driver's perspective */}
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: "inline-block", px: 1.5, py: 0.5, backgroundColor: "#e0e0e0", borderRadius: 1, fontSize: "0.85rem" }}>
+                                  {stmt.status}
+                                </Box>
+                              </TableCell>
+                              <TableCell align="center">
+                                <Button size="small" variant="outlined">
+                                  View
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  </Paper>
+                ) : (
+                  <Paper sx={{ p: { xs: 2, md: 4 }, textAlign: "center" }}>
+                    <Typography color="textSecondary">
+                      No finalized statements found for this person.
+                    </Typography>
+                  </Paper>
+                )}
+              </>
+            )}
+          </>
         )}
       </Container>
 
-      {/* Details Dialog - Same as before */}
-      <Dialog open={detailsDialogOpen} onClose={handleCloseDetails} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
-          <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Report Details
+      {/* Detail Modal Dialog */}
+      <Dialog
+        open={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{ sx: { m: { xs: 1, sm: 2 } } }}
+      >
+        <DialogTitle sx={{ pb: { xs: 1, md: 2 } }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant={{ xs: 'subtitle1', md: 'h6' }} fontWeight="bold">
+              Statement Details
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              {selectedDriver?.firstName} {selectedDriver?.lastName} ({selectedDriver?.driverNumber})
-              {startDate && endDate ? ` • ${startDate.toLocaleDateString()} - ${endDate.toLocaleDateString()}` : ""}
-            </Typography>
+            <Button
+              onClick={() => setDetailModalOpen(false)}
+              sx={{ minWidth: "auto", p: 0 }}
+            >
+              <Close />
+            </Button>
           </Box>
-          <Button variant="outlined" startIcon={<Download />} onClick={handleDownloadPdf}>
-            Download PDF
-          </Button>
         </DialogTitle>
+        <DialogContent>
+          {reportData && (
+            <Box>
+              {/* Header */}
+              <Box sx={{ mb: 3, pb: 2, borderBottom: "1px solid #e0e0e0" }}>
+                <Typography variant="h6" fontWeight="bold">
+                  {reportData.ownerName}
+                </Typography>
+                <Typography variant="body2" color="textSecondary">
+                  {reportData.periodFrom} to {reportData.periodTo}
+                </Typography>
+                <Box sx={{ display: "inline-block", mt: 1, px: 1.5, py: 0.5, backgroundColor: "#e0e0e0", borderRadius: 1, fontSize: "0.85rem" }}>
+                  {reportData.status || "DRAFT"}
+                </Box>
+              </Box>
 
-        <DialogContent dividers>
-          {!reportData ? (
-            <Typography color="text.secondary">No report data available.</Typography>
-          ) : (
-            <div style={{ padding: '16px' }}>
-              {/* DEBUG: Always visible */}
-              {console.log('📊 DIALOG reportData:', reportData)}
-              {console.log('📊 leaseRevenue:', reportData?.leaseRevenue)}
-              {console.log('📊 leaseRevenue.leaseItems:', reportData?.leaseRevenue?.leaseItems)}
-              {console.log('📊 creditCardRevenue:', reportData?.creditCardRevenue)}
-              {console.log('📊 creditCardRevenue.transactionItems:', reportData?.creditCardRevenue?.transactionItems)}
-              <div style={{ marginBottom: '16px', backgroundColor: '#fff3cd', padding: '12px', borderRadius: '4px' }}>
-                <strong>DEBUG INFO:</strong><br/>
-                leaseRevenue items: {reportData?.leaseRevenue?.leaseItems?.length ?? 'undefined'}<br/>
-                creditCard items: {reportData?.creditCardRevenue?.transactionItems?.length ?? 'undefined'}<br/>
-                charges items: {reportData?.chargesRevenue?.chargeItems?.length ?? 'undefined'}<br/>
-                fixedExpenses items: {reportData?.fixedExpenses?.expenseItems?.length ?? 'undefined'}<br/>
-                leaseExpense items: {reportData?.leaseExpense?.leaseExpenseItems?.length ?? 'undefined'}<br/>
-                otherRevenue: {reportData?.otherRevenue?.length ?? 'undefined'}<br/>
-                oneTimeExpenses: {reportData?.oneTimeExpenses?.length ?? 'undefined'}
-              </div>
-              {/* SUMMARY */}
-              <h2 style={{ marginBottom: '16px', borderBottom: '2px solid #333' }}>Summary</h2>
-              <table style={{ width: '100%', marginBottom: '24px', borderCollapse: 'collapse' }}>
-                <tbody>
-                  <tr><td style={{ padding: '8px', border: '1px solid #ddd' }}>Total Revenue</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green', fontWeight: 'bold' }}>${(reportData?.totalRevenue ?? 0).toFixed(2)}</td></tr>
-                  <tr><td style={{ padding: '8px', border: '1px solid #ddd' }}>Total Expenses</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red', fontWeight: 'bold' }}>-${(reportData?.totalExpenses ?? 0).toFixed(2)}</td></tr>
-                  <tr><td style={{ padding: '8px', border: '1px solid #ddd' }}>Amount Paid</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'blue', fontWeight: 'bold' }}>${(reportData?.amountPaid ?? 0).toFixed(2)}</td></tr>
-                  <tr style={{ backgroundColor: (reportData?.amountDue ?? 0) < 0 ? '#ffebee' : '#e8f5e9' }}><td style={{ padding: '8px', border: '1px solid #ddd', fontWeight: 'bold' }}>Amount Due/Owing</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', fontWeight: 'bold', fontSize: '1.2em' }}>{(reportData?.amountDue ?? 0) < 0 ? `($${Math.abs(reportData?.amountDue ?? 0).toFixed(2)})` : `$${(reportData?.amountDue ?? 0).toFixed(2)}`}</td></tr>
-                </tbody>
-              </table>
-
-              {/* REVENUE DETAILS */}
-              <h2 style={{ marginBottom: '16px', borderBottom: '2px solid green', color: 'green' }}>Revenue Details</h2>
-              
-              {/* Lease Revenue */}
-              <h3 style={{ color: 'green' }}>Lease Revenue (${parseFloat(reportData?.leaseRevenue?.totalRevenue || reportData?.leaseRevenue?.grandTotalLease || 0).toFixed(2)})</h3>
-              {(() => {
-                const items = reportData?.leaseRevenue?.leaseItems || [];
-                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No lease revenue items</p>;
-                return (
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Cab</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Shift</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Driver</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
-                    <tbody>{items.map((item, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.shiftDate || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.cabNumber || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.shiftType || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.driverName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green' }}>${parseFloat(item.totalLease || 0).toFixed(2)}</td></tr>)}</tbody>
-                  </table>
-                );
-              })()}
-
-              {/* Credit Card Revenue */}
-              <h3 style={{ color: 'green' }}>Credit Card Revenue (${parseFloat(reportData?.creditCardRevenue?.grandTotal || 0).toFixed(2)})</h3>
-              {(() => {
-                const items = reportData?.creditCardRevenue?.transactionItems || [];
-                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No credit card transactions</p>;
-                return (
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Cab</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Card</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Tip</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Total</th></tr></thead>
-                    <tbody>{items.map((txn, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{txn.transactionDate || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{txn.cabNumber || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{txn.cardLastFour ? `****${txn.cardLastFour}` : '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(txn.amount || 0).toFixed(2)}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(txn.tipAmount || 0).toFixed(2)}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green' }}>${parseFloat(txn.totalAmount || 0).toFixed(2)}</td></tr>)}</tbody>
-                  </table>
-                );
-              })()}
-
-              {/* Charges Revenue */}
-              <h3 style={{ color: 'green' }}>Charges Revenue (${parseFloat(reportData?.chargesRevenue?.grandTotal || 0).toFixed(2)})</h3>
-              {(() => {
-                const items = reportData?.chargesRevenue?.chargeItems || [];
-                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No charges</p>;
-                return (
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Account</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Pickup</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Dropoff</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Fare</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Tip</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Total</th>
-                    </tr></thead>
-                    <tbody>{items.map((c, i) => <tr key={i}>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{c.tripDate || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{c.accountId || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.pickupAddress || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.dropoffAddress || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(c.fareAmount || 0).toFixed(2)}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(c.tipAmount || 0).toFixed(2)}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green', fontWeight: 'bold' }}>${parseFloat(c.totalAmount || 0).toFixed(2)}</td>
-                    </tr>)}</tbody>
-                  </table>
-                );
-              })()}
-
-              {/* Other Revenue */}
-              {Array.isArray(reportData?.otherRevenue) && reportData.otherRevenue.length > 0 && (
-                <>
-                  <h3 style={{ color: 'green' }}>Other Revenue (${reportData.otherRevenue.reduce((sum, r) => sum + parseFloat(r?.amount || 0), 0).toFixed(2)})</h3>
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Category</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Type</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
-                    <tbody>{reportData.otherRevenue.map((r, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{r?.revenueDate || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{r?.categoryName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{r?.revenueType || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'green' }}>${parseFloat(r?.amount || 0).toFixed(2)}</td></tr>)}</tbody>
-                  </table>
-                </>
+              {/* Revenues Section */}
+              {reportData.revenues && reportData.revenues.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#388e3c" }}>
+                    Revenues
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.revenues.map((rev, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{rev.revenueDate || "-"}</TableCell>
+                            <TableCell>{rev.categoryName || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
               )}
 
-              {/* EXPENSE DETAILS */}
-              <h2 style={{ marginTop: '24px', marginBottom: '16px', borderBottom: '2px solid red', color: 'red' }}>Expense Details</h2>
-              
-              {/* Fixed Expenses */}
-              <h3 style={{ color: 'red' }}>Fixed Expenses (${parseFloat(reportData?.fixedExpenses?.totalAmount || reportData?.fixedExpenses?.totalExpenses || 0).toFixed(2)})</h3>
-              {(() => {
-                const items = reportData?.fixedExpenses?.expenseItems || [];
-                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No fixed expenses</p>;
-                return (
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Category</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Description</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
-                    <tbody>{items.map((e, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.expenseDate || e.date || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.categoryName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.description || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red' }}>${parseFloat(e.amount || e.chargedAmount || 0).toFixed(2)}</td></tr>)}</tbody>
-                  </table>
-                );
-              })()}
-
-              {/* Lease Expenses */}
-              <h3 style={{ color: 'red' }}>Lease Expenses (${parseFloat(reportData?.leaseExpense?.grandTotalLease || reportData?.leaseExpense?.totalLeaseExpense || 0).toFixed(2)})</h3>
-              {(() => {
-                const items = reportData?.leaseExpense?.leaseExpenseItems || [];
-                if (items.length === 0) return <p style={{ fontStyle: 'italic', color: '#666' }}>No lease expenses</p>;
-                return (
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Cab</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Shift</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Base Rate</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Mileage Rate</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Mileage</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Mileage Lease</th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Total Lease</th>
-                    </tr></thead>
-                    <tbody>{items.map((e, i) => <tr key={i}>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.shiftDate || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.cabNumber || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{e.shiftType || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(e.baseRate || 0).toFixed(2)}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(e.mileageRate || 0).toFixed(2)}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>{parseFloat(e.miles || 0).toFixed(0)}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>${parseFloat(e.mileageLease || 0).toFixed(2)}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red', fontWeight: 'bold' }}>${parseFloat(e.totalLease || 0).toFixed(2)}</td>
-                    </tr>)}</tbody>
-                  </table>
-                );
-              })()}
-
-              {/* One-Time Expenses */}
-              {Array.isArray(reportData?.oneTimeExpenses) && reportData.oneTimeExpenses.length > 0 && (
-                <>
-                  <h3 style={{ color: 'red' }}>One-Time Expenses (${reportData.oneTimeExpenses.reduce((sum, e) => sum + parseFloat(e?.amount ?? e?.chargedAmount ?? 0), 0).toFixed(2)})</h3>
-                  <table style={{ width: '100%', marginBottom: '16px', borderCollapse: 'collapse' }}>
-                    <thead><tr style={{ backgroundColor: '#f5f5f5' }}><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Date</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Category</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'left' }}>Description</th><th style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>Amount</th></tr></thead>
-                    <tbody>{reportData.oneTimeExpenses.map((e, i) => <tr key={i}><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e?.expenseDate || e?.date || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e?.categoryName || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd' }}>{e?.description || '-'}</td><td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right', color: 'red' }}>${parseFloat(e?.amount ?? e?.chargedAmount ?? 0).toFixed(2)}</td></tr>)}</tbody>
-                  </table>
-                </>
+              {/* Recurring Expenses Section */}
+              {reportData.recurringExpenses && reportData.recurringExpenses.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#e65100" }}>
+                    Recurring Expenses
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Target</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.recurringExpenses.map((exp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{exp.categoryName || "-"}</TableCell>
+                            <TableCell>{exp.entityDescription || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
               )}
-            </div>
+
+              {/* One-Time Expenses Section */}
+              {reportData.oneTimeExpenses && reportData.oneTimeExpenses.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
+                    One-Time Expenses
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.oneTimeExpenses.map((exp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{exp.date || "-"}</TableCell>
+                            <TableCell>{exp.categoryName || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Totals Footer */}
+              <Box sx={{ pt: 2, borderTop: "2px solid #e0e0e0", backgroundColor: "#f9f9f9", p: 2, borderRadius: 1 }}>
+                <Table size="small">
+                  <TableBody>
+                    <TableRow>
+                      <TableCell><strong>Total Revenues</strong></TableCell>
+                      <TableCell align="right">${parseFloat(reportData.totalRevenues || 0).toFixed(2)}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell><strong>Recurring Expenses</strong></TableCell>
+                      <TableCell align="right">${parseFloat(reportData.totalRecurringExpenses || 0).toFixed(2)}</TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell><strong>One-Time Expenses</strong></TableCell>
+                      <TableCell align="right">${parseFloat(reportData.totalOneTimeExpenses || 0).toFixed(2)}</TableCell>
+                    </TableRow>
+                    <TableRow sx={{ backgroundColor: "#fff3e0" }}>
+                      <TableCell><strong>Net Due</strong></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold", color: reportData.netDue > 0 ? "#d32f2f" : "#388e3c" }}>
+                        ${parseFloat(-reportData.netDue || 0).toFixed(2)} {/* Negate to show from driver's perspective */}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Box>
+            </Box>
           )}
         </DialogContent>
-
-        <DialogActions sx={{ p: 2, gap: 1 }}>
-          <Button startIcon={<Email />} variant="outlined" onClick={handleEmail}>
+        <DialogActions>
+          <Button onClick={() => window.print()}>
+            <Print sx={{ mr: 1 }} /> Print
+          </Button>
+          <Button onClick={handleEmailClick}>
             Email
           </Button>
-          <Button startIcon={<Print />} variant="outlined" onClick={handlePrint}>
-            Print
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleCloseDetails}
-            sx={{ backgroundColor: "#3e5244", "&:hover": { backgroundColor: "#2d3d32" } }}
-          >
+          <Button onClick={() => setDetailModalOpen(false)}>
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Email Dialog */}
+      <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)}>
+        <DialogTitle>Send via Email</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            autoFocus
+            type="email"
+            label="Email Address"
+            fullWidth
+            value={emailAddress}
+            onChange={(e) => setEmailAddress(e.target.value)}
+            variant="outlined"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleSendEmail} variant="contained">
+            Send
           </Button>
         </DialogActions>
       </Dialog>

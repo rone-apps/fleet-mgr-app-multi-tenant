@@ -5,7 +5,7 @@ import {
   TextField, MenuItem, FormControl, InputLabel, Select, IconButton, Chip, Alert,
   Grid,
 } from "@mui/material";
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Info as InfoIcon, Calculate as CalculateIcon } from "@mui/icons-material";
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Info as InfoIcon, Calculate as CalculateIcon, AttachMoney as AttachMoneyIcon } from "@mui/icons-material";
 import { API_BASE_URL } from "../../lib/api";
 import ShiftChargesCalculator from "./ShiftChargesCalculator";
 
@@ -191,6 +191,32 @@ export default function AttributeCostsTab({ canEdit }) {
     }
   };
 
+  const handleCreateExpenses = async (costId, attributeName) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/attribute-costs/${costId}/create-expenses`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccess(
+          `Created ${data.result.expensesCreated} expenses for ${data.result.totalMatchingShifts} shifts with ${attributeName}`
+        );
+        loadAttributeCosts();
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to create expenses");
+      }
+    } catch (err) {
+      console.error("Error creating expenses:", err);
+      setError("Failed to create expenses for attribute cost");
+    }
+  };
+
   const getAttributeName = (attributeTypeId) => {
     const attr = attributeTypes.find(a => a.id === attributeTypeId);
     return attr ? attr.attributeName : "-";
@@ -276,6 +302,16 @@ export default function AttributeCostsTab({ canEdit }) {
                       <IconButton size="small" onClick={() => handleOpenDialog(cost)} title="Edit">
                         <EditIcon fontSize="small" />
                       </IconButton>
+                      {cost.isCurrentlyActive && (
+                        <IconButton
+                          size="small"
+                          onClick={() => handleCreateExpenses(cost.id, cost.attributeName)}
+                          title="Create expenses for shifts with this attribute"
+                          color="success"
+                        >
+                          <AttachMoneyIcon fontSize="small" />
+                        </IconButton>
+                      )}
                       {!cost.effectiveTo && (
                         <IconButton
                           size="small"

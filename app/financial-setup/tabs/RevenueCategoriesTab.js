@@ -20,6 +20,9 @@ import {
   MenuItem,
   IconButton,
   Chip,
+  Alert,
+  AlertTitle,
+  Grid,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -28,9 +31,18 @@ import {
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
   Block as BlockIcon,
+  Info as InfoIcon,
 } from "@mui/icons-material";
-import { Alert, AlertTitle } from "@mui/material";
 import { API_BASE_URL } from "../../lib/api";
+
+// Application type display mapping
+const APPLICATION_TYPES = {
+  SHIFT_PROFILE: { label: "Shift Profile", description: "Apply to all shifts with a specific profile" },
+  SPECIFIC_SHIFT: { label: "Specific Shift", description: "Apply to one specific shift" },
+  SPECIFIC_OWNER_DRIVER: { label: "Specific Owner/Driver", description: "Apply to a specific owner or driver" },
+  ALL_ACTIVE_SHIFTS: { label: "All Active Shifts", description: "Apply to all currently active shifts" },
+  ALL_NON_OWNER_DRIVERS: { label: "All Non-Owner Drivers", description: "Apply to all drivers who are not owners" },
+};
 
 export default function RevenueCategoriesTab({
   canEdit,
@@ -46,24 +58,37 @@ export default function RevenueCategoriesTab({
     categoryCode: "",
     categoryName: "",
     description: "",
-    categoryType: "VARIABLE",
-    appliesTo: "DRIVER",
+    categoryType: "FIXED",
+    appliesTo: "SHIFT",
+    applicationType: "ALL_ACTIVE_SHIFTS",
+    shiftProfileId: null,
+    specificShiftId: null,
+    specificOwnerId: null,
+    specificDriverId: null,
+    isActive: true,
   });
+
+  // Dropdown options
+  const [shiftProfiles, setShiftProfiles] = useState([]);
+  const [shifts, setShifts] = useState([]);
+  const [drivers, setDrivers] = useState([]);
 
   // Delete Warning Dialog
   const [openDeleteWarning, setOpenDeleteWarning] = useState(false);
   const [deleteWarningData, setDeleteWarningData] = useState({ name: "" });
 
+  // Load data on component mount
   useEffect(() => {
     loadCategories();
+    loadDropdownOptions();
   }, []);
 
   const loadCategories = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/revenue-categories`, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
       });
       if (response.ok) {
@@ -73,6 +98,37 @@ export default function RevenueCategoriesTab({
       }
     } catch (err) {
       console.error("Error loading revenue categories:", err);
+      setError("Failed to load revenue categories");
+    }
+  };
+
+  const loadDropdownOptions = async () => {
+    try {
+      const headers = {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+        "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+      };
+
+      // Load shift profiles
+      const profilesRes = await fetch(`${API_BASE_URL}/shift-profiles`, { headers });
+      if (profilesRes.ok) {
+        setShiftProfiles(await profilesRes.json());
+      }
+
+      // Load shifts
+      const shiftsRes = await fetch(`${API_BASE_URL}/shifts`, { headers });
+      if (shiftsRes.ok) {
+        setShifts(await shiftsRes.json());
+      }
+
+      // Load drivers
+      const driversRes = await fetch(`${API_BASE_URL}/drivers`, { headers });
+      if (driversRes.ok) {
+        setDrivers(await driversRes.json());
+      }
+    } catch (err) {
+      console.error("Error loading dropdown options:", err);
+      // Don't fail the entire component if dropdowns fail
     }
   };
 
@@ -85,6 +141,12 @@ export default function RevenueCategoriesTab({
         description: category.description || "",
         categoryType: category.categoryType,
         appliesTo: category.appliesTo,
+        applicationType: category.applicationType,
+        shiftProfileId: category.shiftProfileId || null,
+        specificShiftId: category.specificShiftId || null,
+        specificOwnerId: category.specificOwnerId || null,
+        specificDriverId: category.specificDriverId || null,
+        isActive: category.isActive,
       });
     } else {
       setEditing(null);
@@ -92,16 +154,60 @@ export default function RevenueCategoriesTab({
         categoryCode: "",
         categoryName: "",
         description: "",
-        categoryType: "VARIABLE",
-        appliesTo: "DRIVER",
+        categoryType: "FIXED",
+        appliesTo: "SHIFT",
+        applicationType: "ALL_ACTIVE_SHIFTS",
+        shiftProfileId: null,
+        specificShiftId: null,
+        specificOwnerId: null,
+        specificDriverId: null,
+        isActive: true,
       });
     }
     setOpenDialog(true);
   };
 
-  const handleSave = async () => {
+  const validateForm = () => {
     if (!formData.categoryCode || !formData.categoryName) {
       setError("Category code and name are required");
+      return false;
+    }
+
+    // Validate application type requirements
+    switch (formData.applicationType) {
+      case "SHIFT_PROFILE":
+        if (!formData.shiftProfileId) {
+          setError("Shift profile is required for SHIFT_PROFILE application type");
+          return false;
+        }
+        break;
+      case "SPECIFIC_SHIFT":
+        if (!formData.specificShiftId) {
+          setError("Specific shift is required for SPECIFIC_SHIFT application type");
+          return false;
+        }
+        break;
+      case "SPECIFIC_OWNER_DRIVER":
+        if (!formData.specificOwnerId && !formData.specificDriverId) {
+          setError("Either owner or driver is required for SPECIFIC_OWNER_DRIVER application type");
+          return false;
+        }
+        if (formData.specificOwnerId && formData.specificDriverId) {
+          setError("Cannot set both owner and driver for SPECIFIC_OWNER_DRIVER application type");
+          return false;
+        }
+        break;
+      case "ALL_ACTIVE_SHIFTS":
+      case "ALL_NON_OWNER_DRIVERS":
+        // No additional validation needed
+        break;
+    }
+
+    return true;
+  };
+
+  const handleSave = async () => {
+    if (!validateForm()) {
       return;
     }
 
@@ -110,18 +216,14 @@ export default function RevenueCategoriesTab({
         ? `${API_BASE_URL}/revenue-categories/${editing.id}`
         : `${API_BASE_URL}/revenue-categories`;
 
-      const payload = {
-        ...formData,
-        isActive: editing ? editing.active : true,
-      };
-
       const response = await fetch(url, {
         method: editing ? "PUT" : "POST",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(formData),
       });
 
       if (!response.ok) {
@@ -140,13 +242,13 @@ export default function RevenueCategoriesTab({
 
   const handleToggleActive = async (category) => {
     try {
-      const action = category.active ? "deactivate" : "activate";
+      const action = category.isActive ? "deactivate" : "activate";
       const response = await fetch(
         `${API_BASE_URL}/revenue-categories/${category.id}/${action}`,
         {
           method: "PUT",
           headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
             "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           },
         }
@@ -168,6 +270,28 @@ export default function RevenueCategoriesTab({
       name: category.categoryName,
     });
     setOpenDeleteWarning(true);
+  };
+
+  const renderApplicationTarget = (category) => {
+    switch (category.applicationType) {
+      case "SHIFT_PROFILE":
+        return `Profile: ${category.shiftProfileId || "-"}`;
+      case "SPECIFIC_SHIFT":
+        return `Shift: ${category.specificShift?.cabNumber || category.specificShiftId || "-"}`;
+      case "SPECIFIC_OWNER_DRIVER":
+        if (category.specificOwner) {
+          return `Owner: ${category.specificOwner.firstName} ${category.specificOwner.lastName}`;
+        } else if (category.specificDriver) {
+          return `Driver: ${category.specificDriver.firstName} ${category.specificDriver.lastName}`;
+        }
+        return "-";
+      case "ALL_ACTIVE_SHIFTS":
+        return <Chip label="All Active Shifts" size="small" color="success" />;
+      case "ALL_NON_OWNER_DRIVERS":
+        return <Chip label="All Non-Owner Drivers" size="small" color="info" />;
+      default:
+        return "-";
+    }
   };
 
   return (
@@ -201,6 +325,8 @@ export default function RevenueCategoriesTab({
               <TableCell>Name</TableCell>
               <TableCell>Type</TableCell>
               <TableCell>Applies To</TableCell>
+              <TableCell>Application Type</TableCell>
+              <TableCell>Application Target</TableCell>
               <TableCell>Status</TableCell>
               {canEdit && <TableCell align="right">Actions</TableCell>}
             </TableRow>
@@ -230,9 +356,18 @@ export default function RevenueCategoriesTab({
                 </TableCell>
                 <TableCell>
                   <Chip
-                    icon={category.active ? <ActiveIcon /> : <InactiveIcon />}
-                    label={category.active ? "Active" : "Inactive"}
-                    color={category.active ? "success" : "default"}
+                    label={APPLICATION_TYPES[category.applicationType]?.label || category.applicationType}
+                    size="small"
+                    color="primary"
+                    variant="outlined"
+                  />
+                </TableCell>
+                <TableCell>{renderApplicationTarget(category)}</TableCell>
+                <TableCell>
+                  <Chip
+                    icon={category.isActive ? <ActiveIcon /> : <InactiveIcon />}
+                    label={category.isActive ? "Active" : "Inactive"}
+                    color={category.isActive ? "success" : "default"}
                     size="small"
                   />
                 </TableCell>
@@ -247,10 +382,10 @@ export default function RevenueCategoriesTab({
                     <IconButton
                       size="small"
                       onClick={() => handleToggleActive(category)}
-                      color={category.active ? "default" : "success"}
-                      title={category.active ? "Deactivate" : "Activate"}
+                      color={category.isActive ? "default" : "success"}
+                      title={category.isActive ? "Deactivate" : "Activate"}
                     >
-                      {category.active ? <InactiveIcon /> : <ActiveIcon />}
+                      {category.isActive ? <InactiveIcon /> : <ActiveIcon />}
                     </IconButton>
                     {canDelete && (
                       <IconButton
@@ -274,7 +409,7 @@ export default function RevenueCategoriesTab({
       <Dialog
         open={openDialog}
         onClose={() => setOpenDialog(false)}
-        maxWidth="sm"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle sx={{ bgcolor: "success.light" }}>
@@ -282,27 +417,36 @@ export default function RevenueCategoriesTab({
         </DialogTitle>
         <DialogContent>
           <Box sx={{ display: "flex", flexDirection: "column", gap: 2, mt: 2 }}>
-            <TextField
-              label="Category Code"
-              value={formData.categoryCode}
-              onChange={(e) =>
-                setFormData({
-                  ...formData,
-                  categoryCode: e.target.value.toUpperCase(),
-                })
-              }
-              required
-              placeholder="E.g., LEASE_DAY"
-            />
-            <TextField
-              label="Category Name"
-              value={formData.categoryName}
-              onChange={(e) =>
-                setFormData({ ...formData, categoryName: e.target.value })
-              }
-              required
-              placeholder="E.g., Lease Revenue - Day Shift"
-            />
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Category Code"
+                  value={formData.categoryCode}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      categoryCode: e.target.value.toUpperCase(),
+                    })
+                  }
+                  required
+                  fullWidth
+                  placeholder="E.g., LEASE_DAY"
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Category Name"
+                  value={formData.categoryName}
+                  onChange={(e) =>
+                    setFormData({ ...formData, categoryName: e.target.value })
+                  }
+                  required
+                  fullWidth
+                  placeholder="E.g., Lease Revenue - Day Shift"
+                />
+              </Grid>
+            </Grid>
+
             <TextField
               label="Description"
               value={formData.description}
@@ -311,36 +455,190 @@ export default function RevenueCategoriesTab({
               }
               multiline
               rows={3}
+              fullWidth
             />
-            <FormControl fullWidth>
-              <InputLabel>Category Type</InputLabel>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Category Type</InputLabel>
+                  <Select
+                    value={formData.categoryType}
+                    label="Category Type"
+                    onChange={(e) =>
+                      setFormData({ ...formData, categoryType: e.target.value })
+                    }
+                  >
+                    <MenuItem value="FIXED">Fixed</MenuItem>
+                    <MenuItem value="VARIABLE">Variable</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel>Applies To</InputLabel>
+                  <Select
+                    value={formData.appliesTo}
+                    label="Applies To"
+                    onChange={(e) =>
+                      setFormData({ ...formData, appliesTo: e.target.value })
+                    }
+                  >
+                    <MenuItem value="CAB">Cab</MenuItem>
+                    <MenuItem value="COMPANY">Company</MenuItem>
+                    <MenuItem value="DRIVER">Driver</MenuItem>
+                    <MenuItem value="OWNER">Owner</MenuItem>
+                    <MenuItem value="SHIFT">Shift</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+
+            <FormControl fullWidth required>
+              <InputLabel>Application Type</InputLabel>
               <Select
-                value={formData.categoryType}
-                label="Category Type"
+                value={formData.applicationType}
+                label="Application Type"
                 onChange={(e) =>
-                  setFormData({ ...formData, categoryType: e.target.value })
+                  setFormData({
+                    ...formData,
+                    applicationType: e.target.value,
+                    // Clear specific fields when type changes
+                    shiftProfileId: null,
+                    specificShiftId: null,
+                    specificOwnerId: null,
+                    specificDriverId: null,
+                  })
                 }
               >
-                <MenuItem value="FIXED">Fixed</MenuItem>
-                <MenuItem value="VARIABLE">Variable</MenuItem>
+                {Object.entries(APPLICATION_TYPES).map(([key, value]) => (
+                  <MenuItem key={key} value={key}>
+                    {value.label}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>Applies To</InputLabel>
-              <Select
-                value={formData.appliesTo}
-                label="Applies To"
-                onChange={(e) =>
-                  setFormData({ ...formData, appliesTo: e.target.value })
-                }
-              >
-                <MenuItem value="CAB">Cab</MenuItem>
-                <MenuItem value="COMPANY">Company</MenuItem>
-                <MenuItem value="DRIVER">Driver</MenuItem>
-                <MenuItem value="OWNER">Owner</MenuItem>
-                <MenuItem value="SHIFT">Shift</MenuItem>
-              </Select>
-            </FormControl>
+
+            {/* Conditional fields based on application type */}
+            {formData.applicationType === "SHIFT_PROFILE" && (
+              <FormControl fullWidth required>
+                <InputLabel>Shift Profile</InputLabel>
+                <Select
+                  value={formData.shiftProfileId || ""}
+                  label="Shift Profile"
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      shiftProfileId: e.target.value,
+                    })
+                  }
+                >
+                  <MenuItem value="">Select a profile</MenuItem>
+                  {shiftProfiles.map((profile) => (
+                    <MenuItem key={profile.id} value={profile.id}>
+                      {profile.profileName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {formData.applicationType === "SPECIFIC_SHIFT" && (
+              <FormControl fullWidth required>
+                <InputLabel>Shift</InputLabel>
+                <Select
+                  value={formData.specificShiftId || ""}
+                  label="Shift"
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      specificShiftId: e.target.value,
+                    })
+                  }
+                >
+                  <MenuItem value="">Select a shift</MenuItem>
+                  {shifts.map((shift) => (
+                    <MenuItem key={shift.id} value={shift.id}>
+                      {shift.cabNumber || `Shift ${shift.id}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+
+            {formData.applicationType === "SPECIFIC_OWNER_DRIVER" && (
+              <>
+                <Alert severity="info">
+                  <AlertTitle>Select Either Owner or Driver</AlertTitle>
+                  Choose one entity - either an owner or a driver, but not both.
+                </Alert>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Owner</InputLabel>
+                      <Select
+                        value={formData.specificOwnerId || ""}
+                        label="Owner"
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            specificOwnerId: e.target.value,
+                            specificDriverId: null,
+                          })
+                        }
+                        disabled={formData.specificDriverId !== null}
+                      >
+                        <MenuItem value="">None</MenuItem>
+                        {drivers
+                          .filter((d) => d.isOwner)
+                          .map((driver) => (
+                            <MenuItem key={driver.id} value={driver.id}>
+                              {driver.firstName} {driver.lastName}
+                            </MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <FormControl fullWidth>
+                      <InputLabel>Driver</InputLabel>
+                      <Select
+                        value={formData.specificDriverId || ""}
+                        label="Driver"
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            specificDriverId: e.target.value,
+                            specificOwnerId: null,
+                          })
+                        }
+                        disabled={formData.specificOwnerId !== null}
+                      >
+                        <MenuItem value="">None</MenuItem>
+                        {drivers.map((driver) => (
+                          <MenuItem key={driver.id} value={driver.id}>
+                            {driver.firstName} {driver.lastName}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+              </>
+            )}
+
+            {(formData.applicationType === "ALL_ACTIVE_SHIFTS" ||
+              formData.applicationType === "ALL_NON_OWNER_DRIVERS") && (
+              <Alert severity="info" icon={<InfoIcon />}>
+                <AlertTitle>Automatic Application</AlertTitle>
+                This revenue category will automatically apply to{" "}
+                {formData.applicationType === "ALL_ACTIVE_SHIFTS"
+                  ? "all currently active shifts"
+                  : "all drivers who are not owners"}
+                . No specific selection needed.
+              </Alert>
+            )}
           </Box>
         </DialogContent>
         <DialogActions>

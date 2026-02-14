@@ -37,6 +37,14 @@ export default function ExpensesRevenuesPage() {
   const [shiftProfiles, setShiftProfiles] = useState([]);
   const [shifts, setShifts] = useState([]);
 
+  // Statement tab state
+  const [statementType, setStatementType] = useState("DRIVER");
+  const [selectedPersonId, setSelectedPersonId] = useState("");
+  const [statementStartDate, setStatementStartDate] = useState("");
+  const [statementEndDate, setStatementEndDate] = useState("");
+  const [statement, setStatement] = useState(null);
+  const [loadingStatement, setLoadingStatement] = useState(false);
+
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -58,7 +66,7 @@ export default function ExpensesRevenuesPage() {
   });
   
   const [oneTimeFormData, setOneTimeFormData] = useState({
-    name: "", amount: "",
+    expenseCategoryId: "", name: "", amount: "",
     expenseDate: new Date().toISOString().split('T')[0], paidBy: "COMPANY",
     responsibleParty: "COMPANY", description: "", vendor: "", receiptUrl: "",
     invoiceNumber: "", isReimbursable: false, notes: "",
@@ -82,8 +90,12 @@ export default function ExpensesRevenuesPage() {
     }
     setCurrentUser(user);
     const today = new Date();
-    setFilterStartDate(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]);
-    setFilterEndDate(new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0]);
+    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split('T')[0];
+    setFilterStartDate(monthStart);
+    setFilterEndDate(monthEnd);
+    setStatementStartDate(monthStart);
+    setStatementEndDate(monthEnd);
     loadData();
   }, []);
 
@@ -296,7 +308,7 @@ export default function ExpensesRevenuesPage() {
     } else {
       setEditingOneTime(null);
       setOneTimeFormData({
-        name: "", amount: "",
+        expenseCategoryId: "", name: "", amount: "",
         expenseDate: new Date().toISOString().split('T')[0], paidBy: "COMPANY",
         responsibleParty: "COMPANY", description: "", vendor: "", receiptUrl: "",
         invoiceNumber: "", isReimbursable: false, notes: "",
@@ -311,8 +323,8 @@ export default function ExpensesRevenuesPage() {
 
   const handleSaveOneTime = async () => {
     // Validate required fields
-    if (!oneTimeFormData.name || !oneTimeFormData.amount || !oneTimeFormData.expenseDate || !oneTimeFormData.paidBy) {
-      setError("Required fields missing: Name, Amount, Date, and Paid By");
+    if (!oneTimeFormData.expenseCategoryId || !oneTimeFormData.name || !oneTimeFormData.amount || !oneTimeFormData.expenseDate || !oneTimeFormData.paidBy) {
+      setError("Required fields missing: Category, Name, Amount, Date, and Paid By");
       return;
     }
 
@@ -347,6 +359,7 @@ export default function ExpensesRevenuesPage() {
     try {
       // Build payload with correct field types and values
       const payload = {
+        expenseCategoryId: parseInt(oneTimeFormData.expenseCategoryId),
         name: oneTimeFormData.name,
         amount: parseFloat(oneTimeFormData.amount),
         expenseDate: oneTimeFormData.expenseDate,
@@ -358,11 +371,6 @@ export default function ExpensesRevenuesPage() {
         invoiceNumber: oneTimeFormData.invoiceNumber,
         isReimbursable: oneTimeFormData.isReimbursable === true,
         notes: oneTimeFormData.notes,
-        applicationType: oneTimeFormData.applicationType,
-        shiftProfileId: oneTimeFormData.shiftProfileId ? parseInt(oneTimeFormData.shiftProfileId) : null,
-        specificShiftId: oneTimeFormData.specificShiftId ? parseInt(oneTimeFormData.specificShiftId) : null,
-        specificOwnerId: oneTimeFormData.specificOwnerId ? parseInt(oneTimeFormData.specificOwnerId) : null,
-        specificDriverId: oneTimeFormData.specificDriverId ? parseInt(oneTimeFormData.specificDriverId) : null,
       };
 
       const url = editingOneTime ? `${API_BASE_URL}/one-time-expenses/${editingOneTime.id}` : `${API_BASE_URL}/one-time-expenses`;
@@ -517,6 +525,44 @@ export default function ExpensesRevenuesPage() {
   const calculateTotalRecurring = () => getFilteredRecurring().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   const calculateTotalOneTime = () => getFilteredOneTime().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
   const calculateTotalRevenue = () => getFilteredRevenues().reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+
+  const generateStatement = async () => {
+    if (!selectedPersonId || !statementStartDate || !statementEndDate) {
+      setError("Please select a driver/owner and date range");
+      return;
+    }
+
+    setLoadingStatement(true);
+    setError("");
+    try {
+      let endpoint;
+      if (statementType === "DRIVER") {
+        endpoint = `${API_BASE_URL}/financial-statements/driver/${selectedPersonId}`;
+      } else if (statementType === "OWNER") {
+        endpoint = `${API_BASE_URL}/financial-statements/owner/${selectedPersonId}`;
+      } else if (statementType === "OWNER_REPORT") {
+        endpoint = `${API_BASE_URL}/financial-statements/owner-report/${selectedPersonId}`;
+      }
+
+      const response = await fetch(`${endpoint}?from=${statementStartDate}&to=${statementEndDate}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStatement(data);
+      } else {
+        setError(await response.text() || "Failed to generate statement");
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingStatement(false);
+    }
+  };
 
   const filteredRecurring = getFilteredRecurring();
   const filteredOneTime = getFilteredOneTime();
@@ -682,7 +728,7 @@ export default function ExpensesRevenuesPage() {
                     <TableRow>
                       <TableCell>Date</TableCell>
                       <TableCell>Category</TableCell>
-                      <TableCell>Entity</TableCell>
+                      <TableCell>Name</TableCell>
                       <TableCell>Description</TableCell>
                       <TableCell>Vendor</TableCell>
                       <TableCell align="right">Amount</TableCell>
@@ -693,7 +739,7 @@ export default function ExpensesRevenuesPage() {
                       <TableRow key={expense.id}>
                         <TableCell>{expense.expenseDate}</TableCell>
                         <TableCell><Chip label={expense.expenseCategory?.categoryName} size="small" color="secondary" /></TableCell>
-                        <TableCell>{getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}</TableCell>
+                        <TableCell>{expense.name || "-"}</TableCell>
                         <TableCell>{expense.description || "-"}</TableCell>
                         <TableCell>{expense.vendor || "-"}</TableCell>
                         <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="error">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
@@ -759,6 +805,210 @@ export default function ExpensesRevenuesPage() {
           )}
         </Paper>
 
+        {/* Financial Reports Card */}
+        <Paper sx={{ mt: 3, p: 3 }}>
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h5" fontWeight="bold" gutterBottom>
+              <TrendingUpIcon sx={{ mr: 1, verticalAlign: "middle" }} />
+              Financial Reports
+            </Typography>
+          </Box>
+
+          <Box sx={{ p: 3 }}>
+            <Typography variant="h6" fontWeight="bold" gutterBottom>Owner Financial Report</Typography>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth required>
+                    <InputLabel>Statement Type</InputLabel>
+                    <Select value={statementType} label="Statement Type" onChange={(e) => { setStatementType(e.target.value); setSelectedPersonId(""); setStatement(null); }}>
+                      <MenuItem value="DRIVER">Driver Statement</MenuItem>
+                      <MenuItem value="OWNER">Owner Statement</MenuItem>
+                      <MenuItem value="OWNER_REPORT">Owner Financial Report</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={3}>
+                  <FormControl fullWidth required>
+                    <InputLabel>{statementType === "DRIVER" ? "Select Driver" : "Select Owner"}</InputLabel>
+                    <Select value={selectedPersonId} label={statementType === "DRIVER" ? "Select Driver" : "Select Owner"} onChange={(e) => setSelectedPersonId(e.target.value)}>
+                      <MenuItem value="">Choose...</MenuItem>
+                      {drivers
+                        .filter(d => statementType === "DRIVER" ? true : Boolean(d.isOwner))
+                        .map(d => (
+                          <MenuItem key={d.id} value={d.id}>
+                            {d.firstName} {d.lastName} ({d.driverNumber})
+                          </MenuItem>
+                        ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    label="From"
+                    type="date"
+                    value={statementStartDate}
+                    onChange={(e) => setStatementStartDate(e.target.value)}
+                    fullWidth
+                    required
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <TextField
+                    label="To"
+                    type="date"
+                    value={statementEndDate}
+                    onChange={(e) => setStatementEndDate(e.target.value)}
+                    fullWidth
+                    required
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+                <Grid item xs={12} md={2}>
+                  <Button variant="contained" onClick={generateStatement} fullWidth disabled={loadingStatement}>
+                    {loadingStatement ? "Generating..." : "Generate"}
+                  </Button>
+                </Grid>
+              </Grid>
+
+              {statement && (
+                <Box>
+                  <Typography variant="h6" sx={{ mb: 2 }}>
+                    {statementType === "OWNER_REPORT" ? "Financial Report" : "Statement"} for {statement.ownerName || statement.driverName} ({statement.ownerNumber || statement.driverNumber}) - {statement.periodFrom} to {statement.periodTo}
+                  </Typography>
+
+                  {statementType === "OWNER_REPORT" && statement.revenues && statement.revenues.length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "success.main" }}>
+                        Revenues
+                      </Typography>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: "#f0f8f0" }}>
+                              <TableCell><strong>Date</strong></TableCell>
+                              <TableCell><strong>Category</strong></TableCell>
+                              <TableCell><strong>Description</strong></TableCell>
+                              <TableCell align="right"><strong>Amount</strong></TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {statement.revenues.map((item, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>{item.revenueDate}</TableCell>
+                                <TableCell>{item.categoryName}</TableCell>
+                                <TableCell>{item.description}</TableCell>
+                                <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="success.main">${parseFloat(item.amount).toFixed(2)}</Typography></TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      <Box sx={{ mt: 1, textAlign: "right" }}>
+                        <Typography variant="body2"><strong>Subtotal:</strong> ${parseFloat(statement.totalRevenues).toFixed(2)}</Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {(statement.recurringCharges || statement.recurringExpenses) && (statement.recurringCharges || statement.recurringExpenses).length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "error.main" }}>
+                        {statementType === "OWNER_REPORT" ? "Recurring Expenses" : "Recurring Charges"}
+                      </Typography>
+                      <TableContainer>
+                        <Table size="small" border="1px solid #ddd">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                              <TableCell><strong>Category</strong></TableCell>
+                              <TableCell><strong>Type</strong></TableCell>
+                              <TableCell><strong>Billing</strong></TableCell>
+                              <TableCell align="right"><strong>Amount</strong></TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {(statement.recurringCharges || statement.recurringExpenses).map((item, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>{item.categoryName}</TableCell>
+                                <TableCell>{item.entityDescription}</TableCell>
+                                <TableCell>{item.billingMethod}</TableCell>
+                                <TableCell align="right">${parseFloat(item.amount).toFixed(2)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      <Box sx={{ mt: 1, textAlign: "right" }}>
+                        <Typography variant="body2"><strong>Subtotal:</strong> ${parseFloat(statement.totalRecurringExpenses || statement.recurringTotal).toFixed(2)}</Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  {(statement.oneTimeCharges || statement.oneTimeExpenses) && (statement.oneTimeCharges || statement.oneTimeExpenses).length > 0 && (
+                    <Box sx={{ mb: 3 }}>
+                      <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "error.main" }}>
+                        {statementType === "OWNER_REPORT" ? "One-Time Expenses" : "One-Time Charges"}
+                      </Typography>
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                              <TableCell><strong>Date</strong></TableCell>
+                              <TableCell><strong>Category</strong></TableCell>
+                              <TableCell><strong>Description</strong></TableCell>
+                              <TableCell align="right"><strong>Amount</strong></TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {(statement.oneTimeCharges || statement.oneTimeExpenses).map((item, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>{item.date}</TableCell>
+                                <TableCell>{item.categoryName}</TableCell>
+                                <TableCell>{item.description}</TableCell>
+                                <TableCell align="right">${parseFloat(item.amount).toFixed(2)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                      <Box sx={{ mt: 1, textAlign: "right" }}>
+                        <Typography variant="body2"><strong>Subtotal:</strong> ${parseFloat(statement.totalOneTimeExpenses || statement.oneTimeTotal).toFixed(2)}</Typography>
+                      </Box>
+                    </Box>
+                  )}
+
+                  <Box sx={{ mt: 2, p: 2, backgroundColor: statementType === "OWNER_REPORT" ? "#f0f8f0" : "#f9f9f9", border: "1px solid #ddd", borderRadius: 1 }}>
+                    {statementType === "OWNER_REPORT" && (
+                      <>
+                        <Typography variant="h6" sx={{ mb: 1 }}>
+                          <strong>Total Revenues:</strong> <span style={{ color: "green" }}>${parseFloat(statement.totalRevenues).toFixed(2)}</span>
+                        </Typography>
+                        <Typography variant="h6" sx={{ mb: 1 }}>
+                          <strong>Total Expenses:</strong> <span style={{ color: "red" }}>${parseFloat(statement.totalExpenses).toFixed(2)}</span>
+                        </Typography>
+                        <Typography variant="h5" sx={{ mt: 2, color: statement.netAmount >= 0 ? "success.main" : "error.main" }}>
+                          <strong>NET AMOUNT:</strong> ${parseFloat(statement.netAmount).toFixed(2)}
+                        </Typography>
+                      </>
+                    )}
+                    {statementType !== "OWNER_REPORT" && (
+                      <>
+                        <Typography variant="h6" sx={{ mb: 1 }}>
+                          <strong>Recurring Total:</strong> ${parseFloat(statement.recurringTotal).toFixed(2)}
+                        </Typography>
+                        <Typography variant="h6" sx={{ mb: 1 }}>
+                          <strong>One-Time Total:</strong> ${parseFloat(statement.oneTimeTotal).toFixed(2)}
+                        </Typography>
+                        <Typography variant="h5" sx={{ mt: 1, color: "primary.main" }}>
+                          <strong>GRAND TOTAL:</strong> ${parseFloat(statement.grandTotal).toFixed(2)}
+                        </Typography>
+                      </>
+                    )}
+                  </Box>
+                </Box>
+              )}
+            </Box>
+        </Paper>
+
         {/* Recurring Expense Dialog */}
         <Dialog open={openRecurringDialog} onClose={() => setOpenRecurringDialog(false)} maxWidth="md" fullWidth>
           <DialogTitle>{editingRecurring ? "Edit Recurring Expense" : "Add Recurring Expense"}</DialogTitle>
@@ -766,7 +1016,7 @@ export default function ExpensesRevenuesPage() {
             <RecurringExpenseDialogContent
               formData={recurringFormData}
               setFormData={setRecurringFormData}
-              expenseCategories={expenseCategories.filter(c => c.categoryType === "FIXED")}
+              expenseCategories={expenseCategories}
               cabs={cabs}
               drivers={drivers}
               editing={editingRecurring}
@@ -794,6 +1044,20 @@ export default function ExpensesRevenuesPage() {
               <Grid item xs={12} md={6}>
                 <TextField label="Expense Date" type="date" value={oneTimeFormData.expenseDate} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseDate: e.target.value })}
                   fullWidth required InputLabelProps={{ shrink: true }} />
+              </Grid>
+
+              <Grid item xs={12} md={6}>
+                <FormControl fullWidth required>
+                  <InputLabel>Category</InputLabel>
+                  <Select value={oneTimeFormData.expenseCategoryId} label="Category" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseCategoryId: e.target.value })}>
+                    <MenuItem value="">Select Category</MenuItem>
+                    {expenseCategories.map(cat => (
+                      <MenuItem key={cat.id} value={cat.id}>
+                        {cat.categoryName} <Chip label={cat.categoryType} size="small" sx={{ ml: 1 }} />
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
               </Grid>
 
               {/* Charge To / Application Type */}
