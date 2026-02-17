@@ -62,6 +62,8 @@ import {
   Person as PersonIcon,
   AttachMoney as MoneyIcon,
   Category as CategoryIcon,
+  Tune as TuneIcon,
+  Delete as DeleteIcon,
 } from "@mui/icons-material";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
 
@@ -121,6 +123,21 @@ export default function ShiftsPage() {
     airportLicenseNumber: "",
     airportLicenseExpiry: "",
   });
+
+  // Manage Custom Attributes dialog states
+  const [openManageAttributesDialog, setOpenManageAttributesDialog] = useState(false);
+  const [allAttributeTypes, setAllAttributeTypes] = useState([]);
+  const [managingAttributesForShift, setManagingAttributesForShift] = useState(null);
+  const [attributeDialogLoading, setAttributeDialogLoading] = useState(false);
+  const [addAttributeForm, setAddAttributeForm] = useState({
+    attributeTypeId: "",
+    attributeValue: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: "",
+    notes: "",
+  });
+  const [currentAttributes, setCurrentAttributes] = useState([]);
+  const [attributeHistoryAll, setAttributeHistoryAll] = useState([]);
 
   // Tab state
   const [tabValue, setTabValue] = useState(0);
@@ -322,6 +339,217 @@ export default function ShiftsPage() {
       console.error("Error loading custom attributes:", err);
       setCustomAttributes([]);
       setAttributeHistory([]);
+    }
+  };
+
+  // Load all active attribute types for the dialog
+  const loadAllAttributeTypes = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cab-attribute-types/active`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setAllAttributeTypes(data);
+      } else {
+        setAllAttributeTypes([]);
+      }
+    } catch (err) {
+      console.error("Error loading attribute types:", err);
+      setAllAttributeTypes([]);
+    }
+  };
+
+  // Open manage attributes dialog
+  const handleOpenManageAttributesDialog = async (shift) => {
+    setManagingAttributesForShift(shift);
+    setAddAttributeForm({
+      attributeTypeId: "",
+      attributeValue: "",
+      startDate: new Date().toISOString().split("T")[0],
+      endDate: "",
+      notes: "",
+    });
+    setAttributeDialogLoading(true);
+
+    try {
+      // Load both attribute types and current attributes in parallel
+      await Promise.all([
+        loadAllAttributeTypes(),
+        (async () => {
+          const [currentRes, historyRes] = await Promise.all([
+            fetch(`${API_BASE_URL}/cab-shifts/${shift.id}/custom-attributes/current`, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+                "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+              },
+            }),
+            fetch(`${API_BASE_URL}/cab-shifts/${shift.id}/custom-attributes/history`, {
+              headers: {
+                Authorization: `Bearer ${localStorage.getItem("token")}`,
+                "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+              },
+            }),
+          ]);
+
+          if (currentRes.ok) {
+            setCurrentAttributes(await currentRes.json());
+          } else {
+            setCurrentAttributes([]);
+          }
+
+          if (historyRes.ok) {
+            setAttributeHistoryAll(await historyRes.json());
+          } else {
+            setAttributeHistoryAll([]);
+          }
+        })(),
+      ]);
+    } catch (err) {
+      console.error("Error loading data for manage attributes dialog:", err);
+      setCurrentAttributes([]);
+      setAttributeHistoryAll([]);
+      setAllAttributeTypes([]);
+    } finally {
+      setAttributeDialogLoading(false);
+      setOpenManageAttributesDialog(true);
+    }
+  };
+
+  // Add attribute to shift
+  const handleAddAttribute = async () => {
+    if (!managingAttributesForShift || !addAttributeForm.attributeTypeId) {
+      setError("Please select an attribute type");
+      return;
+    }
+
+    setAttributeDialogLoading(true);
+    try {
+      const body = {
+        attributeTypeId: parseInt(addAttributeForm.attributeTypeId),
+        attributeValue: addAttributeForm.attributeValue || "",
+        startDate: addAttributeForm.startDate,
+        endDate: addAttributeForm.endDate || null,
+        notes: addAttributeForm.notes || "",
+      };
+
+      const response = await fetch(
+        `${API_BASE_URL}/cab-shifts/${managingAttributesForShift.id}/custom-attributes`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+          body: JSON.stringify(body),
+        }
+      );
+
+      if (response.ok) {
+        setSuccess("Attribute added successfully");
+        setAddAttributeForm({
+          attributeTypeId: "",
+          attributeValue: "",
+          startDate: new Date().toISOString().split("T")[0],
+          endDate: "",
+          notes: "",
+        });
+        // Reload current attributes
+        const currentRes = await fetch(
+          `${API_BASE_URL}/cab-shifts/${managingAttributesForShift.id}/custom-attributes/current`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+          }
+        );
+        if (currentRes.ok) {
+          setCurrentAttributes(await currentRes.json());
+        }
+        // Also reload history
+        const historyRes = await fetch(
+          `${API_BASE_URL}/cab-shifts/${managingAttributesForShift.id}/custom-attributes/history`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+          }
+        );
+        if (historyRes.ok) {
+          setAttributeHistoryAll(await historyRes.json());
+        }
+      } else {
+        const error = await response.json();
+        setError(error.message || "Failed to add attribute");
+      }
+    } catch (err) {
+      console.error("Error adding attribute:", err);
+      setError(err.message || "Error adding attribute");
+    } finally {
+      setAttributeDialogLoading(false);
+    }
+  };
+
+  // End/remove attribute
+  const handleEndAttribute = async (attributeValueId) => {
+    if (!managingAttributesForShift) return;
+
+    setAttributeDialogLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/cab-shifts/${managingAttributesForShift.id}/custom-attributes/${attributeValueId}/end`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+          body: JSON.stringify({
+            endDate: new Date().toISOString().split("T")[0],
+          }),
+        }
+      );
+
+      if (response.ok) {
+        setSuccess("Attribute removed successfully");
+        // Reload current and history attributes
+        const [currentRes, historyRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/cab-shifts/${managingAttributesForShift.id}/custom-attributes/current`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+          }),
+          fetch(`${API_BASE_URL}/cab-shifts/${managingAttributesForShift.id}/custom-attributes/history`, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+          }),
+        ]);
+
+        if (currentRes.ok) {
+          setCurrentAttributes(await currentRes.json());
+        }
+        if (historyRes.ok) {
+          setAttributeHistoryAll(await historyRes.json());
+        }
+      } else {
+        const error = await response.json();
+        setError(error.message || "Failed to remove attribute");
+      }
+    } catch (err) {
+      console.error("Error removing attribute:", err);
+      setError(err.message || "Error removing attribute");
+    } finally {
+      setAttributeDialogLoading(false);
     }
   };
 
@@ -1447,6 +1675,14 @@ export default function ShiftsPage() {
                                 >
                                   Edit Attributes
                                 </Button>
+                                <Button
+                                  variant="outlined"
+                                  startIcon={<TuneIcon />}
+                                  onClick={() => handleOpenManageAttributesDialog(shift)}
+                                  size="small"
+                                >
+                                  Custom Attributes
+                                </Button>
                                 {!shift.isActive && (
                                   <Button
                                     variant="contained"
@@ -2425,6 +2661,227 @@ export default function ShiftsPage() {
             color="primary"
           >
             Assign Profile
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manage Custom Attributes Dialog */}
+      <Dialog open={openManageAttributesDialog} onClose={() => setOpenManageAttributesDialog(false)} maxWidth="md" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">
+              Custom Attributes — {managingAttributesForShift && `Cab ${managingAttributesForShift.cabNumber} ${managingAttributesForShift.shiftTypeDisplay}`}
+            </Typography>
+            <IconButton onClick={() => setOpenManageAttributesDialog(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+
+          {attributeDialogLoading ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 3 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <>
+              {/* Active Attributes Section */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                  Active Attributes
+                </Typography>
+                {currentAttributes.length === 0 ? (
+                  <Alert severity="info">No custom attributes assigned</Alert>
+                ) : (
+                  <TableContainer sx={{ mb: 2 }}>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                          <TableCell>Code</TableCell>
+                          <TableCell>Value</TableCell>
+                          <TableCell>Start Date</TableCell>
+                          <TableCell align="right">Action</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {currentAttributes.map((attr) => (
+                          <TableRow key={attr.id}>
+                            <TableCell>
+                              <Chip label={attr.attributeCode} size="small" />
+                            </TableCell>
+                            <TableCell>{attr.attributeValue || "-"}</TableCell>
+                            <TableCell>{attr.startDate}</TableCell>
+                            <TableCell align="right">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleEndAttribute(attr.id)}
+                                disabled={attributeDialogLoading}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Add New Attribute Section */}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                  Add New Attribute
+                </Typography>
+
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Attribute Type</InputLabel>
+                  <Select
+                    value={addAttributeForm.attributeTypeId}
+                    label="Attribute Type"
+                    onChange={(e) =>
+                      setAddAttributeForm({
+                        ...addAttributeForm,
+                        attributeTypeId: e.target.value,
+                      })
+                    }
+                  >
+                    <MenuItem value="">Select an attribute type...</MenuItem>
+                    {allAttributeTypes.map((type) => (
+                      <MenuItem key={type.id} value={type.id}>
+                        {type.attributeName} ({type.attributeCode})
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {addAttributeForm.attributeTypeId &&
+                  allAttributeTypes.find(t => t.id.toString() === addAttributeForm.attributeTypeId)?.requiresValue && (
+                  <TextField
+                    fullWidth
+                    label="Value"
+                    value={addAttributeForm.attributeValue}
+                    onChange={(e) =>
+                      setAddAttributeForm({
+                        ...addAttributeForm,
+                        attributeValue: e.target.value,
+                      })
+                    }
+                    sx={{ mb: 2 }}
+                  />
+                )}
+
+                <TextField
+                  fullWidth
+                  label="Start Date"
+                  type="date"
+                  value={addAttributeForm.startDate}
+                  onChange={(e) =>
+                    setAddAttributeForm({
+                      ...addAttributeForm,
+                      startDate: e.target.value,
+                    })
+                  }
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ mb: 2 }}
+                />
+
+                <TextField
+                  fullWidth
+                  label="End Date (optional)"
+                  type="date"
+                  value={addAttributeForm.endDate}
+                  onChange={(e) =>
+                    setAddAttributeForm({
+                      ...addAttributeForm,
+                      endDate: e.target.value,
+                    })
+                  }
+                  InputLabelProps={{ shrink: true }}
+                  sx={{ mb: 2 }}
+                />
+
+                <TextField
+                  fullWidth
+                  label="Notes (optional)"
+                  multiline
+                  rows={2}
+                  value={addAttributeForm.notes}
+                  onChange={(e) =>
+                    setAddAttributeForm({
+                      ...addAttributeForm,
+                      notes: e.target.value,
+                    })
+                  }
+                  placeholder="e.g., Special conditions or context"
+                  sx={{ mb: 2 }}
+                />
+
+                <Button
+                  fullWidth
+                  variant="contained"
+                  onClick={handleAddAttribute}
+                  disabled={attributeDialogLoading || !addAttributeForm.attributeTypeId}
+                >
+                  Add Attribute
+                </Button>
+              </Box>
+
+              <Divider sx={{ my: 3 }} />
+
+              {/* Attribute History Section */}
+              <Box>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold" }}>
+                  Attribute History
+                </Typography>
+                {attributeHistoryAll.length === 0 ? (
+                  <Alert severity="info">No attribute history</Alert>
+                ) : (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                          <TableCell>Attribute</TableCell>
+                          <TableCell>Value</TableCell>
+                          <TableCell>Start Date</TableCell>
+                          <TableCell>End Date</TableCell>
+                          <TableCell>Status</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {attributeHistoryAll.map((attr) => (
+                          <TableRow key={attr.id}>
+                            <TableCell>
+                              <Chip label={attr.attributeCode} size="small" />
+                            </TableCell>
+                            <TableCell>{attr.attributeValue || "-"}</TableCell>
+                            <TableCell>{attr.startDate}</TableCell>
+                            <TableCell>{attr.endDate || "-"}</TableCell>
+                            <TableCell>
+                              {!attr.endDate ? (
+                                <Chip label="Active" color="success" size="small" />
+                              ) : (
+                                <Chip label="Ended" size="small" />
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </Box>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ borderTop: 1, borderColor: "divider", px: 3, py: 2 }}>
+          <Button onClick={() => setOpenManageAttributesDialog(false)} variant="contained">
+            Close
           </Button>
         </DialogActions>
       </Dialog>

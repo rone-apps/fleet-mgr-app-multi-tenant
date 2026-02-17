@@ -18,6 +18,9 @@ import AttributeCostsTab from "../expenses/components/AttributeCostsTab";
 // Statistics Component
 import FinancialStats from "./components/FinancialStats";
 
+// Help Dialog Component
+import FinancialHelpDialog from "./components/FinancialHelpDialog";
+
 // Icons
 import {
   Category as CategoryIcon,
@@ -34,6 +37,7 @@ export default function FinancialSetupPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
 
   // Statistics data
   const [stats, setStats] = useState({
@@ -90,7 +94,7 @@ export default function FinancialSetupPage() {
           )}
 
           {/* Statistics Cards */}
-          <FinancialStats stats={stats} />
+          <FinancialStats stats={stats} onHelpClick={() => setHelpDialogOpen(true)} />
 
           {/* Tabs */}
           <Paper>
@@ -160,6 +164,9 @@ export default function FinancialSetupPage() {
               />
             )}
           </Paper>
+
+          {/* Help Dialog */}
+          <FinancialHelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} />
         </Box>
       </Box>
     </LocalizationProvider>

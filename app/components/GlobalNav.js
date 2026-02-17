@@ -113,7 +113,7 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
               {/* Mobile: Icon buttons only */}
               <IconButton
                 color="inherit"
-                onClick={() => router.push("/")}
+                onClick={() => router.replace("/")}
                 sx={{
                   border: '1px solid rgba(255, 255, 255, 0.5)',
                   '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
@@ -141,7 +141,7 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
                 variant="outlined"
                 color="inherit"
                 startIcon={<Home />}
-                onClick={() => router.push("/")}
+                onClick={() => router.replace("/")}
                 sx={{
                   borderColor: 'rgba(255, 255, 255, 0.5)',
                   '&:hover': {

@@ -1,13 +1,14 @@
-import { Grid, Card, CardContent, Box, Typography } from "@mui/material";
+import { Grid, Card, CardContent, Box, Typography, Tooltip } from "@mui/material";
 import {
   Category as CategoryIcon,
   TrendingUp as RevenueIcon,
   Assignment as PlanIcon,
   AttachMoney as MoneyIcon,
   CreditCard as MerchantIcon,
+  HelpOutline as HelpIcon,
 } from "@mui/icons-material";
 
-export default function FinancialStats({ stats }) {
+export default function FinancialStats({ stats, onHelpClick }) {
   return (
     <Grid container spacing={3} sx={{ mb: 3 }}>
       <Grid item xs={12} sm={6} md={2}>
@@ -104,6 +105,38 @@ export default function FinancialStats({ stats }) {
             </Box>
           </CardContent>
         </Card>
+      </Grid>
+
+      <Grid item xs={12} sm={6} md={2}>
+        <Tooltip title="Click to view configuration guide">
+          <Card
+            onClick={onHelpClick}
+            sx={{
+              cursor: "pointer",
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+              color: "white",
+              transition: "all 0.3s ease",
+              "&:hover": {
+                transform: "translateY(-4px)",
+                boxShadow: "0 8px 24px rgba(102, 126, 234, 0.4)",
+              },
+            }}
+          >
+            <CardContent>
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <HelpIcon sx={{ fontSize: 28 }} />
+                <Box>
+                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    Help & Guide
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Learn More
+                  </Typography>
+                </Box>
+              </Box>
+            </CardContent>
+          </Card>
+        </Tooltip>
       </Grid>
     </Grid>
   );

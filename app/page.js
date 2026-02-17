@@ -66,10 +66,12 @@ import {
   StorefrontOutlined,
   GroupOutlined,
   AiOutlined,
-  SchemaOutlined
+  SchemaOutlined,
+  HelpOutline
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
+import FinancialHelpDialog from './financial-setup/components/FinancialHelpDialog';
 
 export default function HomePage() {
   const [user, setUser] = useState(null);
@@ -77,6 +79,7 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -357,18 +360,6 @@ export default function HomePage() {
                 </Grid>
               )}
 
-              {/* Shift Profiles */}
-              {['ADMIN', 'MANAGER', 'DISPATCHER', 'ACCOUNTANT'].includes(user.role) && (
-                <Grid item xs={12} sm={6} md={4}>
-                  <CategoryCard
-                    title="Shift Profiles"
-                    description="Manage reusable attribute bundles"
-                    icon={Category}
-                    gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
-                    onClick={() => setSelectedCategory('profiles')}
-                  />
-                </Grid>
-              )}
             </Grid>
           </>
         ) : (
@@ -377,6 +368,8 @@ export default function HomePage() {
             category={selectedCategory}
             onBack={() => setSelectedCategory(null)}
             onNavigate={(path) => router.push(path)}
+            helpDialogOpen={helpDialogOpen}
+            setHelpDialogOpen={setHelpDialogOpen}
           />
         )}
       </Container>
@@ -503,7 +496,7 @@ function CategoryCard({ title, description, icon: Icon, gradient, onClick }) {
 }
 
 // Sub-Category View Component
-function SubCategoryView({ user, category, onBack, onNavigate }) {
+function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, setHelpDialogOpen }) {
   const getSubCategories = () => {
     switch (category) {
       case 'account':
@@ -523,6 +516,16 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
       case 'operations':
         return [
           {
+            title: 'Users',
+            description: 'Manage system users, roles & permissions',
+            icon: People,
+            path: '/users',
+            roles: ['ADMIN', 'SUPER_ADMIN'],
+            badge: 'Admin Only',
+            gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            accent: '#fa709a'
+          },
+          {
             title: 'Drivers',
             description: 'Intelligent driver management & performance tracking',
             icon: GroupOutlined,
@@ -533,7 +536,7 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
             accent: '#667eea'
           },
           {
-            title: 'Fleet Management',
+            title: 'Cabs',
             description: 'Real-time vehicle tracking & maintenance scheduling',
             icon: LocalShipping,
             path: '/cabs',
@@ -554,6 +557,16 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
           },
           {
             title: 'Shift Profiles',
+            description: 'Manage reusable attribute bundles',
+            icon: Category,
+            path: '/shift-profiles',
+            roles: ['ADMIN', 'MANAGER', 'DISPATCHER', 'ACCOUNTANT'],
+            badge: 'Templates',
+            gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            accent: '#10b981'
+          },
+          {
+            title: 'Shift Attributes ',
             description: 'Define & manage shift attribute presets',
             icon: Palette,
             path: '/shift-attributes',
@@ -561,16 +574,6 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
             badge: 'Templates',
             gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
             accent: '#38f9d7'
-          },
-          {
-            title: 'Users',
-            description: 'Manage system users, roles & permissions',
-            icon: People,
-            path: '/users',
-            roles: ['ADMIN', 'SUPER_ADMIN'],
-            badge: 'Admin Only',
-            gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-            accent: '#fa709a'
           }
         ];
 
@@ -595,6 +598,17 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
             badge: 'Setup',
             gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
             accent: '#00f2fe'
+          },
+          {
+            title: 'Help & Guide',
+            description: 'Learn how to configure expenses, revenues & lease rates',
+            icon: HelpOutline,
+            path: '/financial-setup?help=true',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Documentation',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#764ba2',
+            isHelp: true
           }
         ];
 
@@ -618,6 +632,16 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
             roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
             badge: 'ML Powered',
             gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            accent: '#f5576c'
+          },
+          {
+            title: 'Statement Builder',
+            description: 'Generate detailed financial statements & settle accounts',
+            icon: ReceiptOutlined,
+            path: '/statement-builder',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Interactive',
+            gradient: 'linear-gradient(135deg, #f5576c 0%, #ffa502 100%)',
             accent: '#f5576c'
           }
         ];
@@ -745,8 +769,12 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
                 }
               }}
               onClick={() => {
-                storeCategoryNav(category);
-                onNavigate(item.path);
+                if (item.isHelp) {
+                  setHelpDialogOpen(true);
+                } else {
+                  storeCategoryNav(category);
+                  onNavigate(item.path);
+                }
               }}
             >
               <CardContent sx={{ p: 3, position: 'relative', zIndex: 1 }}>
@@ -804,6 +832,9 @@ function SubCategoryView({ user, category, onBack, onNavigate }) {
           </Grid>
         ))}
       </Grid>
+
+      {/* Financial Help Dialog */}
+      <FinancialHelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} />
     </>
   );
 }

@@ -42,6 +42,18 @@ export default function ReportsPage() {
   const [revenueTabIndex, setRevenueTabIndex] = useState(0);
   const [expenseTabIndex, setExpenseTabIndex] = useState(0);
 
+  // Helper function to filter lease expenses from one-time expenses
+  const getLeaseExpenses = () => {
+    if (!reportData?.oneTimeExpenses) return [];
+    return reportData.oneTimeExpenses.filter((exp) => exp.applicationType === "LEASE_RENT");
+  };
+
+  // Helper function to filter non-lease one-time expenses
+  const getOtherOneTimeExpenses = () => {
+    if (!reportData?.oneTimeExpenses) return [];
+    return reportData.oneTimeExpenses.filter((exp) => exp.applicationType !== "LEASE_RENT");
+  };
+
   // Filters for revenue details
   const [revenueFilters, setRevenueFilters] = useState({
     creditCardDateFrom: "",
@@ -1146,11 +1158,12 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                         onChange={(e, newValue) => setExpenseTabIndex(newValue)}
                       >
                         <Tab label={`Recurring Expenses (${reportData?.recurringExpenses?.length || 0})`} />
-                        <Tab label={`One-Time Expenses (${reportData?.oneTimeExpenses?.length || 0})`} />
+                        <Tab label={`Lease Expenses (${getLeaseExpenses().length})`} />
+                        <Tab label={`One-Time Expenses (${getOtherOneTimeExpenses().length})`} />
                       </Tabs>
                     </Box>
 
-                    {/* Recurring Expenses Tab */}
+                    {/* Recurring Expenses Tab - Index 0 */}
                     {expenseTabIndex === 0 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         {reportData?.recurringExpenses?.length > 0 ? (
@@ -1184,8 +1197,46 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                       </Box>
                     )}
 
-                    {/* One-Time Expenses Tab */}
+                    {/* Lease Expenses Tab - Index 1 */}
                     {expenseTabIndex === 1 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {getLeaseExpenses().length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#fff8e1" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
+                                  <TableCell><strong>Shift Type</strong></TableCell>
+                                  <TableCell><strong>Owner Name</strong></TableCell>
+                                  <TableCell><strong>Rate Breakdown</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {getLeaseExpenses().map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.date || "-"}</TableCell>
+                                    <TableCell><strong>{exp.description?.match(/Cab (\w+)/)?.[1] || "-"}</strong></TableCell>
+                                    <TableCell>{exp.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
+                                    <TableCell>{exp.description?.match(/Owner: (.+)$/)?.[1] || "-"}</TableCell>
+                                    <TableCell>{exp.entityDescription || "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      ${parseFloat(exp.amount).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No lease expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* One-Time Expenses Tab - Index 2 */}
+                    {expenseTabIndex === 2 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#d32f2f" }}>
                           Filters
@@ -1235,7 +1286,7 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                           </Grid>
                         </Grid>
 
-                        {reportData?.oneTimeExpenses?.length > 0 ? (
+                        {getOtherOneTimeExpenses().length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
                             <Table size="small">
                               <TableHead>
@@ -1243,11 +1294,14 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Category</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
+                                  <TableCell><strong>Shift Type</strong></TableCell>
+                                  <TableCell><strong>Details</strong></TableCell>
                                   <TableCell align="right"><strong>Amount</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {reportData.oneTimeExpenses
+                                {getOtherOneTimeExpenses()
                                   .filter((exp) => {
                                     if (expenseFilters.oneTimeDateFrom && exp.date < expenseFilters.oneTimeDateFrom) return false;
                                     if (expenseFilters.oneTimeDateTo && exp.date > expenseFilters.oneTimeDateTo) return false;
@@ -1255,16 +1309,28 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     if (expenseFilters.oneTimeAmountMax && parseFloat(exp.amount) > parseFloat(expenseFilters.oneTimeAmountMax)) return false;
                                     return true;
                                   })
-                                  .map((exp, idx) => (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{exp.date || "-"}</TableCell>
-                                      <TableCell>{exp.categoryName || "-"}</TableCell>
-                                      <TableCell>{exp.description || "-"}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                        ${parseFloat(exp.amount).toFixed(2)}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
+                                  .map((exp, idx) => {
+                                    // Use explicit fields from backend (much more reliable)
+                                    const cabNumber = exp.cabNumber || "-";
+                                    const shiftType = exp.shiftType || "-";
+                                    const chargeTarget = exp.chargeTarget || "-";
+
+                                    return (
+                                      <TableRow key={idx} hover>
+                                        <TableCell>{exp.date || "-"}</TableCell>
+                                        <TableCell>{exp.categoryName || "-"}</TableCell>
+                                        <TableCell>{exp.description || "-"}</TableCell>
+                                        <TableCell><strong>{cabNumber}</strong></TableCell>
+                                        <TableCell>{shiftType}</TableCell>
+                                        <TableCell sx={{ fontSize: "0.85rem", color: "#666" }}>
+                                          {chargeTarget}
+                                        </TableCell>
+                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                          ${parseFloat(exp.amount).toFixed(2)}
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  })}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1460,8 +1526,39 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                 </Box>
               )}
 
+              {/* Lease Expenses Section */}
+              {getLeaseExpenses().length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#f57f17" }}>
+                    Lease Expenses
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell>Rate Breakdown</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {getLeaseExpenses().map((exp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{exp.date || "-"}</TableCell>
+                            <TableCell>{exp.description || "-"}</TableCell>
+                            <TableCell>{exp.entityDescription || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
               {/* One-Time Expenses Section */}
-              {reportData.oneTimeExpenses && reportData.oneTimeExpenses.length > 0 && (
+              {getOtherOneTimeExpenses().length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
                     One-Time Expenses
@@ -1472,17 +1569,34 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                         <TableRow>
                           <TableCell>Date</TableCell>
                           <TableCell>Category</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell>Shift Type</TableCell>
+                          <TableCell>Details</TableCell>
                           <TableCell align="right">Amount</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportData.oneTimeExpenses.map((exp, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{exp.date || "-"}</TableCell>
-                            <TableCell>{exp.categoryName || "-"}</TableCell>
-                            <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {getOtherOneTimeExpenses().map((exp, idx) => {
+                          // Use explicit fields from backend (much more reliable)
+                          const cabNumber = exp.cabNumber || "-";
+                          const shiftType = exp.shiftType || "-";
+                          const chargeTarget = exp.chargeTarget || "-";
+
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{exp.date || "-"}</TableCell>
+                              <TableCell>{exp.categoryName || "-"}</TableCell>
+                              <TableCell>{exp.description || "-"}</TableCell>
+                              <TableCell><strong>{cabNumber}</strong></TableCell>
+                              <TableCell>{shiftType}</TableCell>
+                              <TableCell sx={{ fontSize: "0.85rem", color: "#666" }}>
+                                {chargeTarget}
+                              </TableCell>
+                              <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                       </TableBody>
                     </Table>
                   </TableContainer>
