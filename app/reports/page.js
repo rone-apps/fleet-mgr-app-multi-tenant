@@ -27,6 +27,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [reportData, setReportData] = useState(null);
 
   // New state for banner/statement functionality
@@ -52,6 +53,27 @@ export default function ReportsPage() {
   const getOtherOneTimeExpenses = () => {
     if (!reportData?.oneTimeExpenses) return [];
     return reportData.oneTimeExpenses.filter((exp) => exp.applicationType !== "LEASE_RENT");
+  };
+
+  // Revenue type filter functions
+  const getLeaseRevenues = () => {
+    if (!reportData?.revenues) return [];
+    return reportData.revenues.filter((rev) => rev.revenueSubType === "LEASE_INCOME");
+  };
+
+  const getAccountChargeRevenues = () => {
+    if (!reportData?.revenues) return [];
+    return reportData.revenues.filter((rev) => rev.revenueSubType === "ACCOUNT_REVENUE");
+  };
+
+  const getCreditCardRevenues = () => {
+    if (!reportData?.revenues) return [];
+    return reportData.revenues.filter((rev) => rev.revenueSubType === "CREDIT_CARD_REVENUE");
+  };
+
+  const getOtherRevenues = () => {
+    if (!reportData?.revenues) return [];
+    return reportData.revenues.filter((rev) => rev.revenueSubType === "OTHER_REVENUE");
   };
 
   // Filters for revenue details
@@ -318,16 +340,47 @@ export default function ReportsPage() {
     setEmailDialogOpen(true);
   };
 
-  const handleSendEmail = () => {
+  const handleSendEmail = async () => {
     if (!emailAddress) {
       setError("Please enter an email address");
       return;
     }
-    const subject = `Financial Statement ${reportData?.periodFrom} to ${reportData?.periodTo}`;
-    const body = generateEmailBody();
-    window.location.href = `mailto:${emailAddress}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setEmailDialogOpen(false);
-    setEmailAddress("");
+
+    if (!reportData) {
+      setError("Please generate a report first");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const response = await fetch(`${API_BASE_URL}/financial-statements/send-report`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          toEmail: emailAddress,
+          driverName: reportData?.ownerName || "Driver",
+          report: reportData,
+        }),
+      });
+
+      if (response.ok) {
+        setSuccess(`Email with detailed PDF report sent successfully to ${emailAddress}`);
+        setEmailDialogOpen(false);
+        setEmailAddress("");
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to send email");
+      }
+    } catch (err) {
+      setError("Error sending email: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const generateEmailBody = () => {
@@ -477,6 +530,12 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
         {error && (
           <Alert severity="error" onClose={() => setError("")} sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+
+        {success && (
+          <Alert severity="success" onClose={() => setSuccess("")} sx={{ mb: 2 }}>
+            {success}
           </Alert>
         )}
 
@@ -1468,11 +1527,11 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                 </Box>
               </Box>
 
-              {/* Revenues Section */}
-              {reportData.revenues && reportData.revenues.length > 0 && (
+              {/* Lease Revenue Section */}
+              {getLeaseRevenues().length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#388e3c" }}>
-                    Revenues
+                    Lease Revenue
                   </Typography>
                   <TableContainer>
                     <Table size="small">
@@ -1480,14 +1539,109 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                         <TableRow>
                           <TableCell>Date</TableCell>
                           <TableCell>Category</TableCell>
+                          <TableCell>Description</TableCell>
                           <TableCell align="right">Amount</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportData.revenues.map((rev, idx) => (
+                        {getLeaseRevenues().map((rev, idx) => (
                           <TableRow key={idx}>
                             <TableCell>{rev.revenueDate || "-"}</TableCell>
                             <TableCell>{rev.categoryName || "-"}</TableCell>
+                            <TableCell>{rev.description || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Account Charges Section */}
+              {getAccountChargeRevenues().length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#1976d2" }}>
+                    Account Charges
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {getAccountChargeRevenues().map((rev, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{rev.revenueDate || "-"}</TableCell>
+                            <TableCell>{rev.categoryName || "-"}</TableCell>
+                            <TableCell>{rev.description || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Credit Card Revenue Section */}
+              {getCreditCardRevenues().length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#d32f2f" }}>
+                    Credit Card Revenue
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {getCreditCardRevenues().map((rev, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{rev.revenueDate || "-"}</TableCell>
+                            <TableCell>{rev.categoryName || "-"}</TableCell>
+                            <TableCell>{rev.description || "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Other Revenue Section */}
+              {getOtherRevenues().length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#f57c00" }}>
+                    Other Revenues
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Category</TableCell>
+                          <TableCell>Description</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {getOtherRevenues().map((rev, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{rev.revenueDate || "-"}</TableCell>
+                            <TableCell>{rev.categoryName || "-"}</TableCell>
+                            <TableCell>{rev.description || "-"}</TableCell>
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}

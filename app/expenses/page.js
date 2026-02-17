@@ -6,7 +6,7 @@ import {
   TableHead, TableRow, Dialog, DialogTitle, DialogContent, DialogActions,
   TextField, MenuItem, FormControl, InputLabel, Select, IconButton, Chip,
   Alert, AlertTitle, Card, CardContent, Grid, Tabs, Tab, InputAdornment,
-  Switch, FormControlLabel,
+  Switch, FormControlLabel, Autocomplete,
 } from "@mui/material";
 import {
   Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
@@ -77,9 +77,15 @@ export default function ExpensesRevenuesPage() {
   });
 
   const [revenueFormData, setRevenueFormData] = useState({
-    revenueCategoryId: "", entityType: "DRIVER", entityId: "", shiftType: "", amount: "",
+    revenueCategoryId: null, amount: "",
     revenueDate: new Date().toISOString().split('T')[0], revenueType: "CREDIT",
-    description: "", referenceNumber: "", paymentStatus: "PENDING", paymentMethod: "", notes: "",
+    description: "", referenceNumber: "", paymentStatus: "PENDING",
+    // ✅ NEW: Application Type System
+    applicationType: null,
+    shiftProfileId: null,
+    specificShiftId: null,
+    specificPersonId: null,
+    attributeTypeId: null,
   });
 
   const canEdit = ["ADMIN", "MANAGER", "ACCOUNTANT"].includes(currentUser?.role);
@@ -425,9 +431,15 @@ export default function ExpensesRevenuesPage() {
     } else {
       setEditingRevenue(null);
       setRevenueFormData({
-        revenueCategoryId: "", entityType: "DRIVER", entityId: "", shiftType: "", amount: "",
+        revenueCategoryId: null, amount: "",
         revenueDate: new Date().toISOString().split('T')[0], revenueType: "CREDIT",
-        description: "", referenceNumber: "", paymentStatus: "PENDING", paymentMethod: "", notes: "",
+        description: "", referenceNumber: "", paymentStatus: "PENDING",
+        // ✅ NEW: Application Type System
+        applicationType: null,
+        shiftProfileId: null,
+        specificShiftId: null,
+        specificPersonId: null,
+        attributeTypeId: null,
       });
     }
     setError("");
@@ -436,40 +448,50 @@ export default function ExpensesRevenuesPage() {
   };
 
   const handleSaveRevenue = async () => {
-    if (!revenueFormData.revenueCategoryId || !revenueFormData.entityId || !revenueFormData.amount || !revenueFormData.revenueDate) {
-      setError("Required fields missing");
+    if (!revenueFormData.amount || !revenueFormData.revenueDate) {
+      setError("Required fields missing: Amount and Revenue Date");
       return;
     }
-    try {
-      const selectedEntityPerson =
-        (revenueFormData.entityType === "DRIVER" || revenueFormData.entityType === "OWNER")
-          ? drivers.find((d) => String(d.id) === String(revenueFormData.entityId))
-          : null;
 
+    // Validate application type requirements
+    if (revenueFormData.applicationType === "SHIFT_PROFILE" && !revenueFormData.shiftProfileId) {
+      setError("Shift Profile ID is required");
+      return;
+    }
+    if (revenueFormData.applicationType === "SPECIFIC_SHIFT" && !revenueFormData.specificShiftId) {
+      setError("Specific Shift is required");
+      return;
+    }
+    if (revenueFormData.applicationType === "SPECIFIC_PERSON" && !revenueFormData.specificPersonId) {
+      setError("Specific Person is required");
+      return;
+    }
+    if (revenueFormData.applicationType === "SHIFTS_WITH_ATTRIBUTE" && !revenueFormData.attributeTypeId) {
+      setError("Attribute Type is required");
+      return;
+    }
+
+    try {
       const payload = {
         revenueDate: revenueFormData.revenueDate,
         amount: parseFloat(revenueFormData.amount),
-        entityType: revenueFormData.entityType,
-        entityId: parseInt(revenueFormData.entityId), // ✅ ADDED entityId
         revenueType: revenueFormData.revenueType,
         description: revenueFormData.description,
-        referenceNumber: revenueFormData.referenceNumber,
-        paymentStatus: revenueFormData.paymentStatus,
-        paymentMethod: revenueFormData.paymentMethod,
-        notes: revenueFormData.notes,
-        category: { id: revenueFormData.revenueCategoryId },
+        referenceNumber: revenueFormData.referenceNumber || null,
+        paymentStatus: revenueFormData.paymentStatus || "PENDING",
+        // ✅ NEW: Application Type System
+        applicationType: revenueFormData.applicationType || null,
+        shiftProfileId: revenueFormData.shiftProfileId || null,
+        specificShiftId: revenueFormData.specificShiftId || null,
+        specificPersonId: revenueFormData.specificPersonId || null,
+        attributeTypeId: revenueFormData.attributeTypeId || null,
       };
-      if (revenueFormData.entityType === "DRIVER" && selectedEntityPerson?.driverNumber != null) {
-        payload.driverNumber = selectedEntityPerson.driverNumber;
+
+      // Add category if provided
+      if (revenueFormData.revenueCategoryId) {
+        payload.categoryId = revenueFormData.revenueCategoryId;
       }
-      if (revenueFormData.entityType === "OWNER" && selectedEntityPerson?.driverNumber != null) {
-        payload.ownerDriverNumber = selectedEntityPerson.driverNumber;
-      }
-      if (revenueFormData.entityType === "DRIVER") payload.driver = { id: revenueFormData.entityId };
-      else if (revenueFormData.entityType === "OWNER") payload.owner = { id: revenueFormData.entityId };
-      else if (revenueFormData.entityType === "CAB") payload.cab = { id: revenueFormData.entityId };
-      else if (revenueFormData.entityType === "SHIFT") payload.shift = { id: revenueFormData.shiftType === "DAY" ? 1 : 2, shiftType: revenueFormData.shiftType };
-      
+
       const url = editingRevenue ? `${API_BASE_URL}/other-revenues/${editingRevenue.id}` : `${API_BASE_URL}/other-revenues`;
       const response = await fetch(url, {
         method: editingRevenue ? "PUT" : "POST",
@@ -481,9 +503,12 @@ export default function ExpensesRevenuesPage() {
         setOpenRevenueDialog(false);
         loadOtherRevenues();
       } else {
-        setError(await response.text() || "Failed");
+        const errorText = await response.text();
+        setError(errorText || "Failed to save revenue");
       }
-    } catch (err) { setError(err.message); }
+    } catch (err) {
+      setError("Error: " + err.message);
+    }
   };
 
   const getEntityDisplay = (entityType, entityId, shiftType, driver, owner, cab) => {
@@ -843,7 +868,7 @@ export default function ExpensesRevenuesPage() {
                       <TableCell>Date</TableCell>
                       <TableCell>Category</TableCell>
                       <TableCell>Type</TableCell>
-                      <TableCell>Entity</TableCell>
+                      <TableCell>Applied To</TableCell>
                       <TableCell>Description</TableCell>
                       <TableCell>Payment Status</TableCell>
                       <TableCell align="right">Amount</TableCell>
@@ -853,9 +878,9 @@ export default function ExpensesRevenuesPage() {
                     {filteredRevenues.map(revenue => (
                       <TableRow key={revenue.id}>
                         <TableCell>{revenue.revenueDate}</TableCell>
-                        <TableCell><Chip label={revenue.categoryName} size="small" color="success" /></TableCell>
+                        <TableCell><Chip label={revenue.categoryName || "Uncategorized"} size="small" color="success" /></TableCell>
                         <TableCell><Chip label={revenue.revenueType} size="small" variant="outlined" color="success" /></TableCell>
-                        <TableCell>{revenue.entityDisplayName || '-'}</TableCell>
+                        <TableCell><Chip label={revenue.applicationTypeDisplay || "General"} size="small" variant="outlined" /></TableCell>
                         <TableCell>{revenue.description || "-"}</TableCell>
                         <TableCell><Chip label={revenue.paymentStatus} size="small" color={revenue.paymentStatus === "PAID" ? "success" : "warning"} /></TableCell>
                         <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="success.main">${parseFloat(revenue.amount).toFixed(2)}</Typography></TableCell>
@@ -918,125 +943,96 @@ export default function ExpensesRevenuesPage() {
               </Grid>
 
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Category (Optional)</InputLabel>
-                  <Select value={oneTimeFormData.expenseCategoryId || ""} label="Category (Optional)" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, expenseCategoryId: e.target.value || null })}>
-                    <MenuItem value="">None - Standalone Expense</MenuItem>
-                    {expenseCategories.map(cat => (
-                      <MenuItem key={cat.id} value={cat.id}>
-                        {cat.categoryName} <Chip label={cat.categoryType} size="small" sx={{ ml: 1 }} />
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={[{ id: null, categoryName: "None - Standalone Expense" }, ...expenseCategories]}
+                  getOptionLabel={(option) => option.categoryName}
+                  getOptionKey={(option) => `expense-category-${option.id || 'none'}`}
+                  value={oneTimeFormData.expenseCategoryId ? expenseCategories.find(c => c.id === oneTimeFormData.expenseCategoryId) || null : null}
+                  onChange={(event, newValue) => setOneTimeFormData({ ...oneTimeFormData, expenseCategoryId: newValue?.id || null })}
+                  renderInput={(params) => <TextField {...params} label="Category (Optional)" />}
+                />
               </Grid>
 
               {/* Charge To / Application Type - Now Optional for Standalone Expenses */}
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Charge To (Optional - for targeting)</InputLabel>
-                  <Select
-                    value={oneTimeFormData.applicationType || ""}
-                    label="Charge To (Optional - for targeting)"
-                    onChange={(e) => setOneTimeFormData({
-                      ...oneTimeFormData,
-                      applicationType: e.target.value || null,
-                      shiftProfileId: null,
-                      specificShiftId: null,
-                      specificPersonId: null,
-                      attributeTypeId: null
-                    })}
-                  >
-                    <MenuItem value="">No Specific Targeting (General Expense)</MenuItem>
-                    <MenuItem value="SHIFT_PROFILE">Shift Profile (All Matching Shifts)</MenuItem>
-                    <MenuItem value="SPECIFIC_SHIFT">Specific Shift</MenuItem>
-                    <MenuItem value="SPECIFIC_PERSON">Specific Person (Driver or Owner)</MenuItem>
-                    <MenuItem value="SHIFTS_WITH_ATTRIBUTE">Shifts With Attribute</MenuItem>
-                    <MenuItem value="ALL_ACTIVE_SHIFTS">All Active Shifts</MenuItem>
-                    <MenuItem value="ALL_OWNERS">All Owners</MenuItem>
-                    <MenuItem value="ALL_DRIVERS">All Drivers</MenuItem>
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={[
+                    { value: null, label: "No Specific Targeting (General Expense)" },
+                    { value: "SHIFT_PROFILE", label: "Shift Profile (All Matching Shifts)" },
+                    { value: "SPECIFIC_SHIFT", label: "Specific Shift" },
+                    { value: "SPECIFIC_PERSON", label: "Specific Person (Driver or Owner)" },
+                    { value: "SHIFTS_WITH_ATTRIBUTE", label: "Shifts With Attribute" },
+                    { value: "ALL_ACTIVE_SHIFTS", label: "All Active Shifts" },
+                    { value: "ALL_OWNERS", label: "All Owners" },
+                    { value: "ALL_DRIVERS", label: "All Drivers" },
+                  ]}
+                  getOptionLabel={(option) => option.label}
+                  value={oneTimeFormData.applicationType ?
+                    { value: oneTimeFormData.applicationType, label: ["No Specific Targeting (General Expense)", "Shift Profile (All Matching Shifts)", "Specific Shift", "Specific Person (Driver or Owner)", "Shifts With Attribute", "All Active Shifts", "All Owners", "All Drivers"][["SHIFT_PROFILE", "SPECIFIC_SHIFT", "SPECIFIC_PERSON", "SHIFTS_WITH_ATTRIBUTE", "ALL_ACTIVE_SHIFTS", "ALL_OWNERS", "ALL_DRIVERS"].indexOf(oneTimeFormData.applicationType) + 1] }
+                    : { value: null, label: "No Specific Targeting (General Expense)" }
+                  }
+                  onChange={(event, newValue) => setOneTimeFormData({
+                    ...oneTimeFormData,
+                    applicationType: newValue?.value || null,
+                    shiftProfileId: null,
+                    specificShiftId: null,
+                    specificPersonId: null,
+                    attributeTypeId: null
+                  })}
+                  renderInput={(params) => <TextField {...params} label="Charge To (Optional - for targeting)" />}
+                />
               </Grid>
 
               {/* Conditional fields based on application type */}
               {oneTimeFormData.applicationType === "SHIFT_PROFILE" && (
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Shift Profile</InputLabel>
-                    <Select
-                      value={oneTimeFormData.shiftProfileId || ""}
-                      label="Shift Profile"
-                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, shiftProfileId: e.target.value })}
-                    >
-                      <MenuItem value="">Select Profile</MenuItem>
-                      {shiftProfiles.map((profile) => (
-                        <MenuItem key={profile.id} value={profile.id}>
-                          {profile.profileName}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={shiftProfiles}
+                    getOptionLabel={(option) => option.profileName}
+                    getOptionKey={(option) => `shift-profile-${option.id}`}
+                    value={oneTimeFormData.shiftProfileId ? shiftProfiles.find(p => p.id === oneTimeFormData.shiftProfileId) || null : null}
+                    onChange={(event, newValue) => setOneTimeFormData({ ...oneTimeFormData, shiftProfileId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Shift Profile" required />}
+                  />
                 </Grid>
               )}
 
               {oneTimeFormData.applicationType === "SPECIFIC_SHIFT" && (
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Shift</InputLabel>
-                    <Select
-                      value={oneTimeFormData.specificShiftId || ""}
-                      label="Shift"
-                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, specificShiftId: e.target.value })}
-                    >
-                      <MenuItem value="">Select Shift</MenuItem>
-                      {shifts.map((shift) => (
-                        <MenuItem key={shift.id} value={shift.id}>
-                          Cab {shift.cabNumber} - {shift.shiftType}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={shifts}
+                    getOptionLabel={(option) => `Cab ${option.cabNumber} - ${option.shiftType}`}
+                    getOptionKey={(option) => `shift-${option.id}`}
+                    value={oneTimeFormData.specificShiftId ? shifts.find(s => s.id === oneTimeFormData.specificShiftId) || null : null}
+                    onChange={(event, newValue) => setOneTimeFormData({ ...oneTimeFormData, specificShiftId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Shift" required />}
+                  />
                 </Grid>
               )}
 
               {oneTimeFormData.applicationType === "SPECIFIC_PERSON" && (
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Select Person</InputLabel>
-                    <Select
-                      value={oneTimeFormData.specificPersonId || ""}
-                      label="Select Person"
-                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, specificPersonId: e.target.value })}
-                    >
-                      <MenuItem value="">Select a person...</MenuItem>
-                      {drivers.map(driver => (
-                        <MenuItem key={driver.id} value={driver.id}>
-                          {driver.firstName} {driver.lastName} {driver.isOwner ? "(Owner)" : "(Driver)"}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={drivers}
+                    getOptionLabel={(option) => `${option.firstName} ${option.lastName} ${option.isOwner ? "(Owner)" : "(Driver)"}`}
+                    getOptionKey={(option) => `driver-${option.id}`}
+                    value={oneTimeFormData.specificPersonId ? drivers.find(d => d.id === oneTimeFormData.specificPersonId) || null : null}
+                    onChange={(event, newValue) => setOneTimeFormData({ ...oneTimeFormData, specificPersonId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Select Person" required />}
+                  />
                 </Grid>
               )}
 
               {oneTimeFormData.applicationType === "SHIFTS_WITH_ATTRIBUTE" && (
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Attribute Type</InputLabel>
-                    <Select
-                      value={oneTimeFormData.attributeTypeId || ""}
-                      label="Attribute Type"
-                      onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, attributeTypeId: e.target.value })}
-                    >
-                      <MenuItem value="">Select Attribute Type</MenuItem>
-                      {attributeTypes.map((attrType) => (
-                        <MenuItem key={attrType.id} value={attrType.id}>
-                          {attrType.attributeName} ({attrType.code})
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={attributeTypes}
+                    getOptionLabel={(option) => `${option.attributeName} (${option.code})`}
+                    getOptionKey={(option) => `attribute-${option.id}`}
+                    value={oneTimeFormData.attributeTypeId ? attributeTypes.find(a => a.id === oneTimeFormData.attributeTypeId) || null : null}
+                    onChange={(event, newValue) => setOneTimeFormData({ ...oneTimeFormData, attributeTypeId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Attribute Type" required />}
+                  />
                 </Grid>
               )}
 
@@ -1045,15 +1041,12 @@ export default function ExpensesRevenuesPage() {
                   fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Paid By</InputLabel>
-                  <Select value={oneTimeFormData.paidBy} label="Paid By" onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, paidBy: e.target.value })}>
-                    <MenuItem value="DRIVER">Driver</MenuItem>
-                    <MenuItem value="OWNER">Owner</MenuItem>
-                    <MenuItem value="COMPANY">Company</MenuItem>
-                    <MenuItem value="THIRD_PARTY">Third Party</MenuItem>
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={["DRIVER", "OWNER", "COMPANY", "THIRD_PARTY"]}
+                  value={oneTimeFormData.paidBy}
+                  onChange={(event, newValue) => setOneTimeFormData({ ...oneTimeFormData, paidBy: newValue })}
+                  renderInput={(params) => <TextField {...params} label="Paid By" required />}
+                />
               </Grid>
               <Grid item xs={12} md={6}>
                 <TextField label="Vendor" value={oneTimeFormData.vendor} onChange={(e) => setOneTimeFormData({ ...oneTimeFormData, vendor: e.target.value })} fullWidth />
@@ -1072,94 +1065,144 @@ export default function ExpensesRevenuesPage() {
 
         {/* Revenue Dialog */}
         <Dialog open={openRevenueDialog} onClose={() => setOpenRevenueDialog(false)} maxWidth="md" fullWidth>
-          <DialogTitle sx={{ bgcolor: "success.light" }}>{editingRevenue ? "Edit Revenue" : "Add Other Revenue"}</DialogTitle>
+          <DialogTitle>{editingRevenue ? "Edit Revenue" : "Add Other Revenue"}</DialogTitle>
           <DialogContent>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              <Typography sx={{ fontWeight: 600, mb: 1 }}>Other Revenues - Now Standalone</Typography>
+              <Typography variant="body2">
+                Create bonuses, credits, adjustments, or other revenue types without needing a pre-defined category.
+                You can optionally assign them to specific shifts, drivers, owners, or shift profiles.
+              </Typography>
+            </Alert>
             <Typography sx={{ fontWeight: 700, mb: 2 }}>
               You will not be able to edit the entry once made. You will have to create a counter entry (reversal), so be careful.
             </Typography>
             <Grid container spacing={2} sx={{ pt: 2 }}>
               <Grid item xs={12} md={6}>
-                <TextField label="Revenue Date" type="date" value={revenueFormData.revenueDate} onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueDate: e.target.value })} 
+                <TextField label="Revenue Name" value={revenueFormData.description || ""} onChange={(e) => setRevenueFormData({ ...revenueFormData, description: e.target.value })}
+                  fullWidth required placeholder="e.g., Performance Bonus, Driver Credit" />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField label="Revenue Date" type="date" value={revenueFormData.revenueDate} onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueDate: e.target.value })}
                   fullWidth required InputLabelProps={{ shrink: true }} />
               </Grid>
+
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Category</InputLabel>
-                  <Select value={revenueFormData.revenueCategoryId} label="Category" onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueCategoryId: e.target.value })}>
-                    {revenueCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={[{ id: null, categoryName: "None - Standalone Revenue" }, ...revenueCategories]}
+                  getOptionLabel={(option) => option.categoryName}
+                  getOptionKey={(option) => `revenue-category-${option.id || 'none'}`}
+                  value={revenueFormData.revenueCategoryId ? revenueCategories.find(c => c.id === revenueFormData.revenueCategoryId) || null : null}
+                  onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, revenueCategoryId: newValue?.id || null })}
+                  renderInput={(params) => <TextField {...params} label="Category (Optional)" />}
+                />
               </Grid>
+
+              {/* Apply To / Application Type - Optional for Standalone Revenues */}
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Revenue Type</InputLabel>
-                  <Select value={revenueFormData.revenueType} label="Revenue Type" onChange={(e) => setRevenueFormData({ ...revenueFormData, revenueType: e.target.value })}>
-                    <MenuItem value="BONUS">Bonus</MenuItem>
-                    <MenuItem value="CREDIT">Credit</MenuItem>
-                    <MenuItem value="ADJUSTMENT">Adjustment</MenuItem>
-                    <MenuItem value="REFERRAL">Referral Fee</MenuItem>
-                    <MenuItem value="INCENTIVE">Incentive</MenuItem>
-                    <MenuItem value="COMMISSION">Commission</MenuItem>
-                    <MenuItem value="OTHER">Other</MenuItem>
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={[
+                    { value: null, label: "No Specific Targeting (General Revenue)" },
+                    { value: "SHIFT_PROFILE", label: "Shift Profile (All Matching Shifts)" },
+                    { value: "SPECIFIC_SHIFT", label: "Specific Shift" },
+                    { value: "SPECIFIC_PERSON", label: "Specific Person (Driver or Owner)" },
+                    { value: "SHIFTS_WITH_ATTRIBUTE", label: "Shifts With Attribute" },
+                    { value: "ALL_ACTIVE_SHIFTS", label: "All Active Shifts" },
+                    { value: "ALL_OWNERS", label: "All Owners" },
+                    { value: "ALL_DRIVERS", label: "All Drivers" },
+                  ]}
+                  getOptionLabel={(option) => option.label}
+                  value={revenueFormData.applicationType ?
+                    { value: revenueFormData.applicationType, label: ["No Specific Targeting (General Revenue)", "Shift Profile (All Matching Shifts)", "Specific Shift", "Specific Person (Driver or Owner)", "Shifts With Attribute", "All Active Shifts", "All Owners", "All Drivers"][["SHIFT_PROFILE", "SPECIFIC_SHIFT", "SPECIFIC_PERSON", "SHIFTS_WITH_ATTRIBUTE", "ALL_ACTIVE_SHIFTS", "ALL_OWNERS", "ALL_DRIVERS"].indexOf(revenueFormData.applicationType) + 1] }
+                    : { value: null, label: "No Specific Targeting (General Revenue)" }
+                  }
+                  onChange={(event, newValue) => setRevenueFormData({
+                    ...revenueFormData,
+                    applicationType: newValue?.value || null,
+                    shiftProfileId: null,
+                    specificShiftId: null,
+                    specificPersonId: null,
+                    attributeTypeId: null
+                  })}
+                  renderInput={(params) => <TextField {...params} label="Apply To (Optional - for targeting)" />}
+                />
               </Grid>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth required>
-                  <InputLabel>Entity Type</InputLabel>
-                  <Select value={revenueFormData.entityType} label="Entity Type" onChange={(e) => setRevenueFormData({ ...revenueFormData, entityType: e.target.value, entityId: "", shiftType: "" })}>
-                    <MenuItem value="DRIVER">Driver</MenuItem>
-                    <MenuItem value="OWNER">Owner</MenuItem>
-                    <MenuItem value="CAB">Cab</MenuItem>
-                    <MenuItem value="SHIFT">Shift</MenuItem>
-                  </Select>
-                </FormControl>
-              </Grid>
-              {revenueFormData.entityType === "SHIFT" ? (
+
+              {/* Conditional fields based on application type */}
+              {revenueFormData.applicationType === "SHIFT_PROFILE" && (
                 <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Shift Type</InputLabel>
-                    <Select value={revenueFormData.shiftType} label="Shift Type" onChange={(e) => setRevenueFormData({ ...revenueFormData, shiftType: e.target.value, entityId: e.target.value === "DAY" ? "1" : "2" })}>
-                      <MenuItem value="DAY">Day Shift</MenuItem>
-                      <MenuItem value="NIGHT">Night Shift</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : revenueFormData.entityType === "CAB" ? (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Cab</InputLabel>
-                    <Select value={revenueFormData.entityId} label="Cab" onChange={(e) => setRevenueFormData({ ...revenueFormData, entityId: e.target.value })}>
-                      {cabs.map(cab => <MenuItem key={cab.id} value={cab.id}>Cab {cab.cabNumber}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              ) : (
-                <Grid item xs={12} md={6}>
-                  <FormControl fullWidth required>
-                    <InputLabel>Entity</InputLabel>
-                    <Select value={revenueFormData.entityId} label="Entity" onChange={(e) => setRevenueFormData({ ...revenueFormData, entityId: e.target.value })}>
-                      {(revenueFormData.entityType === "DRIVER" || revenueFormData.entityType === "OWNER") && drivers.map(driver => <MenuItem key={driver.id} value={driver.id}>{driver.firstName} {driver.lastName}</MenuItem>)}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={shiftProfiles}
+                    getOptionLabel={(option) => option.profileName}
+                    getOptionKey={(option) => `shift-profile-${option.id}`}
+                    value={revenueFormData.shiftProfileId ? shiftProfiles.find(p => p.id === revenueFormData.shiftProfileId) || null : null}
+                    onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, shiftProfileId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Shift Profile" required />}
+                  />
                 </Grid>
               )}
+
+              {revenueFormData.applicationType === "SPECIFIC_SHIFT" && (
+                <Grid item xs={12} md={6}>
+                  <Autocomplete
+                    options={shifts}
+                    getOptionLabel={(option) => `Cab ${option.cabNumber} - ${option.shiftType}`}
+                    getOptionKey={(option) => `shift-${option.id}`}
+                    value={revenueFormData.specificShiftId ? shifts.find(s => s.id === revenueFormData.specificShiftId) || null : null}
+                    onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, specificShiftId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Shift" required />}
+                  />
+                </Grid>
+              )}
+
+              {revenueFormData.applicationType === "SPECIFIC_PERSON" && (
+                <Grid item xs={12} md={6}>
+                  <Autocomplete
+                    options={drivers}
+                    getOptionLabel={(option) => `${option.firstName} ${option.lastName} ${option.isOwner ? "(Owner)" : "(Driver)"}`}
+                    getOptionKey={(option) => `driver-${option.id}`}
+                    value={revenueFormData.specificPersonId ? drivers.find(d => d.id === revenueFormData.specificPersonId) || null : null}
+                    onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, specificPersonId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Select Person" required />}
+                  />
+                </Grid>
+              )}
+
+              {revenueFormData.applicationType === "SHIFTS_WITH_ATTRIBUTE" && (
+                <Grid item xs={12} md={6}>
+                  <Autocomplete
+                    options={attributeTypes}
+                    getOptionLabel={(option) => `${option.attributeName} (${option.code})`}
+                    getOptionKey={(option) => `attribute-${option.id}`}
+                    value={revenueFormData.attributeTypeId ? attributeTypes.find(a => a.id === revenueFormData.attributeTypeId) || null : null}
+                    onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, attributeTypeId: newValue?.id || null })}
+                    renderInput={(params) => <TextField {...params} label="Attribute Type" required />}
+                  />
+                </Grid>
+              )}
+
               <Grid item xs={12} md={6}>
-                <TextField label="Amount" type="number" value={revenueFormData.amount} onChange={(e) => setRevenueFormData({ ...revenueFormData, amount: e.target.value })} 
+                <TextField label="Amount" type="number" value={revenueFormData.amount} onChange={(e) => setRevenueFormData({ ...revenueFormData, amount: e.target.value })}
                   fullWidth required InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} inputProps={{ step: "0.01", min: "0" }} />
               </Grid>
               <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Payment Status</InputLabel>
-                  <Select value={revenueFormData.paymentStatus} label="Payment Status" onChange={(e) => setRevenueFormData({ ...revenueFormData, paymentStatus: e.target.value })}>
-                    <MenuItem value="PENDING">Pending</MenuItem>
-                    <MenuItem value="PAID">Paid</MenuItem>
-                    <MenuItem value="CANCELLED">Cancelled</MenuItem>
-                  </Select>
-                </FormControl>
+                <Autocomplete
+                  options={["BONUS", "CREDIT", "ADJUSTMENT", "REFERRAL", "INCENTIVE", "COMMISSION", "REFUND", "REIMBURSEMENT", "OTHER"]}
+                  value={revenueFormData.revenueType}
+                  onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, revenueType: newValue })}
+                  renderInput={(params) => <TextField {...params} label="Revenue Type" required />}
+                />
               </Grid>
-              <Grid item xs={12}>
-                <TextField label="Description" value={revenueFormData.description} onChange={(e) => setRevenueFormData({ ...revenueFormData, description: e.target.value })} fullWidth multiline rows={2} />
+              <Grid item xs={12} md={6}>
+                <Autocomplete
+                  options={["PENDING", "PAID", "CANCELLED"]}
+                  value={revenueFormData.paymentStatus || "PENDING"}
+                  onChange={(event, newValue) => setRevenueFormData({ ...revenueFormData, paymentStatus: newValue })}
+                  renderInput={(params) => <TextField {...params} label="Payment Status" />}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <TextField label="Reference Number" value={revenueFormData.referenceNumber || ""} onChange={(e) => setRevenueFormData({ ...revenueFormData, referenceNumber: e.target.value })} fullWidth />
               </Grid>
             </Grid>
             {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
