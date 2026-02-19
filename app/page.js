@@ -72,6 +72,10 @@ import {
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
 import FinancialHelpDialog from './financial-setup/components/FinancialHelpDialog';
+import OperationsHelpCard from '../components/OperationsHelpCard';
+import AccountCustomerHelpCard from '../components/AccountCustomerHelpCard';
+import ReportsHelpCard from '../components/ReportsHelpCard';
+import DataIntegrationHelpCard from '../components/DataIntegrationHelpCard';
 
 export default function HomePage() {
   const [user, setUser] = useState(null);
@@ -737,6 +741,34 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
           </Box>
         </Box>
       </Box>
+
+      {/* Account & Customer Help Card */}
+      {category === 'account' && (
+        <Box sx={{ mb: 4 }}>
+          <AccountCustomerHelpCard />
+        </Box>
+      )}
+
+      {/* Operations Help Card */}
+      {category === 'operations' && (
+        <Box sx={{ mb: 4 }}>
+          <OperationsHelpCard />
+        </Box>
+      )}
+
+      {/* Reports Help Card */}
+      {category === 'reports' && (
+        <Box sx={{ mb: 4 }}>
+          <ReportsHelpCard />
+        </Box>
+      )}
+
+      {/* Data & Integrations Help Card */}
+      {category === 'integrations' && (
+        <Box sx={{ mb: 4 }}>
+          <DataIntegrationHelpCard />
+        </Box>
+      )}
 
       <Grid container spacing={3}>
         {subCategories.map((item, index) => (
