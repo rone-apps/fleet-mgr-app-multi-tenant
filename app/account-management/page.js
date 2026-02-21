@@ -139,6 +139,7 @@ export default function AccountManagementPage() {
     // Lookup data
     cabs,
     drivers,
+    paymentMethods,
 
     // Invoices (Tab 4)
     invoices,
@@ -150,6 +151,7 @@ export default function AccountManagementPage() {
     setOpenInvoiceDetailsDialog,
     openRecordPaymentDialog,
     setOpenRecordPaymentDialog,
+    isRecordingPayment,
     openCancelInvoiceDialog,
     setOpenCancelInvoiceDialog,
     cancelReason,
@@ -418,6 +420,8 @@ export default function AccountManagementPage() {
           setPaymentFormData={setPaymentFormData}
           handleRecordPayment={handleRecordPayment}
           error={error}
+          paymentMethods={paymentMethods}
+          isLoading={isRecordingPayment}
         />
 
         <CancelInvoiceDialog

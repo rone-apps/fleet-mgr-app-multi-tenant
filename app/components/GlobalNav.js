@@ -1,26 +1,12 @@
 "use client";
 
 import { Box, Typography, Button, IconButton, useMediaQuery, useTheme, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
-import { DirectionsCar, Home, Logout, Business, ArrowBack } from "@mui/icons-material";
+import { DirectionsCar, Home, Logout, Business } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getTenantName, logout as apiLogout } from "../lib/api";
+import BreadcrumbNav from "./BreadcrumbNav";
 
-// Mapping of page paths to their category
-const pageToCategory = {
-  '/drivers': { category: 'operations', categoryName: 'Operations' },
-  '/cabs': { category: 'operations', categoryName: 'Operations' },
-  '/shifts': { category: 'operations', categoryName: 'Operations' },
-  '/shift-attributes': { category: 'operations', categoryName: 'Operations' },
-  '/account-management': { category: 'account', categoryName: 'Account & Customers' },
-  '/expenses': { category: 'financials', categoryName: 'Financials' },
-  '/financial-setup': { category: 'financials', categoryName: 'Financials' },
-  '/reports': { category: 'reports', categoryName: 'Reports' },
-  '/driver-summary': { category: 'reports', categoryName: 'Reports' },
-  '/taxicaller-integration': { category: 'integrations', categoryName: 'Data & Integrations' },
-  '/data-uploads': { category: 'integrations', categoryName: 'Data & Integrations' },
-  '/shift-profiles': { category: 'profiles', categoryName: 'Shift Profiles' }
-};
 
 export default function GlobalNav({ currentUser, title = "FareFlow" }) {
   const router = useRouter();
@@ -28,19 +14,11 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [tenantName, setTenantName] = useState(null);
-  const [categoryInfo, setCategoryInfo] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   useEffect(() => {
     setTenantName(getTenantName());
-
-    // Get category info from current page
-    if (pageToCategory[pathname]) {
-      setCategoryInfo(pageToCategory[pathname]);
-    } else {
-      setCategoryInfo(null);
-    }
-  }, [pathname]);
+  }, []);
 
   const handleLogout = () => {
     setLogoutDialogOpen(true);
@@ -53,14 +31,6 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
 
   const handleCancelLogout = () => {
     setLogoutDialogOpen(false);
-  };
-
-  const handleBackToCategory = () => {
-    if (categoryInfo?.category) {
-      // Store the category in localStorage and go back to home
-      localStorage.setItem('dashboardCategory', categoryInfo.category);
-      router.push('/');
-    }
   };
 
   if (!currentUser) return null;
@@ -142,6 +112,7 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
                 color="inherit"
                 startIcon={<Home />}
                 onClick={() => router.replace("/")}
+                title="Go to Dashboard"
                 sx={{
                   borderColor: 'rgba(255, 255, 255, 0.5)',
                   '&:hover': {
@@ -150,7 +121,7 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
                   }
                 }}
               >
-                Home
+                Dashboard
               </Button>
               <Button
                 variant="outlined"
@@ -172,45 +143,9 @@ export default function GlobalNav({ currentUser, title = "FareFlow" }) {
         </Box>
       </Box>
 
-      {/* Back to Category Navigation - Simple and Obvious */}
-      {categoryInfo && (
-        <Box
-          sx={{
-            backgroundColor: "#2d5a3d",
-            color: "white",
-            p: { xs: 1.5, sm: 2 },
-            display: "flex",
-            alignItems: "center",
-            gap: 2,
-            borderTop: "3px solid #3e5244"
-          }}
-        >
-          <Button
-            variant="contained"
-            startIcon={<ArrowBack />}
-            onClick={handleBackToCategory}
-            sx={{
-              backgroundColor: "#3e5244",
-              color: "white",
-              fontWeight: 700,
-              textTransform: "none",
-              fontSize: "1rem",
-              px: 3,
-              '&:hover': {
-                backgroundColor: "#4a6652"
-              }
-            }}
-          >
-            ← Back to {categoryInfo.categoryName}
-          </Button>
 
-          <Box sx={{ borderLeft: '2px solid rgba(255, 255, 255, 0.3)', pl: 2 }}>
-            <Typography variant="body2" sx={{ color: 'rgba(255, 255, 255, 0.9)' }}>
-              Click to return to the {categoryInfo.categoryName} category
-            </Typography>
-          </Box>
-        </Box>
-      )}
+      {/* Breadcrumb Navigation */}
+      <BreadcrumbNav />
 
       {/* Professional Logout Confirmation Dialog */}
       <Dialog

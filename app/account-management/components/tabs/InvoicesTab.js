@@ -147,9 +147,9 @@ export default function InvoicesTab({
               <TableCell>Customer</TableCell>
               <TableCell>Date</TableCell>
               <TableCell>Due Date</TableCell>
-              <TableCell align="right">Total</TableCell>
-              <TableCell align="right">Paid</TableCell>
-              <TableCell align="right">Balance</TableCell>
+              <TableCell align="right">Total Amount</TableCell>
+              <TableCell align="right">Amount Paid</TableCell>
+              <TableCell align="right">Outstanding</TableCell>
               <TableCell>Status</TableCell>
               <TableCell align="right">Actions</TableCell>
             </TableRow>
@@ -199,12 +199,17 @@ export default function InvoicesTab({
                     {formatCurrency(invoice.amountPaid)}
                   </TableCell>
                   <TableCell align="right">
-                    <Typography
-                      fontWeight="bold"
-                      color={invoice.balanceDue > 0 ? "error" : "success"}
-                    >
-                      {formatCurrency(invoice.balanceDue)}
-                    </Typography>
+                    {(() => {
+                      const outstanding = (invoice.totalAmount || 0) - (invoice.amountPaid || 0);
+                      return (
+                        <Typography
+                          fontWeight="bold"
+                          color={outstanding > 0 ? "error" : "success"}
+                        >
+                          {formatCurrency(outstanding)}
+                        </Typography>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <Chip

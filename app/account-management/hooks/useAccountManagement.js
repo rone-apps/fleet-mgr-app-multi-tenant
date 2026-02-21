@@ -48,7 +48,7 @@ const initialGenerateInvoiceFormData = {
 const initialPaymentFormData = {
   amount: "",
   paymentDate: "",
-  paymentMethod: "CREDIT_CARD",
+  paymentMethodId: null,
   referenceNumber: "",
   notes: "",
 };
@@ -110,6 +110,7 @@ export function useAccountManagement() {
   // Lookup data
   const [cabs, setCabs] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
 
   // Invoices Tab (Tab 4)
   const [invoices, setInvoices] = useState([]);
@@ -117,6 +118,7 @@ export function useAccountManagement() {
   const [openGenerateInvoiceDialog, setOpenGenerateInvoiceDialog] = useState(false);
   const [openInvoiceDetailsDialog, setOpenInvoiceDetailsDialog] = useState(false);
   const [openRecordPaymentDialog, setOpenRecordPaymentDialog] = useState(false);
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [openCancelInvoiceDialog, setOpenCancelInvoiceDialog] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [generateInvoiceFormData, setGenerateInvoiceFormData] = useState(initialGenerateInvoiceFormData);
@@ -181,10 +183,10 @@ export function useAccountManagement() {
       });
       if (response.ok) {
         const data = await response.json();
-        
+
         // Handle both array response and paginated response
         const driversArray = Array.isArray(data) ? data : (data.content || data.data || []);
-        
+
         setDrivers(driversArray);
       }
     } catch (err) {
@@ -192,17 +194,41 @@ export function useAccountManagement() {
     }
   }, []);
 
+  const loadPaymentMethods = useCallback(async () => {
+    try {
+      console.log('📦 Loading payment methods from:', `${API_BASE_URL}/payments/payment-methods`);
+      const response = await fetch(`${API_BASE_URL}/payments/payment-methods`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('📦 Payment methods loaded:', data);
+        setPaymentMethods(data);
+      } else {
+        console.error('📦 Failed to load payment methods:', response.status);
+        setPaymentMethods([]);
+      }
+    } catch (err) {
+      console.error("Error loading payment methods:", err);
+      setPaymentMethods([]);
+    }
+  }, []);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      await Promise.all([loadCustomers(), loadCabs(), loadDrivers()]);
+      await Promise.all([loadCustomers(), loadCabs(), loadDrivers(), loadPaymentMethods()]);
     } catch (err) {
       console.error("Error loading data:", err);
       setError("Failed to load data");
     } finally {
       setLoading(false);
     }
-  }, [loadCustomers, loadCabs, loadDrivers]);
+  }, [loadCustomers, loadCabs, loadDrivers, loadPaymentMethods]);
 
   const loadChargesForCustomer = useCallback(async (customerId, useFilters = false) => {
     try {
@@ -408,6 +434,8 @@ export function useAccountManagement() {
     setStartDate("");
     setEndDate("");
     loadChargesForCustomer(customer.id);
+    // Pre-filter invoices to show only this customer's invoices
+    setInvoiceFilterCustomerId(customer.id.toString());
   }, [loadChargesForCustomer]);
 
   const applyCustomerFilters = useCallback(() => {
@@ -556,11 +584,23 @@ export function useAccountManagement() {
 
       if (response.ok) {
         setSuccess("Charge marked as paid");
+
+        // Refresh charges for the selected customer
         if (selectedCustomer) {
-          loadChargesForCustomer(selectedCustomer.id);
+          // Add a small delay to ensure backend has persisted the change
+          setTimeout(() => {
+            loadChargesForCustomer(selectedCustomer.id);
+          }, 300);
+
+          // Reload customers to update outstanding balance
+          loadCustomers();
         }
+
+        // Reload all charges if viewing tab 2 (All Charges)
         if (currentTab === 2) {
-          loadAllCharges();
+          setTimeout(() => {
+            loadAllCharges();
+          }, 300);
         }
       } else {
         setError("Failed to mark charge as paid");
@@ -569,7 +609,7 @@ export function useAccountManagement() {
       console.error("Error marking charge as paid:", err);
       setError("Failed to mark charge as paid");
     }
-  }, [selectedCustomer, currentTab, loadChargesForCustomer, loadAllCharges]);
+  }, [selectedCustomer, currentTab, loadChargesForCustomer, loadAllCharges, loadCustomers]);
 
   // ==================== Bulk Edit Operations (Tab 2) ====================
 
@@ -941,55 +981,119 @@ export function useAccountManagement() {
   }, [cancelReason, selectedInvoice, loadInvoices, openInvoiceDetailsDialog]);
 
   const handleOpenRecordPaymentDialog = useCallback((invoice) => {
+    if (!invoice || !invoice.id) {
+      console.error("Invalid invoice object:", invoice);
+      setError("Invalid invoice selected");
+      return;
+    }
+    console.log("Opening payment dialog for invoice:", invoice.id, invoice.invoiceNumber);
     setSelectedInvoice(invoice);
     setPaymentFormData({
-      amount: invoice.balanceDue.toString(),
+      amount: invoice.balanceDue ? invoice.balanceDue.toString() : "0",
       paymentDate: new Date().toISOString().split('T')[0],
-      paymentMethod: "CREDIT_CARD",
+      paymentMethodId: null,
       referenceNumber: "",
       notes: "",
     });
     setError("");
     setSuccess("");
+    setIsRecordingPayment(false);  // ✅ Ensure loading state is reset when opening dialog
     setOpenRecordPaymentDialog(true);
   }, []);
 
   const handleRecordPayment = useCallback(async () => {
-    if (!paymentFormData.amount || !paymentFormData.paymentDate || !paymentFormData.paymentMethod) {
+    if (!paymentFormData.amount || !paymentFormData.paymentDate || !paymentFormData.paymentMethodId) {
       setError("Amount, date, and payment method are required");
       return;
     }
 
+    if (!selectedInvoice || !selectedInvoice.id) {
+      setError("Please select an invoice first");
+      return;
+    }
+
+    setIsRecordingPayment(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/payments/record?` +
-        `invoiceId=${selectedInvoice.id}&` +
+      const url = `${API_BASE_URL}/payments/account-charges/${selectedInvoice.id}/record-payment?` +
         `amount=${paymentFormData.amount}&` +
         `paymentDate=${paymentFormData.paymentDate}&` +
-        `paymentMethod=${paymentFormData.paymentMethod}&` +
+        `paymentMethodId=${paymentFormData.paymentMethodId}&` +
         `referenceNumber=${encodeURIComponent(paymentFormData.referenceNumber || '')}&` +
-        `notes=${encodeURIComponent(paymentFormData.notes || '')}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-            "X-Tenant-ID": localStorage.getItem("tenantSchema"), },
-        }
-      );
+        `notes=${encodeURIComponent(paymentFormData.notes || '')}`;
+
+      console.log("Recording payment - URL:", url);
+      console.log("Invoice ID:", selectedInvoice.id, "Invoice:", selectedInvoice.invoiceNumber);
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
 
       if (response.ok) {
+        const paymentResponse = await response.json();
+        console.log("Payment recorded successfully:", paymentResponse);
         setSuccess("Payment recorded successfully!");
+        setError(""); // Clear any previous errors
+
+        // Reset form
+        setPaymentFormData(initialPaymentFormData);
         setOpenRecordPaymentDialog(false);
-        loadInvoices();
-        if (openInvoiceDetailsDialog) {
-          handleViewInvoice(selectedInvoice);
+        setIsRecordingPayment(false);  // ✅ CRITICAL: Reset loading state
+
+        // Reload invoices to get updated balance
+        await loadInvoices();
+
+        // If invoice detail dialog is open, refresh it with fresh data
+        if (openInvoiceDetailsDialog && selectedInvoice) {
+          // Re-fetch the specific invoice to get updated data
+          setTimeout(async () => {
+            try {
+              const invoiceResponse = await fetch(
+                `${API_BASE_URL}/invoices/${selectedInvoice.id}`,
+                {
+                  headers: {
+                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                    "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+                  },
+                }
+              );
+              if (invoiceResponse.ok) {
+                const updatedInvoice = await invoiceResponse.json();
+                setSelectedInvoice(updatedInvoice);
+                console.log("Invoice refreshed with updated data:", updatedInvoice);
+              }
+            } catch (err) {
+              console.error("Error refreshing invoice:", err);
+            }
+          }, 500); // Small delay to ensure backend is updated
         }
       } else {
-        const errorData = await response.json();
-        setError(errorData.message || errorData.error || "Failed to record payment");
+        const contentType = response.headers.get("content-type");
+        let errorMessage = `Failed to record payment (${response.status})`;
+
+        try {
+          if (contentType && contentType.includes("application/json")) {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorData.error || errorMessage;
+          } else {
+            const errorText = await response.text();
+            errorMessage = errorText || errorMessage;
+          }
+        } catch (parseErr) {
+          console.log("Could not parse error response body");
+        }
+
+        console.error("Payment recording error:", response.status, errorMessage);
+        setError(errorMessage);
+        setIsRecordingPayment(false);
       }
     } catch (err) {
       console.error("Error recording payment:", err);
-      setError("Failed to record payment");
+      setError(err.message || "Failed to record payment");
+      setIsRecordingPayment(false);
     }
   }, [paymentFormData, selectedInvoice, loadInvoices, openInvoiceDetailsDialog, handleViewInvoice]);
 
@@ -997,7 +1101,11 @@ export function useAccountManagement() {
     let filtered = [...invoices];
 
     if (invoiceFilterCustomerId) {
-      filtered = filtered.filter(inv => inv.customer.id === parseInt(invoiceFilterCustomerId));
+      // Filter by customerId - handle both direct customerId and nested customer.id
+      filtered = filtered.filter(inv => {
+        const customerId = inv.customerId || (inv.customer?.id);
+        return customerId === parseInt(invoiceFilterCustomerId);
+      });
     }
 
     if (invoiceFilterStatus !== "all") {
@@ -1041,6 +1149,13 @@ export function useAccountManagement() {
       loadInvoices();
     }
   }, [currentTab, loadInvoices]);
+
+  // Auto-apply invoice filters when filter values change
+  useEffect(() => {
+    if (invoices.length > 0) {
+      applyInvoiceFilters();
+    }
+  }, [invoiceFilterCustomerId, invoiceFilterStatus, invoices, applyInvoiceFilters]);
 
   return {
     // Core state
@@ -1147,6 +1262,8 @@ export function useAccountManagement() {
     // Lookup data
     cabs,
     drivers,
+    paymentMethods,
+    loadPaymentMethods,
 
     // Invoices (Tab 4)
     invoices,
@@ -1159,6 +1276,7 @@ export function useAccountManagement() {
     setOpenInvoiceDetailsDialog,
     openRecordPaymentDialog,
     setOpenRecordPaymentDialog,
+    isRecordingPayment,
     openCancelInvoiceDialog,
     setOpenCancelInvoiceDialog,
     cancelReason,

@@ -26,6 +26,8 @@ export default function RecordPaymentDialog({
   setPaymentFormData,
   handleRecordPayment,
   error,
+  paymentMethods = [],
+  isLoading = false,
 }) {
   if (!selectedInvoice) return null;
 
@@ -66,15 +68,19 @@ export default function RecordPaymentDialog({
           <FormControl fullWidth required>
             <InputLabel>Payment Method</InputLabel>
             <Select
-              value={paymentFormData.paymentMethod}
+              value={paymentFormData.paymentMethodId || ""}
               label="Payment Method"
-              onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentMethod: e.target.value })}
+              onChange={(e) => setPaymentFormData({ ...paymentFormData, paymentMethodId: e.target.value })}
             >
-              <MenuItem value="CASH">Cash</MenuItem>
-              <MenuItem value="CHECK">Check</MenuItem>
-              <MenuItem value="CREDIT_CARD">Credit Card</MenuItem>
-              <MenuItem value="BANK_TRANSFER">Bank Transfer</MenuItem>
-              <MenuItem value="OTHER">Other</MenuItem>
+              {paymentMethods.length === 0 ? (
+                <MenuItem disabled>No payment methods available</MenuItem>
+              ) : (
+                paymentMethods.map((method) => (
+                  <MenuItem key={method.id} value={method.id}>
+                    {method.methodName || method.methodCode}
+                  </MenuItem>
+                ))
+              )}
             </Select>
           </FormControl>
 
@@ -99,9 +105,17 @@ export default function RecordPaymentDialog({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={handleRecordPayment} variant="contained" color="success" startIcon={<PaymentIcon />}>
-          Record Payment
+        <Button onClick={onClose} disabled={isLoading}>
+          Cancel
+        </Button>
+        <Button
+          onClick={handleRecordPayment}
+          variant="contained"
+          color="success"
+          startIcon={<PaymentIcon />}
+          disabled={isLoading}
+        >
+          {isLoading ? "Recording..." : "Record Payment"}
         </Button>
       </DialogActions>
     </Dialog>

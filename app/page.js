@@ -67,7 +67,8 @@ import {
   GroupOutlined,
   AiOutlined,
   SchemaOutlined,
-  HelpOutline
+  HelpOutline,
+  PaymentOutlined
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
@@ -281,6 +282,7 @@ export default function HomePage() {
 
         {!selectedCategory ? (
           <>
+
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 4 }}>
               Select a Category
             </Typography>
@@ -308,6 +310,22 @@ export default function HomePage() {
                     icon={DirectionsCar}
                     gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
                     onClick={() => setSelectedCategory('operations')}
+                  />
+                </Grid>
+              )}
+
+              {/* Payments - Direct Link */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Payments"
+                    description="Driver & owner bulk payments"
+                    icon={PaymentOutlined}
+                    gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                    onClick={() => {
+                      storeCategoryNav('payments');
+                      router.push('/driver-payments');
+                    }}
                   />
                 </Grid>
               )}
@@ -592,6 +610,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Smart Analysis',
             gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
             accent: '#f5576c'
+          },
+          {
+            title: 'Driver & Owner Payments',
+            description: 'Bulk payment batches and settlement management',
+            icon: PaymentOutlined,
+            path: '/driver-payments',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Bulk Processing',
+            gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+            accent: '#10b981'
           },
           {
             title: 'Financial Configuration',

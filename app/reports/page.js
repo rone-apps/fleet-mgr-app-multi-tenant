@@ -6,7 +6,7 @@ import GlobalNav from "../components/GlobalNav";
 import {
   Box, Container, Typography, Button, Paper, Grid, TextField,
   Tabs, Tab, Card, CardContent, CircularProgress, Alert, Dialog, DialogTitle,
-  DialogContent, DialogActions, Autocomplete,
+  DialogContent, DialogActions, Autocomplete, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   FormControl, InputLabel, Select, MenuItem,
 } from "@mui/material";
@@ -68,12 +68,18 @@ export default function ReportsPage() {
 
   const getCreditCardRevenues = () => {
     if (!reportData?.revenues) return [];
-    return reportData.revenues.filter((rev) => rev.revenueSubType === "CREDIT_CARD_REVENUE");
+    return reportData.revenues.filter((rev) => rev.revenueSubType === "CARD_REVENUE");
   };
 
   const getOtherRevenues = () => {
     if (!reportData?.revenues) return [];
     return reportData.revenues.filter((rev) => rev.revenueSubType === "OTHER_REVENUE");
+  };
+
+  // Helper function to calculate subtotals for revenue/expense sections
+  const calculateSubtotal = (items) => {
+    if (!items || items.length === 0) return 0;
+    return items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
   };
 
   // Filters for revenue details
@@ -233,10 +239,49 @@ export default function ReportsPage() {
     setActiveBanner(null);
   };
 
+  // Check if period is multi-month (spans more than one calendar month)
+  const isMultiMonthPeriod = () => {
+    if (!startDate || !endDate) return false;
+    // Parse dates in local timezone (HTML date inputs are YYYY-MM-DD format)
+    const [startYear, startMonth] = startDate.split('-').slice(0, 2);
+    const [endYear, endMonth] = endDate.split('-').slice(0, 2);
+    return !(startYear === endYear && startMonth === endMonth);
+  };
+
+  // Check if finalize button should be disabled
+  const isFinalizeButtonDisabled = () => {
+    if (!reportData) return true;
+    // Disable if already finalized or paid
+    if (reportData.status === "FINALIZED" || reportData.status === "PAID") return true;
+    // Disable if period spans multiple months
+    if (isMultiMonthPeriod()) return true;
+    return false;
+  };
+
   const generateReport = async () => {
     if (!selectedDriverId || !startDate || !endDate) {
       setError("Please select a driver and date range");
       return;
+    }
+
+    // Validate that start date is not later than end date
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    if (start > end) {
+      setError("Start date cannot be later than end date");
+      return;
+    }
+
+    // Warn if period is not a full month (optional, for user awareness)
+    const isSameMonth = start.getFullYear() === end.getFullYear() &&
+                        start.getMonth() === end.getMonth();
+    const isMonthStart = start.getDate() === 1;
+    const isMonthEnd = new Date(end.getFullYear(), end.getMonth() + 1, 0).getDate() === end.getDate();
+
+    const isStandardMonth = isSameMonth && isMonthStart && isMonthEnd;
+    if (!isStandardMonth) {
+      console.info("Non-standard period selected: this will include all transactions across month boundaries");
     }
 
     setLoadingReport(true);
@@ -396,7 +441,7 @@ One-Time Expenses: $${parseFloat(reportData.totalOneTimeExpenses || 0).toFixed(2
 Total Expenses: $${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
 Previous Balance: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
 Paid Amount: $${parseFloat(paidAmount || 0).toFixed(2)}
-Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
+${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? '$' + parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2) : '-$' + parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2)}
     `.trim();
   };
 
@@ -517,16 +562,6 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
             Generate and manage financial statements for drivers and owners
           </Typography>
         </Box>
-
-        {/* Debug Info */}
-        {process.env.NODE_ENV === "development" && (
-          <Alert severity="info" sx={{ mb: 2 }}>
-            <Typography variant="caption">
-              DEBUG: Role={currentUser?.role}, SelectedDriver={selectedDriver?.firstName}, Loading={loadingReport}, HasReport={!!reportData}
-            </Typography>
-          </Alert>
-        )}
-
         {error && (
           <Alert severity="error" onClose={() => setError("")} sx={{ mb: 2 }}>
             {error}
@@ -627,6 +662,8 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                     fullWidth
                     size="small"
                     InputLabelProps={{ shrink: true }}
+                    error={startDate && endDate && new Date(startDate) > new Date(endDate)}
+                    helperText={startDate && endDate && new Date(startDate) > new Date(endDate) ? "Start date must be before end date" : ""}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
@@ -638,6 +675,8 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                     fullWidth
                     size="small"
                     InputLabelProps={{ shrink: true }}
+                    error={startDate && endDate && new Date(startDate) > new Date(endDate)}
+                    helperText={startDate && endDate && new Date(startDate) > new Date(endDate) ? "End date must be after start date" : ""}
                   />
                 </Grid>
                 <Grid item xs={12} sm={12} md={4}>
@@ -662,12 +701,26 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
             {/* Selected Driver Info */}
             {selectedDriver && (
               <Paper sx={{ p: 2, mb: 3, backgroundColor: "#e3f2fd", border: "1px solid #90caf9" }}>
-                <Typography variant="subtitle1" fontWeight="bold">
-                  {selectedDriver.firstName} {selectedDriver.lastName}
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {selectedDriver.isOwner ? "Owner" : "Driver"} • Driver #: {selectedDriver.driverNumber}
-                </Typography>
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight="bold">
+                      {selectedDriver.firstName} {selectedDriver.lastName}
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      {selectedDriver.isOwner ? "Owner" : "Driver"} • Driver #: {selectedDriver.driverNumber}
+                    </Typography>
+                  </Box>
+                  {reportData && reportData.status && (
+                    <Box sx={{ display: "flex", gap: 1 }}>
+                      <Chip
+                        label={reportData.status === "PAID" ? "✓ PAID" : reportData.status === "FINALIZED" ? "FINALIZED" : "DRAFT"}
+                        color={reportData.status === "PAID" ? "success" : reportData.status === "FINALIZED" ? "primary" : "default"}
+                        variant={reportData.status === "DRAFT" ? "outlined" : "filled"}
+                        sx={{ fontWeight: 600 }}
+                      />
+                    </Box>
+                  )}
+                </Box>
               </Paper>
             )}
 
@@ -784,8 +837,8 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                       <Card
                         onClick={() => setActiveBanner(activeBanner === "netDue" ? null : "netDue")}
                         sx={{
-                          backgroundColor: reportData.netDue > 0 ? "#ffebee" : "#e8f5e9", // ❌ Red if driver owes, ✅ Green if company owes
-                          border: `3px solid ${reportData.netDue > 0 ? "#d32f2f" : "#388e3c"}`,
+                          backgroundColor: reportData.netDue > 0 ? "#e8f5e9" : "#ffebee", // ✅ Green if company owes, ❌ Red if driver owes
+                          border: `3px solid ${reportData.netDue > 0 ? "#388e3c" : "#d32f2f"}`,
                           cursor: "pointer",
                           transition: "all 0.3s",
                           "&:hover": { boxShadow: 4 },
@@ -793,16 +846,16 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                       >
                         <CardContent>
                           <Typography color="textSecondary" variant="body2" gutterBottom>
-                            <strong>Net Due</strong>
+                            <strong>{reportData.netDue > 0 ? "Net Payable" : "Net Due"}</strong>
                           </Typography>
                           <Typography
                             variant="h6"
                             sx={{
-                              color: reportData.netDue > 0 ? "#d32f2f" : "#388e3c", // ❌ Red if driver owes, ✅ Green if company owes
+                              color: reportData.netDue > 0 ? "#388e3c" : "#d32f2f", // ✅ Green if company owes, ❌ Red if driver owes
                               fontWeight: "bold",
                             }}
                           >
-                            ${parseFloat(-reportData.netDue || 0).toFixed(2)} {/* Negate to show from driver's perspective */}
+                            {reportData.netDue > 0 ? '$' : '-$'}{parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2)}
                           </Typography>
                         </CardContent>
                       </Card>
@@ -812,14 +865,35 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
 
                 {/* Action Buttons - Moved to top */}
                 {reportData && (
-                  <Box sx={{ display: "flex", gap: 2, mb: 3 }}>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      onClick={finalizeStatement}
-                    >
-                      Finalize & Save Statement
-                    </Button>
+                  <Box sx={{ display: "flex", gap: 2, mb: 3, alignItems: "center" }}>
+                    {reportData.status === "PAID" ? (
+                      <Box sx={{ p: 2, backgroundColor: "#e8f5e9", border: "1px solid #4caf50", borderRadius: 1, flex: 1 }}>
+                        <Typography variant="body2" sx={{ color: "#2e7d32", fontWeight: 600 }}>
+                          ✓ Statement Finalized & Paid
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: "#558b2f" }}>
+                          This statement has been processed. Re-finalization is not allowed.
+                        </Typography>
+                      </Box>
+                    ) : (
+                      <>
+                        <Button
+                          variant="contained"
+                          color="success"
+                          onClick={finalizeStatement}
+                          disabled={isFinalizeButtonDisabled()}
+                          title={isFinalizeButtonDisabled() ?
+                            (reportData.status === "FINALIZED" ? "Statement already finalized" :
+                             reportData.status === "PAID" ? "Statement already paid" :
+                             isMultiMonthPeriod() ? "Cannot finalize multi-month periods. Finalization is limited to single-month periods." :
+                             "") : ""}
+                        >
+                          {reportData.status === "FINALIZED" ? "Statement Finalized" :
+                           reportData.status === "PAID" ? "Statement Paid" :
+                           "Finalize & Save Statement"}
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant="outlined"
                       startIcon={<Print />}
@@ -918,6 +992,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={3} align="right"><strong>Credit Card Revenue Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(getFilteredCreditCards()).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1024,6 +1102,15 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     </TableRow>
                                   );
                                 })}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={4} align="right"><strong>Account Charges Total:</strong></TableCell>
+                                  <TableCell align="right" colSpan={2}></TableCell>
+                                  <TableCell align="right"><strong>${getFilteredCharges().reduce((sum, rev) => {
+                                    const tip = rev.tipAmount ? parseFloat(rev.tipAmount) : 0;
+                                    const amount = rev.fareAmount ? parseFloat(rev.fareAmount) : parseFloat(rev.amount) || 0;
+                                    return sum + amount + tip;
+                                  }, 0).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1115,6 +1202,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={3} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(getFilteredLeaseRevenue()).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1197,6 +1288,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={3} align="right"><strong>Other Revenues Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(getFilteredOtherRevenues()).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1247,6 +1342,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={3} align="right"><strong>Recurring Expenses Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(reportData?.recurringExpenses || []).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1285,6 +1384,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={5} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1390,6 +1493,18 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                                       </TableRow>
                                     );
                                   })}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={6} align="right"><strong>One-Time Expenses Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(
+                                    getOtherOneTimeExpenses().filter((exp) => {
+                                      if (expenseFilters.oneTimeDateFrom && exp.date < expenseFilters.oneTimeDateFrom) return false;
+                                      if (expenseFilters.oneTimeDateTo && exp.date > expenseFilters.oneTimeDateTo) return false;
+                                      if (expenseFilters.oneTimeAmountMin && parseFloat(exp.amount) < parseFloat(expenseFilters.oneTimeAmountMin)) return false;
+                                      if (expenseFilters.oneTimeAmountMax && parseFloat(exp.amount) > parseFloat(expenseFilters.oneTimeAmountMax)) return false;
+                                      return true;
+                                    })
+                                  ).toFixed(2)}</strong></TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1441,7 +1556,7 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell><strong>Period</strong></TableCell>
                             <TableCell align="right"><strong>Total Revenues</strong></TableCell>
                             <TableCell align="right"><strong>Total Expenses</strong></TableCell>
-                            <TableCell align="right"><strong>Net Due</strong></TableCell>
+                            <TableCell align="right"><strong>Net Payable / Due</strong></TableCell>
                             <TableCell><strong>Status</strong></TableCell>
                             <TableCell align="center"><strong>Actions</strong></TableCell>
                           </TableRow>
@@ -1458,8 +1573,9 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                               <TableCell align="right">
                                 ${parseFloat(stmt.totalExpenses || 0).toFixed(2)}
                               </TableCell>
-                              <TableCell align="right" sx={{ fontWeight: "bold", color: stmt.netDue > 0 ? "#d32f2f" : "#388e3c" }}>
-                                ${parseFloat(-stmt.netDue || 0).toFixed(2)} {/* Negate to show from driver's perspective */}
+                              <TableCell align="right" sx={{ fontWeight: "bold", color: stmt.netDue > 0 ? "#388e3c" : "#d32f2f" }}>
+                                <div>{stmt.netDue > 0 ? "Net Payable" : "Net Due"}</div>
+                                {stmt.netDue > 0 ? '$' : '-$'}{parseFloat(Math.abs(stmt.netDue) || 0).toFixed(2)}
                               </TableCell>
                               <TableCell>
                                 <Box sx={{ display: "inline-block", px: 1.5, py: 0.5, backgroundColor: "#e0e0e0", borderRadius: 1, fontSize: "0.85rem" }}>
@@ -1552,6 +1668,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={3} align="right"><strong>Lease Revenue Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getLeaseRevenues()).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1583,6 +1703,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={3} align="right"><strong>Account Charges Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getAccountChargeRevenues()).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1614,6 +1738,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={3} align="right"><strong>Credit Card Revenue Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getCreditCardRevenues()).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1645,6 +1773,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={3} align="right"><strong>Other Revenues Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getOtherRevenues()).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1674,6 +1806,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={2} align="right"><strong>Recurring Expenses Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1705,6 +1841,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={3} align="right"><strong>Lease Expenses Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1751,6 +1891,10 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
                             </TableRow>
                           );
                         })}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={6} align="right"><strong>One-Time Expenses Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getOtherOneTimeExpenses()).toFixed(2)}</strong></TableCell>
+                        </TableRow>
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1758,27 +1902,55 @@ Net Due: $${parseFloat(-reportData.netDue || 0).toFixed(2)}
               )}
 
               {/* Totals Footer */}
-              <Box sx={{ pt: 2, borderTop: "2px solid #e0e0e0", backgroundColor: "#f9f9f9", p: 2, borderRadius: 1 }}>
+              <Box sx={{ pt: 3, borderTop: "3px solid #e0e0e0", backgroundColor: "#f9f9f9", p: 3, borderRadius: 1 }}>
                 <Table size="small">
                   <TableBody>
-                    <TableRow>
-                      <TableCell><strong>Total Revenues</strong></TableCell>
-                      <TableCell align="right">${parseFloat(reportData.totalRevenues || 0).toFixed(2)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><strong>Recurring Expenses</strong></TableCell>
-                      <TableCell align="right">${parseFloat(reportData.totalRecurringExpenses || 0).toFixed(2)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell><strong>One-Time Expenses</strong></TableCell>
-                      <TableCell align="right">${parseFloat(reportData.totalOneTimeExpenses || 0).toFixed(2)}</TableCell>
-                    </TableRow>
-                    <TableRow sx={{ backgroundColor: "#fff3e0" }}>
-                      <TableCell><strong>Net Due</strong></TableCell>
-                      <TableCell align="right" sx={{ fontWeight: "bold", color: reportData.netDue > 0 ? "#d32f2f" : "#388e3c" }}>
-                        ${parseFloat(-reportData.netDue || 0).toFixed(2)} {/* Negate to show from driver's perspective */}
+                    {/* Revenue Totals Section */}
+                    <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
+                      <TableCell><strong>📊 TOTAL REVENUES</strong></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold", color: "#388e3c", fontSize: "1.1rem" }}>
+                        ${parseFloat(reportData.totalRevenues || 0).toFixed(2)}
                       </TableCell>
                     </TableRow>
+
+                    {/* Expense Totals Section */}
+                    <TableRow sx={{ backgroundColor: "#ffebee", mt: 2 }}>
+                      <TableCell><strong>💰 TOTAL EXPENSES</strong></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold", color: "#d32f2f", fontSize: "1.1rem" }}>
+                        ${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Spacing */}
+                    <TableRow sx={{ height: "10px" }} />
+
+                    {/* Previous Balance */}
+                    {reportData.previousBalance && reportData.previousBalance !== 0 && (
+                      <TableRow>
+                        <TableCell><strong>Previous Balance</strong></TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                          ${parseFloat(reportData.previousBalance || 0).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    )}
+
+                    {/* Final Net Payable/Due */}
+                    <TableRow sx={{ backgroundColor: reportData.netDue > 0 ? "#c8e6c9" : "#ffcdd2", borderTop: "2px solid #999" }}>
+                      <TableCell><strong>✓ {reportData.netDue > 0 ? "NET PAYABLE" : "NET DUE"}</strong></TableCell>
+                      <TableCell align="right" sx={{ fontWeight: "bold", color: reportData.netDue > 0 ? "#1b5e20" : "#b71c1c", fontSize: "1.15rem" }}>
+                        {reportData.netDue > 0 ? '$' : '-$'}{parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+
+                    {/* Paid Amount */}
+                    {reportData.paidAmount && reportData.paidAmount !== 0 && (
+                      <TableRow>
+                        <TableCell><strong>Amount Paid</strong></TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600 }}>
+                          ${parseFloat(reportData.paidAmount || 0).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </TableBody>
                 </Table>
               </Box>

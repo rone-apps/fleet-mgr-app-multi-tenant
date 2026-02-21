@@ -449,7 +449,11 @@ export default function InvoiceDetailsDialog({
                   {selectedInvoice.payments.map((payment) => (
                     <tr key={payment.id}>
                       <td>{formatDate(payment.paymentDate)}</td>
-                      <td>{payment.paymentMethod.replace('_', ' ')}</td>
+                      <td>
+                        {(payment.paymentMethodName || payment.paymentMethod || "-")
+                          .toString()
+                          .replace('_', ' ')}
+                      </td>
                       <td>{payment.referenceNumber || "-"}</td>
                       <td className="text-right">{formatCurrency(payment.amount)}</td>
                     </tr>
@@ -563,7 +567,12 @@ export default function InvoiceDetailsDialog({
                       <TableRow key={payment.id}>
                         <TableCell>{formatDate(payment.paymentDate)}</TableCell>
                         <TableCell>
-                          <Chip label={payment.paymentMethod.replace('_', ' ')} size="small" />
+                          <Chip
+                            label={(payment.paymentMethodName || payment.paymentMethod || "-")
+                              .toString()
+                              .replace('_', ' ')}
+                            size="small"
+                          />
                         </TableCell>
                         <TableCell>{payment.referenceNumber || "-"}</TableCell>
                         <TableCell align="right">{formatCurrency(payment.amount)}</TableCell>

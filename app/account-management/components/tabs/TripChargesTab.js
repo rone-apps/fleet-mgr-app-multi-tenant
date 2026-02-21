@@ -185,6 +185,40 @@ export default function TripChargesTab({
         <Grid item xs={12} md={8}>
           {selectedCustomer ? (
             <>
+              {/* Summary Cards */}
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Paper sx={{ p: 2, backgroundColor: "#f5f5f5" }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                      Total Charges
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: "#1976d2" }}>
+                      ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Paper sx={{ p: 2, backgroundColor: "#f5f5f5" }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                      Total Paid
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: "#4caf50" }}>
+                      ${(selectedCustomer.outstandingBalance ? (totalAmount - selectedCustomer.outstandingBalance) : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <Paper sx={{ p: 2, backgroundColor: "#f5f5f5" }}>
+                    <Typography color="textSecondary" variant="body2" gutterBottom>
+                      Amount Due
+                    </Typography>
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: selectedCustomer.outstandingBalance > 0 ? "#d32f2f" : "#4caf50" }}>
+                      ${(selectedCustomer.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </Typography>
+                  </Paper>
+                </Grid>
+              </Grid>
+
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
                 <Typography variant="h6">
                   Charges for {selectedCustomer.companyName}
@@ -293,13 +327,22 @@ export default function TripChargesTab({
                       </TableCell>
                       <TableCell align="right">
                         <Box>
-                          <Typography variant="body2">Total</Typography>
+                          <Typography variant="body2">Total Amount</Typography>
                           <Typography variant="h6" display="block" color="success.main" fontWeight="bold" sx={{ fontSize: '1.2rem' }}>
                             ${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </Typography>
                         </Box>
                       </TableCell>
-                      <TableCell>Status</TableCell>
+                      <TableCell align="right">
+                        <Box>
+                          <Typography variant="body2" sx={{ mb: 0.5 }}>Status</Typography>
+                          <Chip
+                            label={charges.every(c => c.paid) ? "All Paid" : charges.some(c => c.paid) ? "Partially Paid" : "Unpaid"}
+                            color={charges.every(c => c.paid) ? "success" : charges.some(c => c.paid) ? "warning" : "default"}
+                            size="small"
+                          />
+                        </Box>
+                      </TableCell>
                       {!bulkEditMode && canEdit && <TableCell align="right">Actions</TableCell>}
                     </TableRow>
                   </TableHead>

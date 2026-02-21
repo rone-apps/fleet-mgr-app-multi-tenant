@@ -77,13 +77,19 @@ export async function apiRequest(endpoint, options = {}) {
 
   const token = localStorage.getItem('token');
   const tenantSchema = getTenantSchema(); // Use schema name for DB switching
-  
+
+  // Tenant is required for all API calls (multi-tenancy)
+  if (!tenantSchema) {
+    console.error('Missing tenant schema in localStorage. Keys:', Object.keys(localStorage));
+    throw new Error('Tenant not configured. Please login again.');
+  }
+
   const config = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
-      ...(tenantSchema && { 'X-Tenant-ID': tenantSchema }), // Schema name goes to backend
+      'X-Tenant-ID': tenantSchema, // Tenant ID is always required
       ...options.headers,
     },
   };
