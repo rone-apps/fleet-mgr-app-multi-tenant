@@ -14,6 +14,8 @@ import LeasePlansRatesTab from "./tabs/LeasePlansRatesTab";
 import LeaseRateOverridesTab from "./tabs/LeaseRateOverridesTab";
 import MerchantMappingsTab from "./tabs/MerchantMappingsTab";
 import AttributeCostsTab from "../expenses/components/AttributeCostsTab";
+import ItemRatesTab from "./tabs/ItemRatesTab";
+import ItemRateOverridesTab from "./tabs/ItemRateOverridesTab";
 
 // Statistics Component
 import FinancialStats from "./components/FinancialStats";
@@ -29,6 +31,8 @@ import {
   AttachMoney as MoneyIcon,
   CreditCard as MerchantIcon,
   Settings as AttributeIcon,
+  Speed as SpeedIcon,
+  Tune as TuneIcon,
 } from "@mui/icons-material";
 
 export default function FinancialSetupPage() {
@@ -105,6 +109,8 @@ export default function FinancialSetupPage() {
               <Tab label="Lease Rate Overrides" icon={<MoneyIcon />} iconPosition="start" />
               <Tab label="Merchant Mappings" icon={<MerchantIcon />} iconPosition="start" />
               <Tab label="Attribute Costs" icon={<AttributeIcon />} iconPosition="start" />
+              <Tab label="Item Rates" icon={<SpeedIcon />} iconPosition="start" />
+              <Tab label="Item Rate Overrides" icon={<TuneIcon />} iconPosition="start" />
             </Tabs>
 
             {/* Tab Content */}
@@ -161,6 +167,26 @@ export default function FinancialSetupPage() {
             {currentTab === 5 && (
               <AttributeCostsTab
                 canEdit={canEdit}
+              />
+            )}
+
+            {currentTab === 6 && (
+              <ItemRatesTab
+                canEdit={canEdit}
+                canDelete={canDelete}
+                setError={setError}
+                setSuccess={setSuccess}
+                updateStats={updateStats}
+              />
+            )}
+
+            {currentTab === 7 && (
+              <ItemRateOverridesTab
+                canEdit={canEdit}
+                canDelete={canDelete}
+                setError={setError}
+                setSuccess={setSuccess}
+                updateStats={updateStats}
               />
             )}
           </Paper>

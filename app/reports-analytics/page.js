@@ -130,7 +130,7 @@ export default function ReportsAnalyticsPage() {
     setError("");
     try {
       const response = await fetch(
-        `${API_BASE_URL}/financial-statements/driver/${selectedPersonId}?from=${dateFrom}&to=${dateTo}`,
+        `${API_BASE_URL}/financial-statements/owner-report/${selectedPersonId}?from=${dateFrom}&to=${dateTo}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,

@@ -438,6 +438,9 @@ Period: ${reportData.periodFrom} to ${reportData.periodTo}
 Revenues: $${parseFloat(reportData.totalRevenues || 0).toFixed(2)}
 Recurring Expenses: $${parseFloat(reportData.totalRecurringExpenses || 0).toFixed(2)}
 One-Time Expenses: $${parseFloat(reportData.totalOneTimeExpenses || 0).toFixed(2)}
+Per-Unit Expenses: $${parseFloat(reportData.totalPerUnitExpenses || 0).toFixed(2)}
+Mileage Expenses: $${reportData?.mileageExpenses?.reduce((sum, exp) => sum + parseFloat(exp.totalLeaseAmount || 0), 0).toFixed(2) || '0.00'}
+Insurance Mileage Expenses: $${parseFloat(reportData.totalInsuranceMileageExpenses || 0).toFixed(2)}
 Total Expenses: $${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
 Previous Balance: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
 Paid Amount: $${parseFloat(paidAmount || 0).toFixed(2)}
@@ -905,7 +908,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 )}
 
                 {/* Revenue Details - Tabbed View */}
-                {reportData?.revenues && reportData.revenues.length > 0 && (
+                {(reportData?.revenues && reportData.revenues.length > 0 || reportData?.insuranceMileageRevenues?.length > 0) && (
                   <Paper sx={{ mb: 3 }}>
                     <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
                       <Tabs
@@ -915,7 +918,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <Tab label={`Credit Cards (${getRevenuesByType("CARD_REVENUE").length})`} />
                         <Tab label={`Charges (${getRevenuesByType("ACCOUNT_REVENUE").length})`} />
                         <Tab label={`Lease Revenue (${getRevenuesByType("LEASE_INCOME").length})`} />
-                        <Tab label={`Others (${reportData.revenues.filter(r => !["CARD_REVENUE", "ACCOUNT_REVENUE", "LEASE_INCOME"].includes(r.revenueSubType)).length})`} />
+                        <Tab label={`Insurance Mileage (${reportData?.insuranceMileageRevenues?.length || 0})`} />
+                        <Tab label={`Others (${(reportData?.revenues || []).filter(r => !["CARD_REVENUE", "ACCOUNT_REVENUE", "LEASE_INCOME", "INSURANCE_MILEAGE_INCOME"].includes(r.revenueSubType)).length})`} />
                       </Tabs>
                     </Box>
 
@@ -1186,24 +1190,39 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                               <TableHead>
                                 <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
                                   <TableCell><strong>Shift Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
                                   <TableCell><strong>Driver Name</strong></TableCell>
-                                  <TableCell><strong>Description</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell><strong>Shift Type</strong></TableCell>
+                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Total Lease</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {getFilteredLeaseRevenue().map((rev, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
-                                    <TableCell>{rev.description || "-"}</TableCell>
-                                    <TableCell>{rev.categoryName || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
-                                      ${parseFloat(rev.amount).toFixed(2)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {getFilteredLeaseRevenue().map((rev, idx) => {
+                                  // Calculate mileage portion (from leaseBreakdown if available, otherwise 0)
+                                  const fixedLease = rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0;
+                                  const mileageLease = rev.leaseBreakdown?.mileageLeaseAmount || 0;
+                                  const totalLease = parseFloat(rev.amount || 0);
+
+                                  return (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                      <TableCell><strong>{rev.description?.match(/Cab\s+(\d+)/)?.[1] || "-"}</strong></TableCell>
+                                      <TableCell><strong>{rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</strong></TableCell>
+                                      <TableCell>{rev.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
+                                      <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
+                                      <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                        ${parseFloat(totalLease).toFixed(2)}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                                 <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={3} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                                  <TableCell colSpan={4} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${getFilteredLeaseRevenue().reduce((sum, rev) => sum + (rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0), 0).toFixed(2)}</strong></TableCell>
+                                  <TableCell align="right"><strong>${getFilteredLeaseRevenue().reduce((sum, rev) => sum + (rev.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
                                   <TableCell align="right"><strong>${calculateSubtotal(getFilteredLeaseRevenue()).toFixed(2)}</strong></TableCell>
                                 </TableRow>
                               </TableBody>
@@ -1215,8 +1234,61 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       </Box>
                     )}
 
-                    {/* Others Tab */}
+                    {/* Insurance Mileage Revenue Tab - Index 3 */}
                     {revenueTabIndex === 3 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {reportData?.insuranceMileageRevenues?.length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#fce4ec" }}>
+                                  <TableCell><strong>Shift Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
+                                  <TableCell><strong>Driver Name</strong></TableCell>
+                                  <TableCell><strong>Shift Type</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage</strong></TableCell>
+                                  <TableCell align="right"><strong>Insurance Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {reportData.insuranceMileageRevenues.map((rev, idx) => {
+                                  // Extract data from description: "Insurance Mileage Income - Cab 7 (DAY) - Driver: GURMIT SINGH-7 - Mileage: XX miles"
+                                  const cabMatch = rev.description?.match(/Cab\s+(\d+)/);
+                                  const shiftTypeMatch = rev.description?.match(/\((\w+)\)/);
+                                  const driverMatch = rev.description?.match(/Driver:\s+([^-]+)/);
+                                  const cabNum = cabMatch ? cabMatch[1] : "-";
+                                  const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
+                                  const driverName = driverMatch ? driverMatch[1].trim() : "-";
+                                  const miles = rev.miles ? parseFloat(rev.miles) : 0;  // Use miles from API instead of parsing
+
+                                  return (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                      <TableCell><strong>{cabNum}</strong></TableCell>
+                                      <TableCell><strong>{driverName}</strong></TableCell>
+                                      <TableCell>{shiftType}</TableCell>
+                                      <TableCell align="right">{miles.toFixed(2)}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                        ${parseFloat(rev.amount).toFixed(2)}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={5} align="right"><strong>Insurance Mileage Revenue Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageRevenues).toFixed(2)}</strong></TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No insurance mileage revenue</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Others Tab - Updated index from 3 to 4 */}
+                    {revenueTabIndex === 4 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#388e3c" }}>
                           Filters
@@ -1304,7 +1376,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 )}
 
                 {/* Expense Details - Tabbed View */}
-                {(reportData?.recurringExpenses?.length > 0 || reportData?.oneTimeExpenses?.length > 0) && (
+                {(reportData?.recurringExpenses?.length > 0 || reportData?.oneTimeExpenses?.length > 0 || reportData?.mileageExpenses?.length > 0 || reportData?.insuranceMileageExpenses?.length > 0) && (
                   <Paper sx={{ mb: 3 }}>
                     <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
                       <Tabs
@@ -1314,6 +1386,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <Tab label={`Recurring Expenses (${reportData?.recurringExpenses?.length || 0})`} />
                         <Tab label={`Lease Expenses (${getLeaseExpenses().length})`} />
                         <Tab label={`One-Time Expenses (${getOtherOneTimeExpenses().length})`} />
+                        <Tab label={`Per-Unit Expenses (${reportData?.perUnitExpenses?.length || 0})`} />
+                        <Tab label={`Mileage Expenses (${reportData?.mileageExpenses?.length || 0})`} />
+                        <Tab label={`Insurance Mileage (${reportData?.insuranceMileageExpenses?.length || 0})`} />
                       </Tabs>
                     </Box>
 
@@ -1366,26 +1441,37 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Cab #</strong></TableCell>
                                   <TableCell><strong>Shift Type</strong></TableCell>
-                                  <TableCell><strong>Owner Name</strong></TableCell>
-                                  <TableCell><strong>Rate Breakdown</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell><strong>Owner</strong></TableCell>
+                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Total Lease</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {getLeaseExpenses().map((exp, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{exp.date || "-"}</TableCell>
-                                    <TableCell><strong>{exp.description?.match(/Cab (\w+)/)?.[1] || "-"}</strong></TableCell>
-                                    <TableCell>{exp.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
-                                    <TableCell>{exp.description?.match(/Owner: (.+)$/)?.[1] || "-"}</TableCell>
-                                    <TableCell>{exp.entityDescription || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                      ${parseFloat(exp.amount).toFixed(2)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {getLeaseExpenses().map((exp, idx) => {
+                                  // Calculate mileage portion (from leaseBreakdown if available, otherwise 0)
+                                  const fixedLease = exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0;
+                                  const mileageLease = exp.leaseBreakdown?.mileageLeaseAmount || 0;
+                                  const totalLease = parseFloat(exp.amount || 0);
+
+                                  return (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{exp.date || "-"}</TableCell>
+                                      <TableCell><strong>{exp.description?.match(/Cab (\w+)/)?.[1] || "-"}</strong></TableCell>
+                                      <TableCell>{exp.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
+                                      <TableCell>{exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</TableCell>
+                                      <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
+                                      <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                        ${parseFloat(totalLease).toFixed(2)}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                                 <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={5} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                                  <TableCell colSpan={4} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0), 0).toFixed(2)}</strong></TableCell>
+                                  <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
                                   <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                                 </TableRow>
                               </TableBody>
@@ -1510,6 +1596,142 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           </TableContainer>
                         ) : (
                           <Typography color="textSecondary">No one-time expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Per-Unit Expenses Tab - Index 3 */}
+                    {expenseTabIndex === 3 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {reportData?.perUnitExpenses && reportData.perUnitExpenses.length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
+                                  <TableCell><strong>Name</strong></TableCell>
+                                  <TableCell><strong>Unit Type</strong></TableCell>
+                                  <TableCell align="right"><strong>Units</strong></TableCell>
+                                  <TableCell align="right"><strong>Rate/Unit</strong></TableCell>
+                                  <TableCell align="right"><strong>Total</strong></TableCell>
+                                  <TableCell><strong>Charged To</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {reportData.perUnitExpenses.map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.name || "-"}</TableCell>
+                                    <TableCell>{exp.unitTypeDisplay || exp.unitType || "-"}</TableCell>
+                                    <TableCell align="right">{parseFloat(exp.totalUnits || 0).toFixed(2)}</TableCell>
+                                    <TableCell align="right">${parseFloat(exp.rate || 0).toFixed(2)}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      ${parseFloat(exp.amount || 0).toFixed(2)}
+                                    </TableCell>
+                                    <TableCell>{exp.chargedTo || "-"}</TableCell>
+                                  </TableRow>
+                                ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={4} align="right"><strong>Per-Unit Expenses Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(reportData?.perUnitExpenses || []).toFixed(2)}</strong></TableCell>
+                                  <TableCell></TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No per-unit expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Mileage Expenses Tab - Index 4 */}
+                    {expenseTabIndex === 4 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {reportData?.mileageExpenses?.length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#f3e5f5" }}>
+                                  <TableCell><strong>Item Rate</strong></TableCell>
+                                  <TableCell><strong>Unit Type</strong></TableCell>
+                                  <TableCell align="right"><strong>Total Units</strong></TableCell>
+                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Rate/Unit</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Total Lease</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {reportData.mileageExpenses.map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.itemRateName}</TableCell>
+                                    <TableCell>{exp.unitType}</TableCell>
+                                    <TableCell align="right">{parseFloat(exp.totalUnits || 0).toFixed(2)}</TableCell>
+                                    <TableCell align="right">${parseFloat(exp.fixedLeaseAmount || 0).toFixed(2)}</TableCell>
+                                    <TableCell align="right">${parseFloat(exp.mileageRate || 0).toFixed(2)}</TableCell>
+                                    <TableCell align="right">${parseFloat(exp.mileageLeaseAmount || 0).toFixed(2)}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      ${parseFloat(exp.totalLeaseAmount || 0).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={6} align="right"><strong>Total Lease Amount:</strong></TableCell>
+                                  <TableCell align="right"><strong>${reportData.mileageExpenses.reduce((sum, exp) => sum + parseFloat(exp.totalLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No mileage expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Insurance Mileage Expenses Tab - Index 5 */}
+                    {expenseTabIndex === 5 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {reportData?.insuranceMileageExpenses?.length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#fce4ec" }}>
+                                  <TableCell><strong>Shift Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
+                                  <TableCell><strong>Shift Type</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage</strong></TableCell>
+                                  <TableCell align="right"><strong>Insurance Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {reportData.insuranceMileageExpenses.map((exp, idx) => {
+                                  // Extract data from description and miles field from API
+                                  const cabMatch = exp.description?.match(/Cab\s+(\d+)/);
+                                  const shiftTypeMatch = exp.description?.match(/\((\w+)\)/);
+                                  const cabNum = cabMatch ? cabMatch[1] : "-";
+                                  const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
+                                  const miles = exp.miles ? parseFloat(exp.miles) : 0;  // Use miles from API instead of parsing
+
+                                  return (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{exp.date || "-"}</TableCell>
+                                      <TableCell><strong>{cabNum}</strong></TableCell>
+                                      <TableCell>{shiftType}</TableCell>
+                                      <TableCell align="right">{miles.toFixed(2)}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                        ${parseFloat(exp.amount).toFixed(2)}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={4} align="right"><strong>Insurance Mileage Expenses Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</strong></TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No insurance mileage expenses</Typography>
                         )}
                       </Box>
                     )}
@@ -1654,22 +1876,36 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       <TableHead>
                         <TableRow>
                           <TableCell>Date</TableCell>
-                          <TableCell>Category</TableCell>
-                          <TableCell>Description</TableCell>
-                          <TableCell align="right">Amount</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell>Driver</TableCell>
+                          <TableCell>Shift Type</TableCell>
+                          <TableCell align="right">Fixed Lease</TableCell>
+                          <TableCell align="right">Mileage Lease</TableCell>
+                          <TableCell align="right">Total Lease</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {getLeaseRevenues().map((rev, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{rev.revenueDate || "-"}</TableCell>
-                            <TableCell>{rev.categoryName || "-"}</TableCell>
-                            <TableCell>{rev.description || "-"}</TableCell>
-                            <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {getLeaseRevenues().map((rev, idx) => {
+                          const fixedLease = rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0;
+                          const mileageLease = rev.leaseBreakdown?.mileageLeaseAmount || 0;
+                          const totalLease = parseFloat(rev.amount || 0);
+
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{rev.revenueDate || "-"}</TableCell>
+                              <TableCell><strong>{rev.description?.match(/Cab\s+(\d+)/)?.[1] || "-"}</strong></TableCell>
+                              <TableCell><strong>{rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</strong></TableCell>
+                              <TableCell>{rev.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
+                              <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
+                              <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
+                              <TableCell align="right">${parseFloat(totalLease).toFixed(2)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={3} align="right"><strong>Lease Revenue Subtotal:</strong></TableCell>
+                          <TableCell colSpan={4} align="right"><strong>Lease Revenue Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${getLeaseRevenues().reduce((sum, rev) => sum + (rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0), 0).toFixed(2)}</strong></TableCell>
+                          <TableCell align="right"><strong>${getLeaseRevenues().reduce((sum, rev) => sum + (rev.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
                           <TableCell align="right"><strong>${calculateSubtotal(getLeaseRevenues()).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>
@@ -1783,6 +2019,56 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               )}
 
+              {/* Insurance Mileage Revenue Section */}
+              {reportData.insuranceMileageRevenues && reportData.insuranceMileageRevenues.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
+                    Insurance Mileage Revenue
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Shift Date</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell>Driver Name</TableCell>
+                          <TableCell>Shift Type</TableCell>
+                          <TableCell align="right">Mileage</TableCell>
+                          <TableCell align="right">Insurance Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.insuranceMileageRevenues.map((rev, idx) => {
+                          // Extract data from description and miles field from API
+                          const cabMatch = rev.description?.match(/Cab\s+(\d+)/);
+                          const shiftTypeMatch = rev.description?.match(/\((\w+)\)/);
+                          const driverMatch = rev.description?.match(/Driver:\s+([^-]+)/);
+                          const cabNum = cabMatch ? cabMatch[1] : "-";
+                          const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
+                          const driverName = driverMatch ? driverMatch[1].trim() : "-";
+                          const miles = rev.miles ? parseFloat(rev.miles) : 0;  // Use miles from API instead of parsing
+
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{rev.revenueDate || "-"}</TableCell>
+                              <TableCell><strong>{cabNum}</strong></TableCell>
+                              <TableCell><strong>{driverName}</strong></TableCell>
+                              <TableCell>{shiftType}</TableCell>
+                              <TableCell align="right">{miles.toFixed(2)}</TableCell>
+                              <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={5} align="right"><strong>Insurance Mileage Revenue Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageRevenues).toFixed(2)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
               {/* Recurring Expenses Section */}
               {reportData.recurringExpenses && reportData.recurringExpenses.length > 0 && (
                 <Box sx={{ mb: 3 }}>
@@ -1827,22 +2113,38 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       <TableHead>
                         <TableRow>
                           <TableCell>Date</TableCell>
-                          <TableCell>Description</TableCell>
-                          <TableCell>Rate Breakdown</TableCell>
-                          <TableCell align="right">Amount</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell>Shift Type</TableCell>
+                          <TableCell>Owner</TableCell>
+                          <TableCell align="right">Fixed Lease</TableCell>
+                          <TableCell align="right">Mileage Lease</TableCell>
+                          <TableCell align="right">Total Lease</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {getLeaseExpenses().map((exp, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{exp.date || "-"}</TableCell>
-                            <TableCell>{exp.description || "-"}</TableCell>
-                            <TableCell>{exp.entityDescription || "-"}</TableCell>
-                            <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
+                        {getLeaseExpenses().map((exp, idx) => {
+                          const fixedLease = exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0;
+                          const mileageLease = exp.leaseBreakdown?.mileageLeaseAmount || 0;
+                          const totalLease = parseFloat(exp.amount || 0);
+
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{exp.date || "-"}</TableCell>
+                              <TableCell><strong>{exp.description?.match(/Cab\s+(\d+)/)?.[1] || "-"}</strong></TableCell>
+                              <TableCell>{exp.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
+                              <TableCell>{exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</TableCell>
+                              <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
+                              <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
+                              <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                ${parseFloat(totalLease).toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={3} align="right"><strong>Lease Expenses Subtotal:</strong></TableCell>
+                          <TableCell colSpan={4} align="right"><strong>Lease Expenses Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0), 0).toFixed(2)}</strong></TableCell>
+                          <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
                           <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>
@@ -1901,6 +2203,89 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               )}
 
+              {/* Per-Unit Expenses Section */}
+              {reportData.perUnitExpenses && reportData.perUnitExpenses.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#558b2f" }}>
+                    Per-Unit Expenses
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Name</TableCell>
+                          <TableCell>Unit Type</TableCell>
+                          <TableCell align="right">Units</TableCell>
+                          <TableCell align="right">Rate/Unit</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.perUnitExpenses.map((exp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{exp.name || "-"}</TableCell>
+                            <TableCell>{exp.unitTypeDisplay || exp.unitType || "-"}</TableCell>
+                            <TableCell align="right">{parseFloat(exp.totalUnits || 0).toFixed(2)}</TableCell>
+                            <TableCell align="right">${parseFloat(exp.rate || 0).toFixed(2)}</TableCell>
+                            <TableCell align="right">${parseFloat(exp.amount || 0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={4} align="right"><strong>Per-Unit Expenses Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(reportData.perUnitExpenses).toFixed(2)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Insurance Mileage Expenses Section */}
+              {reportData.insuranceMileageExpenses && reportData.insuranceMileageExpenses.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
+                    Insurance Mileage Expenses
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Shift Date</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell>Shift Type</TableCell>
+                          <TableCell align="right">Mileage</TableCell>
+                          <TableCell align="right">Insurance Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.insuranceMileageExpenses.map((exp, idx) => {
+                          // Extract data from description and miles field from API
+                          const cabMatch = exp.description?.match(/Cab\s+(\d+)/);
+                          const shiftTypeMatch = exp.description?.match(/\((\w+)\)/);
+                          const cabNum = cabMatch ? cabMatch[1] : "-";
+                          const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
+                          const miles = exp.miles ? parseFloat(exp.miles) : 0;  // Use miles from API instead of parsing
+
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell>{exp.date || "-"}</TableCell>
+                              <TableCell><strong>{cabNum}</strong></TableCell>
+                              <TableCell>{shiftType}</TableCell>
+                              <TableCell align="right">{miles.toFixed(2)}</TableCell>
+                              <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={4} align="right"><strong>Insurance Mileage Expenses Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
               {/* Totals Footer */}
               <Box sx={{ pt: 3, borderTop: "3px solid #e0e0e0", backgroundColor: "#f9f9f9", p: 3, borderRadius: 1 }}>
                 <Table size="small">
@@ -1925,14 +2310,14 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     <TableRow sx={{ height: "10px" }} />
 
                     {/* Previous Balance */}
-                    {reportData.previousBalance && reportData.previousBalance !== 0 && (
+                    {(reportData.previousBalance && reportData.previousBalance !== 0) ? (
                       <TableRow>
                         <TableCell><strong>Previous Balance</strong></TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
                           ${parseFloat(reportData.previousBalance || 0).toFixed(2)}
                         </TableCell>
                       </TableRow>
-                    )}
+                    ) : null}
 
                     {/* Final Net Payable/Due */}
                     <TableRow sx={{ backgroundColor: reportData.netDue > 0 ? "#c8e6c9" : "#ffcdd2", borderTop: "2px solid #999" }}>
@@ -1943,14 +2328,14 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     </TableRow>
 
                     {/* Paid Amount */}
-                    {reportData.paidAmount && reportData.paidAmount !== 0 && (
+                    {(reportData.paidAmount && reportData.paidAmount !== 0) ? (
                       <TableRow>
                         <TableCell><strong>Amount Paid</strong></TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
                           ${parseFloat(reportData.paidAmount || 0).toFixed(2)}
                         </TableCell>
                       </TableRow>
-                    )}
+                    ) : null}
                   </TableBody>
                 </Table>
               </Box>

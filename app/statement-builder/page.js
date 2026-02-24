@@ -67,14 +67,8 @@ export default function StatementBuilderPage() {
 
     setLoadingStatement(true);
     try {
-      let endpoint = "";
-      if (statementType === "DRIVER") {
-        endpoint = `${API_BASE_URL}/financial-statements/driver/${selectedPersonId}`;
-      } else if (statementType === "OWNER") {
-        endpoint = `${API_BASE_URL}/financial-statements/owner/${selectedPersonId}`;
-      } else if (statementType === "OWNER_REPORT") {
-        endpoint = `${API_BASE_URL}/financial-statements/owner-report/${selectedPersonId}`;
-      }
+      // Use unified endpoint for all report types
+      const endpoint = `${API_BASE_URL}/financial-statements/owner-report/${selectedPersonId}`;
 
       const response = await fetch(`${endpoint}?from=${statementStartDate}&to=${statementEndDate}`, {
         headers: {
