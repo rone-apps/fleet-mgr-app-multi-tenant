@@ -908,7 +908,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 )}
 
                 {/* Revenue Details - Tabbed View */}
-                {(reportData?.revenues && reportData.revenues.length > 0 || reportData?.insuranceMileageRevenues?.length > 0) && (
+                {reportData?.revenues && reportData.revenues.length > 0 && (
                   <Paper sx={{ mb: 3 }}>
                     <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
                       <Tabs
@@ -918,8 +918,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <Tab label={`Credit Cards (${getRevenuesByType("CARD_REVENUE").length})`} />
                         <Tab label={`Charges (${getRevenuesByType("ACCOUNT_REVENUE").length})`} />
                         <Tab label={`Lease Revenue (${getRevenuesByType("LEASE_INCOME").length})`} />
-                        <Tab label={`Insurance Mileage (${reportData?.insuranceMileageRevenues?.length || 0})`} />
-                        <Tab label={`Others (${(reportData?.revenues || []).filter(r => !["CARD_REVENUE", "ACCOUNT_REVENUE", "LEASE_INCOME", "INSURANCE_MILEAGE_INCOME"].includes(r.revenueSubType)).length})`} />
+                        <Tab label={`Others (${(reportData?.revenues || []).filter(r => !["CARD_REVENUE", "ACCOUNT_REVENUE", "LEASE_INCOME"].includes(r.revenueSubType)).length})`} />
                       </Tabs>
                     </Box>
 
@@ -1234,61 +1233,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       </Box>
                     )}
 
-                    {/* Insurance Mileage Revenue Tab - Index 3 */}
+                    {/* Others Tab */}
                     {revenueTabIndex === 3 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
-                        {reportData?.insuranceMileageRevenues?.length > 0 ? (
-                          <TableContainer sx={{ overflowX: 'auto' }}>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow sx={{ backgroundColor: "#fce4ec" }}>
-                                  <TableCell><strong>Shift Date</strong></TableCell>
-                                  <TableCell><strong>Cab #</strong></TableCell>
-                                  <TableCell><strong>Driver Name</strong></TableCell>
-                                  <TableCell><strong>Shift Type</strong></TableCell>
-                                  <TableCell align="right"><strong>Mileage</strong></TableCell>
-                                  <TableCell align="right"><strong>Insurance Amount</strong></TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {reportData.insuranceMileageRevenues.map((rev, idx) => {
-                                  // Extract data from description: "Insurance Mileage Income - Cab 7 (DAY) - Driver: GURMIT SINGH-7 - Mileage: XX miles"
-                                  const cabMatch = rev.description?.match(/Cab\s+(\d+)/);
-                                  const shiftTypeMatch = rev.description?.match(/\((\w+)\)/);
-                                  const driverMatch = rev.description?.match(/Driver:\s+([^-]+)/);
-                                  const cabNum = cabMatch ? cabMatch[1] : "-";
-                                  const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
-                                  const driverName = driverMatch ? driverMatch[1].trim() : "-";
-                                  const miles = rev.miles ? parseFloat(rev.miles) : 0;  // Use miles from API instead of parsing
-
-                                  return (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{rev.revenueDate || "-"}</TableCell>
-                                      <TableCell><strong>{cabNum}</strong></TableCell>
-                                      <TableCell><strong>{driverName}</strong></TableCell>
-                                      <TableCell>{shiftType}</TableCell>
-                                      <TableCell align="right">{miles.toFixed(2)}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
-                                        ${parseFloat(rev.amount).toFixed(2)}
-                                      </TableCell>
-                                    </TableRow>
-                                  );
-                                })}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={5} align="right"><strong>Insurance Mileage Revenue Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageRevenues).toFixed(2)}</strong></TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        ) : (
-                          <Typography color="textSecondary">No insurance mileage revenue</Typography>
-                        )}
-                      </Box>
-                    )}
-
-                    {/* Others Tab - Updated index from 3 to 4 */}
-                    {revenueTabIndex === 4 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#388e3c" }}>
                           Filters
@@ -1695,30 +1641,27 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             <Table size="small">
                               <TableHead>
                                 <TableRow sx={{ backgroundColor: "#fce4ec" }}>
-                                  <TableCell><strong>Shift Date</strong></TableCell>
+                                  <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Cab #</strong></TableCell>
-                                  <TableCell><strong>Shift Type</strong></TableCell>
                                   <TableCell align="right"><strong>Mileage</strong></TableCell>
-                                  <TableCell align="right"><strong>Insurance Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Insurance Rate</strong></TableCell>
+                                  <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
                                 {reportData.insuranceMileageExpenses.map((exp, idx) => {
-                                  // Extract data from description and miles field from API
-                                  const cabMatch = exp.description?.match(/Cab\s+(\d+)/);
-                                  const shiftTypeMatch = exp.description?.match(/\((\w+)\)/);
-                                  const cabNum = cabMatch ? cabMatch[1] : "-";
-                                  const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
-                                  const miles = exp.miles ? parseFloat(exp.miles) : 0;  // Use miles from API instead of parsing
+                                  const miles = exp.miles ? parseFloat(exp.miles) : 0;
+                                  const amount = exp.amount ? parseFloat(exp.amount) : 0;
+                                  const insuranceRate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
 
                                   return (
                                     <TableRow key={idx} hover>
                                       <TableCell>{exp.date || "-"}</TableCell>
-                                      <TableCell><strong>{cabNum}</strong></TableCell>
-                                      <TableCell>{shiftType}</TableCell>
+                                      <TableCell><strong>{exp.cabNumber || "-"}</strong></TableCell>
                                       <TableCell align="right">{miles.toFixed(2)}</TableCell>
+                                      <TableCell align="right">${insuranceRate}</TableCell>
                                       <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                        ${parseFloat(exp.amount).toFixed(2)}
+                                        ${amount.toFixed(2)}
                                       </TableCell>
                                     </TableRow>
                                   );
@@ -2019,56 +1962,6 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               )}
 
-              {/* Insurance Mileage Revenue Section */}
-              {reportData.insuranceMileageRevenues && reportData.insuranceMileageRevenues.length > 0 && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
-                    Insurance Mileage Revenue
-                  </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Shift Date</TableCell>
-                          <TableCell>Cab #</TableCell>
-                          <TableCell>Driver Name</TableCell>
-                          <TableCell>Shift Type</TableCell>
-                          <TableCell align="right">Mileage</TableCell>
-                          <TableCell align="right">Insurance Amount</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {reportData.insuranceMileageRevenues.map((rev, idx) => {
-                          // Extract data from description and miles field from API
-                          const cabMatch = rev.description?.match(/Cab\s+(\d+)/);
-                          const shiftTypeMatch = rev.description?.match(/\((\w+)\)/);
-                          const driverMatch = rev.description?.match(/Driver:\s+([^-]+)/);
-                          const cabNum = cabMatch ? cabMatch[1] : "-";
-                          const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
-                          const driverName = driverMatch ? driverMatch[1].trim() : "-";
-                          const miles = rev.miles ? parseFloat(rev.miles) : 0;  // Use miles from API instead of parsing
-
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>{rev.revenueDate || "-"}</TableCell>
-                              <TableCell><strong>{cabNum}</strong></TableCell>
-                              <TableCell><strong>{driverName}</strong></TableCell>
-                              <TableCell>{shiftType}</TableCell>
-                              <TableCell align="right">{miles.toFixed(2)}</TableCell>
-                              <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={5} align="right"><strong>Insurance Mileage Revenue Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageRevenues).toFixed(2)}</strong></TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              )}
-
               {/* Recurring Expenses Section */}
               {reportData.recurringExpenses && reportData.recurringExpenses.length > 0 && (
                 <Box sx={{ mb: 3 }}>
@@ -2250,29 +2143,26 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Shift Date</TableCell>
+                          <TableCell>Date</TableCell>
                           <TableCell>Cab #</TableCell>
-                          <TableCell>Shift Type</TableCell>
                           <TableCell align="right">Mileage</TableCell>
-                          <TableCell align="right">Insurance Amount</TableCell>
+                          <TableCell align="right">Insurance Rate</TableCell>
+                          <TableCell align="right">Total</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
                         {reportData.insuranceMileageExpenses.map((exp, idx) => {
-                          // Extract data from description and miles field from API
-                          const cabMatch = exp.description?.match(/Cab\s+(\d+)/);
-                          const shiftTypeMatch = exp.description?.match(/\((\w+)\)/);
-                          const cabNum = cabMatch ? cabMatch[1] : "-";
-                          const shiftType = shiftTypeMatch ? shiftTypeMatch[1] : "-";
-                          const miles = exp.miles ? parseFloat(exp.miles) : 0;  // Use miles from API instead of parsing
+                          const miles = exp.miles ? parseFloat(exp.miles) : 0;
+                          const amount = exp.amount ? parseFloat(exp.amount) : 0;
+                          const insuranceRate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
 
                           return (
                             <TableRow key={idx}>
                               <TableCell>{exp.date || "-"}</TableCell>
-                              <TableCell><strong>{cabNum}</strong></TableCell>
-                              <TableCell>{shiftType}</TableCell>
+                              <TableCell><strong>{exp.cabNumber || "-"}</strong></TableCell>
                               <TableCell align="right">{miles.toFixed(2)}</TableCell>
-                              <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                              <TableCell align="right">${insuranceRate}</TableCell>
+                              <TableCell align="right">${amount.toFixed(2)}</TableCell>
                             </TableRow>
                           );
                         })}
