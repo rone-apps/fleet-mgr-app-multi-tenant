@@ -12,9 +12,12 @@ import {
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { Assessment, Download, Close } from "@mui/icons-material";
+import { Assessment, Download, Close, FileDownload } from "@mui/icons-material";
 import axios from "axios";
 import { API_BASE_URL } from "../lib/api";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import "jspdf-autotable";
 
 // ✅ FIXED: Proper date formatting function that handles timezones correctly
 const formatDateForAPI = (date) => {
@@ -109,6 +112,13 @@ export default function DriverSummaryPage() {
       return;
     }
 
+    // ✅ VALIDATE 1-MONTH PERIOD
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    if (daysDiff > 31) {
+      setError("Report period cannot exceed 31 days. Please select a shorter date range.");
+      return;
+    }
+
     setLoading(true);
     setLoadingMessage("Loading all driver records...");
     setError("");
@@ -144,7 +154,7 @@ export default function DriverSummaryPage() {
               Authorization: `Bearer ${token}`,
               "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             },
-            timeout: 300000, // 5 minutes to allow large report calculations
+            timeout: 900000, // 5 minutes to allow large report calculations
           }
         );
 
@@ -224,6 +234,65 @@ export default function DriverSummaryPage() {
     const endIndex = startIndex + pageSize;
     return allRecords.slice(startIndex, endIndex);
   }, [page, pageSize, allRecords]);
+
+  // ✅ DYNAMIC COLUMN SCHEMA - Compute from all records
+  const revenueColumns = useMemo(() => {
+    const keys = new Map(); // key → displayName
+    allRecords.forEach(d => {
+      (d.revenueBreakdown || []).forEach(item => {
+        if (!keys.has(item.key)) {
+          keys.set(item.key, item.displayName);
+        }
+      });
+    });
+    // Return in consistent order: CC, CHARGES, LEASE_INC, then OTHER items
+    const ordered = new Map();
+    const otherItems = new Map();
+    keys.forEach((displayName, key) => {
+      if (key === "CC") ordered.set(key, displayName);
+      else if (key === "CHARGES") ordered.set(key, displayName);
+      else if (key === "LEASE_INC") ordered.set(key, displayName);
+      else otherItems.set(key, displayName);
+    });
+    otherItems.forEach((displayName, key) => ordered.set(key, displayName));
+    return Array.from(ordered.entries()).map(([key, displayName]) => ({ key, displayName }));
+  }, [allRecords]);
+
+  const expenseColumns = useMemo(() => {
+    const keys = new Map();
+    allRecords.forEach(d => {
+      (d.expenseBreakdown || []).forEach(item => {
+        if (!keys.has(item.key)) {
+          keys.set(item.key, item.displayName);
+        }
+      });
+    });
+    // Return in consistent order: RECURRING items, LEASE_EXP, ONETIME items, INSURANCE
+    const ordered = new Map();
+    const recurringItems = new Map();
+    const ontimeItems = new Map();
+    keys.forEach((displayName, key) => {
+      if (key === "LEASE_EXP") ordered.set(key, displayName);
+      else if (key === "INSURANCE") ordered.set(key, displayName);
+      else if (key.startsWith("RECURRING:")) recurringItems.set(key, displayName);
+      else if (key.startsWith("ONETIME:")) ontimeItems.set(key, displayName);
+    });
+    recurringItems.forEach((displayName, key) => ordered.set(key, displayName));
+    ontimeItems.forEach((displayName, key) => ordered.set(key, displayName));
+    if (keys.has("INSURANCE")) {
+      const insurance = keys.get("INSURANCE");
+      ordered.delete("INSURANCE");
+      ordered.set("INSURANCE", insurance);
+    }
+    return Array.from(ordered.entries()).map(([key, displayName]) => ({ key, displayName }));
+  }, [allRecords]);
+
+  // ✅ HELPER FUNCTIONS FOR DYNAMIC COLUMN LOOKUP
+  const getRevAmount = (driver, key) =>
+    (driver.revenueBreakdown || []).find(i => i.key === key)?.amount || 0;
+
+  const getExpAmount = (driver, key) =>
+    (driver.expenseBreakdown || []).find(i => i.key === key)?.amount || 0;
 
   // ✅ Get display totals from grand totals (all records cached)
   const getDisplayTotals = () => {
@@ -329,76 +398,159 @@ export default function DriverSummaryPage() {
     }
   };
 
-  // ✅ Export ALL cached records to CSV (not just current page)
-  const exportToCSV = () => {
+  // ✅ Export ALL cached records to Excel (not just current page)
+  const exportToExcel = () => {
     if (!isAllRecordsLoaded || allRecords.length === 0) {
       setError("No data to export. Please load all records first.");
       return;
     }
 
-    const headers = [
-      "Driver Number",
-      "Driver Name",
-      "Is Owner",
-      "Lease Revenue",
-      "Credit Card Revenue",
-      "Charges Revenue",
-      "Other Revenue",
-      "Total Revenue",
-      "Fixed Expense",
-      "Lease Expense",
-      "Variable Expense",
-      "Other Expense",
-      "Total Expense",
-      "Net Owed",
-      "Paid",
-      "Outstanding",
-    ];
+    try {
+      // Build headers: Driver #, Name, [dynamic revenue columns], Total Rev, [dynamic expense columns], Total Exp, Net Owed, Paid, Outstanding
+      const headers = ["Driver #", "Name"];
+      revenueColumns.forEach(col => headers.push(col.displayName));
+      headers.push("Total Rev");
+      expenseColumns.forEach(col => headers.push(col.displayName));
+      headers.push("Total Exp", "Net Owed", "Paid", "Outstanding");
 
-    // ✅ Export ALL records, not just filtered page
-    const rows = allRecords.map((driver) => {
-      const totalRevenue = (driver.leaseRevenue || 0) +
-                         (driver.creditCardRevenue || 0) +
-                         (driver.chargesRevenue || 0) +
-                         (driver.otherRevenue || 0);
-      const totalExpense = (driver.fixedExpense || 0) +
-                         (driver.leaseExpense || 0) +
-                         (driver.variableExpense || 0) +
-                         (driver.otherExpense || 0);
+      // Build rows
+      const rows = allRecords.map((driver) => {
+        const row = [driver.driverNumber, driver.driverName];
 
-      return [
-        driver.driverNumber,
-        driver.driverName,
-        driver.isOwner ? "Yes" : "No",
-        driver.leaseRevenue || 0,
-        driver.creditCardRevenue || 0,
-        driver.chargesRevenue || 0,
-        driver.otherRevenue || 0,
-        totalRevenue,
-        driver.fixedExpense || 0,
-        driver.leaseExpense || 0,
-        driver.variableExpense || 0,
-        driver.otherExpense || 0,
-        totalExpense,
-        driver.netOwed || 0,
-        driver.paid || 0,
-        driver.outstanding || 0,
-      ];
-    });
+        // Revenue columns
+        revenueColumns.forEach(col => {
+          row.push(getRevAmount(driver, col.key));
+        });
+        row.push(driver.totalRevenue || 0);
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map((row) => row.join(",")),
-    ].join("\n");
+        // Expense columns
+        expenseColumns.forEach(col => {
+          row.push(getExpAmount(driver, col.key));
+        });
+        row.push(driver.totalExpense || 0, driver.netOwed || 0, driver.paid || 0, driver.outstanding || 0);
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `driver-summary-${formatDateForAPI(startDate)}-to-${formatDateForAPI(endDate)}-${allRecords.length}-records.csv`;
-    a.click();
+        return row;
+      });
 
-    setError(""); // Clear any previous errors
+      // Add grand totals row
+      const totalsRow = ["TOTALS", ""];
+      revenueColumns.forEach(col => {
+        const revTotal = allRecords.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
+        totalsRow.push(revTotal);
+      });
+      totalsRow.push(displayTotals.revenue);
+      expenseColumns.forEach(col => {
+        const expTotal = allRecords.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
+        totalsRow.push(expTotal);
+      });
+      totalsRow.push(displayTotals.expense, displayTotals.netOwed, displayTotals.paid, displayTotals.netOwed - displayTotals.paid);
+      rows.push(totalsRow);
+
+      // Create workbook
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+      // Set column widths
+      const colWidths = [];
+      headers.forEach(() => colWidths.push({ wch: 15 }));
+      worksheet["!cols"] = colWidths;
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Driver Summary");
+      XLSX.writeFile(workbook, `driver-summary-${formatDateForAPI(startDate)}-to-${formatDateForAPI(endDate)}.xlsx`);
+
+      setError(""); // Clear any previous errors
+    } catch (err) {
+      console.error("Error exporting to Excel:", err);
+      setError(`Failed to export Excel: ${err.message}`);
+    }
+  };
+
+  // ✅ Export ALL cached records to PDF (not just current page)
+  const exportToPDF = () => {
+    if (!isAllRecordsLoaded || allRecords.length === 0) {
+      setError("No data to export. Please load all records first.");
+      return;
+    }
+
+    try {
+      // Create PDF in landscape A3 for wide table
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a3"
+      });
+
+      // Add title
+      pdf.setFontSize(16);
+      pdf.text("Driver Financial Summary Report", 15, 20);
+      pdf.setFontSize(10);
+      pdf.text(`Period: ${formatDateForAPI(startDate)} to ${formatDateForAPI(endDate)}`, 15, 28);
+
+      // Build headers and rows
+      const headers = ["Driver #", "Name"];
+      revenueColumns.forEach(col => headers.push(col.displayName));
+      headers.push("Total Rev");
+      expenseColumns.forEach(col => headers.push(col.displayName));
+      headers.push("Total Exp", "Net Owed", "Paid", "Outstanding");
+
+      const rows = allRecords.map((driver) => {
+        const row = [driver.driverNumber, driver.driverName];
+
+        revenueColumns.forEach(col => {
+          row.push(formatCurrency(getRevAmount(driver, col.key)));
+        });
+        row.push(formatCurrency(driver.totalRevenue || 0));
+
+        expenseColumns.forEach(col => {
+          row.push(formatCurrency(getExpAmount(driver, col.key)));
+        });
+        row.push(
+          formatCurrency(driver.totalExpense || 0),
+          formatCurrency(driver.netOwed || 0),
+          formatCurrency(driver.paid || 0),
+          formatCurrency(driver.outstanding || 0)
+        );
+
+        return row;
+      });
+
+      // Add totals row
+      const totalsRow = ["TOTALS", ""];
+      revenueColumns.forEach(col => {
+        const revTotal = allRecords.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
+        totalsRow.push(formatCurrency(revTotal));
+      });
+      totalsRow.push(formatCurrency(displayTotals.revenue));
+      expenseColumns.forEach(col => {
+        const expTotal = allRecords.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
+        totalsRow.push(formatCurrency(expTotal));
+      });
+      totalsRow.push(
+        formatCurrency(displayTotals.expense),
+        formatCurrency(displayTotals.netOwed),
+        formatCurrency(displayTotals.paid),
+        formatCurrency(displayTotals.netOwed - displayTotals.paid)
+      );
+      rows.push(totalsRow);
+
+      // Add table
+      pdf.autoTable({
+        head: [headers],
+        body: rows,
+        startY: 35,
+        styles: { fontSize: 8, cellPadding: 3 },
+        headStyles: { fillColor: [70, 130, 180], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [240, 240, 240] },
+        margin: { left: 10, right: 10 }
+      });
+
+      pdf.save(`driver-summary-${formatDateForAPI(startDate)}-to-${formatDateForAPI(endDate)}.pdf`);
+
+      setError(""); // Clear any previous errors
+    } catch (err) {
+      console.error("Error exporting to PDF:", err);
+      setError(`Failed to export PDF: ${err.message}`);
+    }
   };
 
   return (
@@ -489,16 +641,30 @@ export default function DriverSummaryPage() {
                       size="small"
                     />
                   </Grid>
-                  <Grid item xs={12} sm={4}>
+                  <Grid item xs={12} sm={6}>
                     <Button
-                      variant="outlined"
+                      variant="contained"
+                      color="success"
                       startIcon={<Download />}
-                      onClick={exportToCSV}
+                      onClick={exportToExcel}
                       fullWidth
                       disabled={!isAllRecordsLoaded}
-                      title={isAllRecordsLoaded ? `Export all ${allRecords.length} records` : "Generate report and load all records first"}
+                      title={isAllRecordsLoaded ? `Export all ${allRecords.length} records to Excel` : "Generate report and load all records first"}
                     >
-                      {isAllRecordsLoaded ? `Export All (${allRecords.length})` : "Export to CSV"}
+                      Export Excel
+                    </Button>
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <Button
+                      variant="contained"
+                      color="error"
+                      startIcon={<Download />}
+                      onClick={exportToPDF}
+                      fullWidth
+                      disabled={!isAllRecordsLoaded}
+                      title={isAllRecordsLoaded ? `Export all ${allRecords.length} records to PDF` : "Generate report and load all records first"}
+                    >
+                      Export PDF
                     </Button>
                   </Grid>
                 </Grid>
@@ -695,7 +861,7 @@ export default function DriverSummaryPage() {
                   </Grid>
                 </Paper>
 
-                {/* Driver Summary Table - Enhanced with Total Revenue and Total Expense columns */}
+                {/* Driver Summary Table - Dynamic Columns */}
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                   <Table size="small" sx={{ minWidth: 1600 }}>
                     <TableHead>
@@ -719,23 +885,14 @@ export default function DriverSummaryPage() {
                           </TableSortLabel>
                         </TableCell>
 
-                        {/* Revenue Section */}
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Lease</Typography>
-                          <Typography variant="caption" display="block">Rev</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">CC</Typography>
-                          <Typography variant="caption" display="block">Rev</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Charges</Typography>
-                          <Typography variant="caption" display="block">Rev</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Other</Typography>
-                          <Typography variant="caption" display="block">Rev</Typography>
-                        </TableCell>
+                        {/* ✅ Dynamic Revenue Columns */}
+                        {revenueColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ minWidth: 75, bgcolor: "#f5f5f5" }}>
+                            <Typography variant="caption" fontWeight="bold">{col.displayName}</Typography>
+                          </TableCell>
+                        ))}
+
+                        {/* Total Revenue */}
                         <TableCell align="right" sx={{ minWidth: 75, bgcolor: "#e8f5e9" }}>
                           <TableSortLabel
                             active={orderBy === "totalRevenue"}
@@ -746,23 +903,14 @@ export default function DriverSummaryPage() {
                           </TableSortLabel>
                         </TableCell>
 
-                        {/* Expense Section */}
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Fixed</Typography>
-                          <Typography variant="caption" display="block">Exp</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Lease</Typography>
-                          <Typography variant="caption" display="block">Exp</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Var</Typography>
-                          <Typography variant="caption" display="block">Exp</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 65, bgcolor: "#f5f5f5" }}>
-                          <Typography variant="caption" display="block" fontWeight="bold">Other</Typography>
-                          <Typography variant="caption" display="block">Exp</Typography>
-                        </TableCell>
+                        {/* ✅ Dynamic Expense Columns */}
+                        {expenseColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ minWidth: 75, bgcolor: "#f5f5f5" }}>
+                            <Typography variant="caption" fontWeight="bold">{col.displayName}</Typography>
+                          </TableCell>
+                        ))}
+
+                        {/* Total Expense */}
                         <TableCell align="right" sx={{ minWidth: 75, bgcolor: "#ffebee" }}>
                           <TableSortLabel
                             active={orderBy === "totalExpense"}
@@ -802,14 +950,8 @@ export default function DriverSummaryPage() {
                     </TableHead>
                     <TableBody>
                       {filteredDataComputed.map((driver) => {
-                        const totalRevenue = (driver.leaseRevenue || 0) +
-                                           (driver.creditCardRevenue || 0) +
-                                           (driver.chargesRevenue || 0) +
-                                           (driver.otherRevenue || 0);
-                        const totalExpense = (driver.fixedExpense || 0) +
-                                           (driver.leaseExpense || 0) +
-                                           (driver.variableExpense || 0) +
-                                           (driver.otherExpense || 0);
+                        const totalRevenue = driver.totalRevenue || 0;
+                        const totalExpense = driver.totalExpense || 0;
 
                         return (
                           <TableRow
@@ -841,38 +983,28 @@ export default function DriverSummaryPage() {
                               </Typography>
                             </TableCell>
 
-                            {/* Revenue Columns */}
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.leaseRevenue)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.creditCardRevenue)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.chargesRevenue)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.otherRevenue || 0)}
-                            </TableCell>
+                            {/* ✅ Dynamic Revenue Columns */}
+                            {revenueColumns.map(col => (
+                              <TableCell key={col.key} align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                                {formatCurrency(getRevAmount(driver, col.key))}
+                              </TableCell>
+                            ))}
+
+                            {/* Total Revenue */}
                             <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
                               <Typography variant="body2" fontWeight="bold" color="success.main">
                                 {formatCurrency(totalRevenue)}
                               </Typography>
                             </TableCell>
 
-                            {/* Expense Columns */}
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.fixedExpense)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.leaseExpense)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.variableExpense)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#f9f9f9" }}>
-                              {formatCurrency(driver.otherExpense || 0)}
-                            </TableCell>
+                            {/* ✅ Dynamic Expense Columns */}
+                            {expenseColumns.map(col => (
+                              <TableCell key={col.key} align="right" sx={{ bgcolor: "#f9f9f9" }}>
+                                {formatCurrency(getExpAmount(driver, col.key))}
+                              </TableCell>
+                            ))}
+
+                            {/* Total Expense */}
                             <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
                               <Typography variant="body2" fontWeight="bold" color="error.main">
                                 {formatCurrency(totalExpense)}
@@ -940,53 +1072,35 @@ export default function DriverSummaryPage() {
                               : `TOTALS (${displayTotals.driverCount} drivers cached)`}
                           </Typography>
                         </TableCell>
-                        {/* Revenue Totals */}
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.leaseRevenue)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.creditCardRevenue)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.chargesRevenue)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.otherRevenue)}
-                          </Typography>
-                        </TableCell>
+                        {/* ✅ Dynamic Revenue Totals */}
+                        {revenueColumns.map(col => {
+                          const revTotal = allRecords.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
+                          return (
+                            <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {formatCurrency(revTotal)}
+                              </Typography>
+                            </TableCell>
+                          );
+                        })}
+                        {/* Total Revenue Grand Total */}
                         <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
                           <Typography variant="body2" fontWeight="bold" color="success.main">
                             {formatCurrency(displayTotals.revenue)}
                           </Typography>
                         </TableCell>
-                        {/* Expense Totals */}
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.fixedExpense)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.leaseExpense)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.variableExpense)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {formatCurrency(displayTotals.otherExpense)}
-                          </Typography>
-                        </TableCell>
+                        {/* ✅ Dynamic Expense Totals */}
+                        {expenseColumns.map(col => {
+                          const expTotal = allRecords.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
+                          return (
+                            <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold">
+                                {formatCurrency(expTotal)}
+                              </Typography>
+                            </TableCell>
+                          );
+                        })}
+                        {/* Total Expense Grand Total */}
                         <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
                           <Typography variant="body2" fontWeight="bold" color="error.main">
                             {formatCurrency(displayTotals.expense)}
@@ -1068,7 +1182,7 @@ export default function DriverSummaryPage() {
                   {loadingMessage || "Generating report..."}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  This may take up to 5 minutes for large date ranges
+                  This may take up to 15 minutes for large date ranges
                 </Typography>
               </Paper>
             )}
