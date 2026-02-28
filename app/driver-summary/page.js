@@ -336,6 +336,31 @@ export default function DriverSummaryPage() {
 
   const displayTotals = getDisplayTotals();
 
+  // ✅ Calculate filtered totals based on Driver Type filter
+  const getFilteredTotals = () => {
+    const filterByType = (records) => {
+      if (driverTypeFilter === "DRIVERS_ONLY") {
+        return records.filter(d => !d.isOwner);
+      } else if (driverTypeFilter === "OWNERS_ONLY") {
+        return records.filter(d => d.isOwner);
+      }
+      return records; // ALL
+    };
+
+    const filtered = filterByType(allRecords);
+    return {
+      revenue: filtered.reduce((sum, d) => sum + (d.totalRevenue || 0), 0),
+      expense: filtered.reduce((sum, d) => sum + (d.totalExpense || 0), 0),
+      netOwed: filtered.reduce((sum, d) => sum + (d.totalRevenue || 0), 0) -
+               filtered.reduce((sum, d) => sum + (d.totalExpense || 0), 0),
+      paid: filtered.reduce((sum, d) => sum + (d.paid || 0), 0),
+      count: filtered.length,
+      filtered: filtered,
+    };
+  };
+
+  const filteredTotals = getFilteredTotals();
+
   // ✅ Compute filtered data directly (no useEffect to avoid infinite loop)
   const filteredDataComputed = useMemo(() => {
     // Use allRecords if fully loaded, otherwise use currentPageData
@@ -1152,29 +1177,12 @@ export default function DriverSummaryPage() {
                       </TableRow>
 
                       {/* Grand Totals Row - Dynamic based on Driver Type Filter */}
-                      {useMemo(() => {
-                        // Filter records based on driver type filter
-                        const filterByType = (records) => {
-                          if (driverTypeFilter === "DRIVERS_ONLY") {
-                            return records.filter(d => !d.isOwner);
-                          } else if (driverTypeFilter === "OWNERS_ONLY") {
-                            return records.filter(d => d.isOwner);
-                          }
-                          return records; // ALL
-                        };
-                        const filteredForTotals = filterByType(allRecords);
-
-                        // Calculate totals
-                        const totalRev = filteredForTotals.reduce((sum, d) => sum + (d.totalRevenue || 0), 0);
-                        const totalExp = filteredForTotals.reduce((sum, d) => sum + (d.totalExpense || 0), 0);
-                        const netOwed = totalRev - totalExp;
-                        const paid = filteredForTotals.reduce((sum, d) => sum + (d.paid || 0), 0);
-                        const outstanding = netOwed - paid;
-
+                      {(() => {
                         const typeLabel =
                           driverTypeFilter === "DRIVERS_ONLY" ? "DRIVERS" :
                           driverTypeFilter === "OWNERS_ONLY" ? "OWNERS" :
                           "ALL DRIVERS";
+                        const outstanding = filteredTotals.netOwed - filteredTotals.paid;
 
                         return (
                           <TableRow sx={{ bgcolor: isAllRecordsLoaded ? "success.light" : "info.light", fontWeight: "bold", borderTop: "3px solid #ff9800" }}>
@@ -1182,12 +1190,12 @@ export default function DriverSummaryPage() {
                               <Typography variant="body2" fontWeight="bold">
                                 {isAllRecordsLoaded
                                   ? `GRAND TOTALS (${typeLabel})`
-                                  : `TOTALS (${filteredForTotals.length} ${typeLabel.toLowerCase()} cached)`}
+                                  : `TOTALS (${filteredTotals.count} ${typeLabel.toLowerCase()} cached)`}
                               </Typography>
                             </TableCell>
                             {/* ✅ Dynamic Revenue Totals */}
                             {revenueColumns.map(col => {
-                              const revTotal = filteredForTotals.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
+                              const revTotal = filteredTotals.filtered.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
                               return (
                                 <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
                                   <Typography variant="body2" fontWeight="bold">
@@ -1199,12 +1207,12 @@ export default function DriverSummaryPage() {
                             {/* Total Revenue Grand Total */}
                             <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
                               <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
-                                {formatCurrency(totalRev)}
+                                {formatCurrency(filteredTotals.revenue)}
                               </Typography>
                             </TableCell>
                             {/* ✅ Dynamic Expense Totals */}
                             {expenseColumns.map(col => {
-                              const expTotal = filteredForTotals.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
+                              const expTotal = filteredTotals.filtered.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
                               return (
                                 <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
                                   <Typography variant="body2" fontWeight="bold">
@@ -1216,7 +1224,7 @@ export default function DriverSummaryPage() {
                             {/* Total Expense Grand Total */}
                             <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
                               <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
-                                {formatCurrency(totalExp)}
+                                {formatCurrency(filteredTotals.expense)}
                               </Typography>
                             </TableCell>
                             {/* Summary Totals */}
@@ -1225,20 +1233,20 @@ export default function DriverSummaryPage() {
                                 variant="body2"
                                 fontWeight="bold"
                                 color={
-                                  netOwed > 0
+                                  filteredTotals.netOwed > 0
                                     ? "success.main"
-                                    : netOwed < 0
+                                    : filteredTotals.netOwed < 0
                                     ? "error.main"
                                     : "text.primary"
                                 }
                                 sx={{ fontSize: "1.1em" }}
                               >
-                                {formatCurrency(netOwed)}
+                                {formatCurrency(filteredTotals.netOwed)}
                               </Typography>
                             </TableCell>
                             <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
                               <Typography variant="caption" fontWeight="bold">
-                                {formatCurrency(paid)}
+                                {formatCurrency(filteredTotals.paid)}
                               </Typography>
                             </TableCell>
                             <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
@@ -1259,7 +1267,7 @@ export default function DriverSummaryPage() {
                             </TableCell>
                           </TableRow>
                         );
-                      }, [allRecords, driverTypeFilter, revenueColumns, expenseColumns])}
+                      })()}
 
 
                       {/* Revenue Subtotal Row */}
