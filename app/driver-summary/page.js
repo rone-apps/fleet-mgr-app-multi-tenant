@@ -55,6 +55,7 @@ export default function DriverSummaryPage() {
   // Search/filter state
   const [searchDriverNumber, setSearchDriverNumber] = useState("");
   const [searchDriverName, setSearchDriverName] = useState("");
+  const [driverTypeFilter, setDriverTypeFilter] = useState("ALL"); // ALL, DRIVERS_ONLY, OWNERS_ONLY
 
   // Sort state
   const [orderBy, setOrderBy] = useState("driverName");
@@ -336,11 +337,21 @@ export default function DriverSummaryPage() {
 
   // ✅ Compute filtered data directly (no useEffect to avoid infinite loop)
   const filteredDataComputed = useMemo(() => {
-    if (currentPageData.length === 0) {
+    // Use allRecords if fully loaded, otherwise use currentPageData
+    const dataToFilter = isAllRecordsLoaded ? allRecords : currentPageData;
+
+    if (dataToFilter.length === 0) {
       return [];
     }
 
-    let filtered = [...currentPageData];
+    let filtered = [...dataToFilter];
+
+    // Filter by driver type
+    if (driverTypeFilter === "DRIVERS_ONLY") {
+      filtered = filtered.filter((driver) => !driver.isOwner);
+    } else if (driverTypeFilter === "OWNERS_ONLY") {
+      filtered = filtered.filter((driver) => driver.isOwner);
+    }
 
     if (searchDriverNumber) {
       filtered = filtered.filter((driver) =>
@@ -355,7 +366,7 @@ export default function DriverSummaryPage() {
     }
 
     return filtered;
-  }, [searchDriverNumber, searchDriverName, currentPageData]);
+  }, [searchDriverNumber, searchDriverName, currentPageData, allRecords, isAllRecordsLoaded, driverTypeFilter]);
 
   // Format currency
   const formatCurrency = (value) => {
@@ -620,9 +631,9 @@ export default function DriverSummaryPage() {
             {reportData && (
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" gutterBottom>
-                  Filters
+                  Filters & Search
                 </Typography>
-                <Grid container spacing={2}>
+                <Grid container spacing={2} sx={{ mb: 2 }}>
                   <Grid item xs={12} sm={4}>
                     <TextField
                       label="Search Driver Number"
@@ -630,6 +641,7 @@ export default function DriverSummaryPage() {
                       onChange={(e) => setSearchDriverNumber(e.target.value)}
                       fullWidth
                       size="small"
+                      helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
                     />
                   </Grid>
                   <Grid item xs={12} sm={4}>
@@ -639,8 +651,25 @@ export default function DriverSummaryPage() {
                       onChange={(e) => setSearchDriverName(e.target.value)}
                       fullWidth
                       size="small"
+                      helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
                     />
                   </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Driver Type</InputLabel>
+                      <Select
+                        value={driverTypeFilter}
+                        label="Driver Type"
+                        onChange={(e) => setDriverTypeFilter(e.target.value)}
+                      >
+                        <MenuItem value="ALL">All (Drivers & Owners)</MenuItem>
+                        <MenuItem value="DRIVERS_ONLY">Drivers Only</MenuItem>
+                        <MenuItem value="OWNERS_ONLY">Owners Only</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                </Grid>
+                <Grid container spacing={2}>
                   <Grid item xs={12} sm={6}>
                     <Button
                       variant="contained"
