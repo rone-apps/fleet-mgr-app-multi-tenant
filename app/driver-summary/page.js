@@ -1092,8 +1092,66 @@ export default function DriverSummaryPage() {
                           </TableRow>
                         );
                       })}
-                      {/* Totals Row */}
-                      <TableRow sx={{ bgcolor: isAllRecordsLoaded ? "success.light" : "info.light", fontWeight: "bold" }}>
+                      {/* Revenue Subtotals Row */}
+                      <TableRow sx={{ bgcolor: "#e8f5e9", borderTop: "2px solid #4caf50" }}>
+                        <TableCell colSpan={2}>
+                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                            REVENUE SUBTOTALS BY CATEGORY
+                          </Typography>
+                        </TableCell>
+                        {/* ✅ Dynamic Revenue Subtotals */}
+                        {revenueColumns.map(col => {
+                          const revTotal = filteredDataComputed.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
+                          return (
+                            <TableCell key={col.key} align="right" sx={{ bgcolor: "#f0f9f6", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" color="success.main">
+                                {formatCurrency(revTotal)}
+                              </Typography>
+                            </TableCell>
+                          );
+                        })}
+                        {/* Total Revenue Subtotal */}
+                        <TableCell align="right" sx={{ bgcolor: "#c8e6c9", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.05em" }}>
+                            {formatCurrency(filteredDataComputed.reduce((sum, d) => sum + (d.totalRevenue || 0), 0))}
+                          </Typography>
+                        </TableCell>
+                        <TableCell colSpan={expenseColumns.length + 5} />
+                      </TableRow>
+
+                      {/* Expense Subtotals Row */}
+                      <TableRow sx={{ bgcolor: "#ffebee", borderTop: "2px solid #f44336" }}>
+                        <TableCell colSpan={2}>
+                          <Typography variant="body2" fontWeight="bold" color="error.main">
+                            EXPENSE SUBTOTALS BY CATEGORY
+                          </Typography>
+                        </TableCell>
+                        {revenueColumns.map(col => (
+                          <TableCell key={col.key} sx={{ bgcolor: "#f9f9f9" }} />
+                        ))}
+                        <TableCell sx={{ bgcolor: "#e8f5e9" }} />
+                        {/* ✅ Dynamic Expense Subtotals */}
+                        {expenseColumns.map(col => {
+                          const expTotal = filteredDataComputed.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
+                          return (
+                            <TableCell key={col.key} align="right" sx={{ bgcolor: "#f0f6f9", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" color="error.main">
+                                {formatCurrency(expTotal)}
+                              </Typography>
+                            </TableCell>
+                          );
+                        })}
+                        {/* Total Expense Subtotal */}
+                        <TableCell align="right" sx={{ bgcolor: "#ffcdd2", fontWeight: "bold" }}>
+                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                            {formatCurrency(filteredDataComputed.reduce((sum, d) => sum + (d.totalExpense || 0), 0))}
+                          </Typography>
+                        </TableCell>
+                        <TableCell colSpan={4} />
+                      </TableRow>
+
+                      {/* Grand Totals Row */}
+                      <TableRow sx={{ bgcolor: isAllRecordsLoaded ? "success.light" : "info.light", fontWeight: "bold", borderTop: "3px solid #ff9800" }}>
                         <TableCell colSpan={2}>
                           <Typography variant="body2" fontWeight="bold">
                             {isAllRecordsLoaded
@@ -1114,7 +1172,7 @@ export default function DriverSummaryPage() {
                         })}
                         {/* Total Revenue Grand Total */}
                         <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                          <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
                             {formatCurrency(displayTotals.revenue)}
                           </Typography>
                         </TableCell>
@@ -1131,7 +1189,7 @@ export default function DriverSummaryPage() {
                         })}
                         {/* Total Expense Grand Total */}
                         <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold" color="error.main">
+                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
                             {formatCurrency(displayTotals.expense)}
                           </Typography>
                         </TableCell>
@@ -1147,12 +1205,13 @@ export default function DriverSummaryPage() {
                                 ? "error.main"
                                 : "text.primary"
                             }
+                            sx={{ fontSize: "1.1em" }}
                           >
                             {formatCurrency(displayTotals.netOwed)}
                           </Typography>
                         </TableCell>
                         <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" fontWeight="bold">
                             {formatCurrency(displayTotals.paid)}
                           </Typography>
                         </TableCell>
@@ -1167,6 +1226,7 @@ export default function DriverSummaryPage() {
                                 ? "error.main"
                                 : "text.primary"
                             }
+                            sx={{ fontSize: "1.1em" }}
                           >
                             {formatCurrency(displayTotals.netOwed - displayTotals.paid)}
                           </Typography>
@@ -1403,7 +1463,11 @@ export default function DriverSummaryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {driverDetailReport.revenues.map((rev, idx) => (
+                                {[...driverDetailReport.revenues].sort((a, b) => {
+                                  const dateA = new Date(a.revenueDate || "");
+                                  const dateB = new Date(b.revenueDate || "");
+                                  return dateB - dateA;
+                                }).map((rev, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{rev.revenueDate || "-"}</TableCell>
                                     <TableCell>{rev.categoryName || "-"}</TableCell>
@@ -1413,6 +1477,19 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* Revenue Subtotal Row */}
+                                <TableRow sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                  <TableCell colSpan={3} align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main">
+                                      TOTAL REVENUE
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                                      {formatCurrency(driverDetailReport.revenues.reduce((sum, r) => sum + (r.amount || 0), 0))}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1429,21 +1506,104 @@ export default function DriverSummaryPage() {
                             <Table size="small">
                               <TableHead>
                                 <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                                  <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
                                   <TableCell align="right"><strong>Amount</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "LEASE_INCOME").map((rev, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{rev.revenueDate || "-"}</TableCell>
-                                    <TableCell>{rev.description || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
-                                      {formatCurrency(rev.amount)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {useMemo(() => {
+                                  // Group by cab number
+                                  const grouped = {};
+                                  driverDetailReport.revenues.filter(r => r.revenueSubType === "LEASE_INCOME").forEach((rev) => {
+                                    const cabNum = rev.description?.match(/Cab\s+(\d+)/)?.[1] || rev.cabNumber || "Unknown";
+                                    if (!grouped[cabNum]) {
+                                      grouped[cabNum] = [];
+                                    }
+                                    grouped[cabNum].push(rev);
+                                  });
+
+                                  // Sort cabs numerically, then sort items within each cab by date
+                                  const sortedCabs = Object.keys(grouped).sort((a, b) => {
+                                    const numA = parseInt(a) || 999;
+                                    const numB = parseInt(b) || 999;
+                                    return numA - numB;
+                                  });
+
+                                  let rows = [];
+                                  let totalByTab = 0;
+
+                                  sortedCabs.forEach((cab, cabIdx) => {
+                                    const items = grouped[cab].sort((a, b) => {
+                                      const dateA = new Date(a.revenueDate || "");
+                                      const dateB = new Date(b.revenueDate || "");
+                                      return dateB - dateA;
+                                    });
+
+                                    const cabSubtotal = items.reduce((sum, item) => sum + (item.amount || 0), 0);
+                                    totalByTab += cabSubtotal;
+
+                                    // Add cab header row
+                                    rows.push(
+                                      <TableRow key={`cab-header-${cab}`} sx={{ bgcolor: "#c8e6c9", fontWeight: "bold" }}>
+                                        <TableCell colSpan={4}>
+                                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                                            Cab {cab}
+                                          </Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+
+                                    // Add items for this cab
+                                    items.forEach((rev, itemIdx) => {
+                                      rows.push(
+                                        <TableRow key={`${cab}-${itemIdx}`} hover>
+                                          <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
+                                          <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                          <TableCell>{rev.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                            {formatCurrency(rev.amount)}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    });
+
+                                    // Add subtotal for this cab
+                                    rows.push(
+                                      <TableRow key={`cab-subtotal-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
+                                        <TableCell colSpan={3} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="success.main">
+                                            Cab {cab} Subtotal:
+                                          </Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="success.main">
+                                            {formatCurrency(cabSubtotal)}
+                                          </Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  });
+
+                                  // Add total row
+                                  rows.push(
+                                    <TableRow key="total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                      <TableCell colSpan={3} align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="success.main">
+                                          TOTAL LEASE INCOME
+                                        </Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                                          {formatCurrency(totalByTab)}
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+
+                                  return rows;
+                                }, [driverDetailReport])}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1466,7 +1626,11 @@ export default function DriverSummaryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE").map((rev, idx) => (
+                                {[...driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE")].sort((a, b) => {
+                                  const dateA = new Date(a.revenueDate || "");
+                                  const dateB = new Date(b.revenueDate || "");
+                                  return dateB - dateA;
+                                }).map((rev, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{rev.revenueDate || "-"}</TableCell>
                                     <TableCell>{rev.description || "-"}</TableCell>
@@ -1475,6 +1639,19 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* Card Revenue Subtotal */}
+                                <TableRow sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                  <TableCell colSpan={2} align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main">
+                                      TOTAL CARD REVENUE
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                                      {formatCurrency(driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE").reduce((sum, r) => sum + (r.amount || 0), 0))}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1498,7 +1675,11 @@ export default function DriverSummaryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE").map((rev, idx) => (
+                                {[...driverDetailReport.revenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE")].sort((a, b) => {
+                                  const dateA = new Date(a.revenueDate || "");
+                                  const dateB = new Date(b.revenueDate || "");
+                                  return dateB - dateA;
+                                }).map((rev, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{rev.revenueDate || "-"}</TableCell>
                                     <TableCell>{rev.accountName || "-"}</TableCell>
@@ -1508,6 +1689,19 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* Account Charges Subtotal */}
+                                <TableRow sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                  <TableCell colSpan={3} align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main">
+                                      TOTAL ACCOUNT CHARGES
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                                      {formatCurrency(driverDetailReport.revenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE").reduce((sum, r) => sum + (r.amount || 0), 0))}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1530,7 +1724,11 @@ export default function DriverSummaryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {driverDetailReport.revenues.filter(r => r.revenueSubType === "OTHER_REVENUE").map((rev, idx) => (
+                                {[...driverDetailReport.revenues.filter(r => r.revenueSubType === "OTHER_REVENUE")].sort((a, b) => {
+                                  const dateA = new Date(a.revenueDate || "");
+                                  const dateB = new Date(b.revenueDate || "");
+                                  return dateB - dateA;
+                                }).map((rev, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{rev.revenueDate || "-"}</TableCell>
                                     <TableCell>{rev.description || "-"}</TableCell>
@@ -1539,6 +1737,19 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* Other Revenue Subtotal */}
+                                <TableRow sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                  <TableCell colSpan={2} align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main">
+                                      TOTAL OTHER REVENUE
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                                      {formatCurrency(driverDetailReport.revenues.filter(r => r.revenueSubType === "OTHER_REVENUE").reduce((sum, r) => sum + (r.amount || 0), 0))}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1580,6 +1791,19 @@ export default function DriverSummaryPage() {
                                       </TableCell>
                                     </TableRow>
                                   ))}
+                                  {/* Recurring Expenses Subtotal */}
+                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                    <TableCell colSpan={2} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">
+                                        RECURRING SUBTOTAL
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                        {formatCurrency(driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
                                 </TableBody>
                               </Table>
                             </TableContainer>
@@ -1600,7 +1824,11 @@ export default function DriverSummaryPage() {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {driverDetailReport.oneTimeExpenses.map((exp, idx) => (
+                                  {[...driverDetailReport.oneTimeExpenses].sort((a, b) => {
+                                    const dateA = new Date(a.date || "");
+                                    const dateB = new Date(b.date || "");
+                                    return dateB - dateA;
+                                  }).map((exp, idx) => (
                                     <TableRow key={idx} hover>
                                       <TableCell>{exp.date || "-"}</TableCell>
                                       <TableCell>{exp.categoryName || "-"}</TableCell>
@@ -1610,6 +1838,19 @@ export default function DriverSummaryPage() {
                                       </TableCell>
                                     </TableRow>
                                   ))}
+                                  {/* One-Time Expenses Subtotal */}
+                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                    <TableCell colSpan={3} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">
+                                        ONE-TIME SUBTOTAL
+                                      </Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                        {formatCurrency(driverDetailReport.oneTimeExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
                                 </TableBody>
                               </Table>
                             </TableContainer>
@@ -1645,6 +1886,19 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* Recurring Expenses Subtotal */}
+                                <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                  <TableCell colSpan={2} align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                                      TOTAL RECURRING EXPENSES
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                      {formatCurrency(driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1668,7 +1922,11 @@ export default function DriverSummaryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {driverDetailReport.oneTimeExpenses.map((exp, idx) => (
+                                {[...driverDetailReport.oneTimeExpenses].sort((a, b) => {
+                                  const dateA = new Date(a.date || "");
+                                  const dateB = new Date(b.date || "");
+                                  return dateB - dateA;
+                                }).map((exp, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{exp.date || "-"}</TableCell>
                                     <TableCell>{exp.categoryName || "-"}</TableCell>
@@ -1678,6 +1936,19 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
+                                {/* One-Time Expenses Subtotal */}
+                                <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                  <TableCell colSpan={3} align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">
+                                      TOTAL ONE-TIME EXPENSES
+                                    </Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                      {formatCurrency(driverDetailReport.oneTimeExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                    </Typography>
+                                  </TableCell>
+                                </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
