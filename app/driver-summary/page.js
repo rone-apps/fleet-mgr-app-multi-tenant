@@ -1151,88 +1151,116 @@ export default function DriverSummaryPage() {
                         <TableCell colSpan={4} />
                       </TableRow>
 
-                      {/* Grand Totals Row */}
-                      <TableRow sx={{ bgcolor: isAllRecordsLoaded ? "success.light" : "info.light", fontWeight: "bold", borderTop: "3px solid #ff9800" }}>
-                        <TableCell colSpan={2}>
-                          <Typography variant="body2" fontWeight="bold">
-                            {isAllRecordsLoaded
-                              ? "GRAND TOTALS (ALL DRIVERS)"
-                              : `TOTALS (${displayTotals.driverCount} drivers cached)`}
-                          </Typography>
-                        </TableCell>
-                        {/* ✅ Dynamic Revenue Totals */}
-                        {revenueColumns.map(col => {
-                          const revTotal = allRecords.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
-                          return (
-                            <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                      {/* Grand Totals Row - Dynamic based on Driver Type Filter */}
+                      {useMemo(() => {
+                        // Filter records based on driver type filter
+                        const filterByType = (records) => {
+                          if (driverTypeFilter === "DRIVERS_ONLY") {
+                            return records.filter(d => !d.isOwner);
+                          } else if (driverTypeFilter === "OWNERS_ONLY") {
+                            return records.filter(d => d.isOwner);
+                          }
+                          return records; // ALL
+                        };
+                        const filteredForTotals = filterByType(allRecords);
+
+                        // Calculate totals
+                        const totalRev = filteredForTotals.reduce((sum, d) => sum + (d.totalRevenue || 0), 0);
+                        const totalExp = filteredForTotals.reduce((sum, d) => sum + (d.totalExpense || 0), 0);
+                        const netOwed = totalRev - totalExp;
+                        const paid = filteredForTotals.reduce((sum, d) => sum + (d.paid || 0), 0);
+                        const outstanding = netOwed - paid;
+
+                        const typeLabel =
+                          driverTypeFilter === "DRIVERS_ONLY" ? "DRIVERS" :
+                          driverTypeFilter === "OWNERS_ONLY" ? "OWNERS" :
+                          "ALL DRIVERS";
+
+                        return (
+                          <TableRow sx={{ bgcolor: isAllRecordsLoaded ? "success.light" : "info.light", fontWeight: "bold", borderTop: "3px solid #ff9800" }}>
+                            <TableCell colSpan={2}>
                               <Typography variant="body2" fontWeight="bold">
-                                {formatCurrency(revTotal)}
+                                {isAllRecordsLoaded
+                                  ? `GRAND TOTALS (${typeLabel})`
+                                  : `TOTALS (${filteredForTotals.length} ${typeLabel.toLowerCase()} cached)`}
                               </Typography>
                             </TableCell>
-                          );
-                        })}
-                        {/* Total Revenue Grand Total */}
-                        <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
-                            {formatCurrency(displayTotals.revenue)}
-                          </Typography>
-                        </TableCell>
-                        {/* ✅ Dynamic Expense Totals */}
-                        {expenseColumns.map(col => {
-                          const expTotal = allRecords.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
-                          return (
-                            <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
-                              <Typography variant="body2" fontWeight="bold">
-                                {formatCurrency(expTotal)}
+                            {/* ✅ Dynamic Revenue Totals */}
+                            {revenueColumns.map(col => {
+                              const revTotal = filteredForTotals.reduce((sum, d) => sum + (getRevAmount(d, col.key) || 0), 0);
+                              return (
+                                <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {formatCurrency(revTotal)}
+                                  </Typography>
+                                </TableCell>
+                              );
+                            })}
+                            {/* Total Revenue Grand Total */}
+                            <TableCell align="right" sx={{ bgcolor: "#e8f5e9", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                                {formatCurrency(totalRev)}
                               </Typography>
                             </TableCell>
-                          );
-                        })}
-                        {/* Total Expense Grand Total */}
-                        <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
-                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
-                            {formatCurrency(displayTotals.expense)}
-                          </Typography>
-                        </TableCell>
-                        {/* Summary Totals */}
-                        <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight="bold"
-                            color={
-                              displayTotals.netOwed > 0
-                                ? "success.main"
-                                : displayTotals.netOwed < 0
-                                ? "error.main"
-                                : "text.primary"
-                            }
-                            sx={{ fontSize: "1.1em" }}
-                          >
-                            {formatCurrency(displayTotals.netOwed)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                          <Typography variant="caption" fontWeight="bold">
-                            {formatCurrency(displayTotals.paid)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight="bold"
-                            color={
-                              displayTotals.netOwed - displayTotals.paid > 0
-                                ? "success.main"
-                                : displayTotals.netOwed - displayTotals.paid < 0
-                                ? "error.main"
-                                : "text.primary"
-                            }
-                            sx={{ fontSize: "1.1em" }}
-                          >
-                            {formatCurrency(displayTotals.netOwed - displayTotals.paid)}
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
+                            {/* ✅ Dynamic Expense Totals */}
+                            {expenseColumns.map(col => {
+                              const expTotal = filteredForTotals.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
+                              return (
+                                <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <Typography variant="body2" fontWeight="bold">
+                                    {formatCurrency(expTotal)}
+                                  </Typography>
+                                </TableCell>
+                              );
+                            })}
+                            {/* Total Expense Grand Total */}
+                            <TableCell align="right" sx={{ bgcolor: "#ffebee", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                {formatCurrency(totalExp)}
+                              </Typography>
+                            </TableCell>
+                            {/* Summary Totals */}
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={
+                                  netOwed > 0
+                                    ? "success.main"
+                                    : netOwed < 0
+                                    ? "error.main"
+                                    : "text.primary"
+                                }
+                                sx={{ fontSize: "1.1em" }}
+                              >
+                                {formatCurrency(netOwed)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography variant="caption" fontWeight="bold">
+                                {formatCurrency(paid)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={
+                                  outstanding > 0
+                                    ? "success.main"
+                                    : outstanding < 0
+                                    ? "error.main"
+                                    : "text.primary"
+                                }
+                                sx={{ fontSize: "1.1em" }}
+                              >
+                                {formatCurrency(outstanding)}
+                              </Typography>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      }, [allRecords, driverTypeFilter, revenueColumns, expenseColumns])}
+
 
                       {/* Revenue Subtotal Row */}
                       <TableRow sx={{ bgcolor: "#e8f5e9", borderTop: "3px solid #4caf50" }}>
