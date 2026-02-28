@@ -28,11 +28,15 @@ import {
   DialogContent,
   DialogActions,
   Autocomplete,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import {
   Download as DownloadIcon,
   Refresh as RefreshIcon,
   Description as DescriptionIcon,
+  ReceiptLong as ReceiptLongIcon,
+  Assessment as AssessmentIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
@@ -65,9 +69,15 @@ export default function LeaseReportPage() {
   const [reportData, setReportData] = useState(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
+  // Tab state
+  const [mainTabIndex, setMainTabIndex] = useState(0);
+
   // Modal state for detail view
   const [selectedCab, setSelectedCab] = useState(null);
   const [selectedStatus, setSelectedStatus] = useState(null);
+
+  // Modal state for driver expense detail
+  const [selectedDriverExpense, setSelectedDriverExpense] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -213,6 +223,52 @@ export default function LeaseReportPage() {
     return drivers;
   }, [selectedCab, selectedStatus, summaryData]);
 
+  // Compute driver expense data (Tab 2) - only MATCHED rows
+  const driverExpenseData = useMemo(() => {
+    if (!reportData?.rows) return [];
+
+    const matchedRows = reportData.rows.filter((r) => r.status === "MATCHED");
+
+    const byDriver = {};
+    matchedRows.forEach((row) => {
+      if (!byDriver[row.driverNumber]) {
+        byDriver[row.driverNumber] = {
+          driverNumber: row.driverNumber,
+          driverName: row.driverName,
+          shifts: [],
+          totalLease: 0,
+          cabSet: new Set(),
+        };
+      }
+      const d = byDriver[row.driverNumber];
+      d.shifts.push(row);
+      d.totalLease += Number(row.leaseAmount || 0);
+      d.cabSet.add(row.cabNumber);
+    });
+
+    return Object.values(byDriver)
+      .map((d) => ({ ...d, cabCount: d.cabSet.size }))
+      .sort((a, b) => b.totalLease - a.totalLease);
+  }, [reportData]);
+
+  // Group shifts by cab for selected driver (Tab 2 modal)
+  const cabGroupsForSelectedDriver = useMemo(() => {
+    if (!selectedDriverExpense) return [];
+    const sorted = [...selectedDriverExpense.shifts].sort((a, b) => {
+      if (a.cabNumber !== b.cabNumber)
+        return a.cabNumber.localeCompare(b.cabNumber);
+      if (a.shiftDate !== b.shiftDate)
+        return a.shiftDate.localeCompare(b.shiftDate);
+      return (a.shiftType || "").localeCompare(b.shiftType || "");
+    });
+    const byCab = {};
+    sorted.forEach((s) => {
+      if (!byCab[s.cabNumber]) byCab[s.cabNumber] = [];
+      byCab[s.cabNumber].push(s);
+    });
+    return Object.entries(byCab);
+  }, [selectedDriverExpense]);
+
   const generateReport = async () => {
     setLoading(true);
     setError("");
@@ -275,6 +331,30 @@ export default function LeaseReportPage() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const exportExpenseCSV = () => {
+    if (!driverExpenseData || driverExpenseData.length === 0) {
+      setError("No data to export");
+      return;
+    }
+
+    const headers = ["Driver #", "Driver Name", "Cabs Driven", "Shifts", "Total Expense"];
+    const rows = driverExpenseData.map((d) => [
+      d.driverNumber,
+      d.driverName,
+      d.cabCount,
+      d.shifts.length,
+      d.totalLease.toFixed(2),
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lease-expense-${startDate}-to-${endDate}.csv`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
@@ -433,8 +513,18 @@ export default function LeaseReportPage() {
           </Grid>
         </Paper>
 
-        {/* Summary Cards */}
-        {reportData && (
+        {/* Tab Bar */}
+        {isDataLoaded && reportData && (
+          <Paper sx={{ mb: 3 }}>
+            <Tabs value={mainTabIndex} onChange={(_, v) => setMainTabIndex(v)}>
+              <Tab label="Lease Summary" icon={<AssessmentIcon />} iconPosition="start" />
+              <Tab label="Lease Expense" icon={<ReceiptLongIcon />} iconPosition="start" />
+            </Tabs>
+          </Paper>
+        )}
+
+        {/* Summary Cards - Tab 0 */}
+        {mainTabIndex === 0 && reportData && (
           <Grid container spacing={2} sx={{ mb: 3 }}>
             <Grid item xs={12} sm={6} md={3}>
               <Card>
@@ -485,8 +575,8 @@ export default function LeaseReportPage() {
           </Grid>
         )}
 
-        {/* Summary Table */}
-        {isDataLoaded && reportData ? (
+        {/* Summary Table - Tab 0 */}
+        {mainTabIndex === 0 && isDataLoaded && reportData ? (
           <>
             <Paper sx={{ mb: 3, display: "flex", justifyContent: "flex-end", p: 2 }}>
               <Button
@@ -684,19 +774,210 @@ export default function LeaseReportPage() {
               </DialogActions>
             </Dialog>
           </>
-        ) : loading ? (
-          <Paper sx={{ p: 4, textAlign: "center" }}>
-            <CircularProgress />
-            <Typography sx={{ mt: 2 }}>Generating report...</Typography>
-          </Paper>
-        ) : (
-          <Paper sx={{ p: 4, textAlign: "center" }}>
-            <DescriptionIcon sx={{ fontSize: 48, color: "text.disabled", mb: 2 }} />
-            <Typography variant="h6" color="text.secondary">
-              Select date range and click Generate Report
-            </Typography>
-          </Paper>
+        ) : null}
+
+        {/* Tab 1: Lease Expense */}
+        {mainTabIndex === 1 && (
+          <Box>
+            {!isDataLoaded ? (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <Typography color="text.secondary">
+                  Generate a report above to see lease expenses
+                </Typography>
+              </Paper>
+            ) : driverExpenseData.length === 0 ? (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <Typography color="text.secondary">
+                  No matched lease expenses in this date range
+                </Typography>
+              </Paper>
+            ) : (
+              <Paper>
+                <Box
+                  sx={{
+                    p: 2,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <Typography variant="h6">
+                    {driverExpenseData.length} drivers with lease expenses
+                  </Typography>
+                  <Button variant="outlined" onClick={exportExpenseCSV}>
+                    Export CSV
+                  </Button>
+                </Box>
+                <TableContainer>
+                  <Table>
+                    <TableHead>
+                      <TableRow sx={{ bgcolor: "grey.100" }}>
+                        <TableCell>
+                          <strong>Driver #</strong>
+                        </TableCell>
+                        <TableCell>
+                          <strong>Driver Name</strong>
+                        </TableCell>
+                        <TableCell align="center">
+                          <strong>Cabs Driven</strong>
+                        </TableCell>
+                        <TableCell align="center">
+                          <strong>Shifts</strong>
+                        </TableCell>
+                        <TableCell align="right">
+                          <strong>Total Expense</strong>
+                        </TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {driverExpenseData.map((driver) => (
+                        <TableRow
+                          key={driver.driverNumber}
+                          hover
+                          sx={{ cursor: "pointer" }}
+                          onClick={() => setSelectedDriverExpense(driver)}
+                        >
+                          <TableCell>{driver.driverNumber}</TableCell>
+                          <TableCell>{driver.driverName}</TableCell>
+                          <TableCell align="center">{driver.cabCount}</TableCell>
+                          <TableCell align="center">{driver.shifts.length}</TableCell>
+                          <TableCell align="right">
+                            ${driver.totalLease.toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {/* Totals footer row */}
+                      <TableRow sx={{ bgcolor: "action.selected" }}>
+                        <TableCell colSpan={2}>
+                          <strong>TOTAL</strong>
+                        </TableCell>
+                        <TableCell />
+                        <TableCell align="center">
+                          <strong>
+                            {driverExpenseData.reduce(
+                              (s, d) => s + d.shifts.length,
+                              0
+                            )}
+                          </strong>
+                        </TableCell>
+                        <TableCell align="right">
+                          <strong>
+                            $
+                            {driverExpenseData
+                              .reduce((s, d) => s + d.totalLease, 0)
+                              .toFixed(2)}
+                          </strong>
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </Paper>
+            )}
+          </Box>
         )}
+
+        {/* Loading and Empty State - shown when data not loaded */}
+        {!isDataLoaded && (
+          <>
+            {loading ? (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <CircularProgress />
+                <Typography sx={{ mt: 2 }}>Generating report...</Typography>
+              </Paper>
+            ) : (
+              <Paper sx={{ p: 4, textAlign: "center" }}>
+                <DescriptionIcon sx={{ fontSize: 48, color: "text.disabled", mb: 2 }} />
+                <Typography variant="h6" color="text.secondary">
+                  Select date range and click Generate Report
+                </Typography>
+              </Paper>
+            )}
+          </>
+        )}
+
+        {/* Driver Expense Detail Modal - Tab 1 */}
+        <Dialog
+          open={selectedDriverExpense !== null}
+          onClose={() => setSelectedDriverExpense(null)}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>
+            Lease Expense Details —{" "}
+            {selectedDriverExpense?.driverName} ({selectedDriverExpense?.driverNumber})
+          </DialogTitle>
+          <DialogContent>
+            {cabGroupsForSelectedDriver.map(([cabNumber, cabShifts]) => (
+              <Box key={cabNumber} sx={{ mb: 3 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight: "bold", mb: 1 }}>
+                  Cab {cabNumber}
+                </Typography>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ bgcolor: "grey.50" }}>
+                      <TableCell>Date</TableCell>
+                      <TableCell>Shift</TableCell>
+                      <TableCell>Owner #</TableCell>
+                      <TableCell>Owner Name</TableCell>
+                      <TableCell align="right">Amount</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {cabShifts.map((shift) => (
+                      <TableRow key={shift.driverShiftId}>
+                        <TableCell>{shift.shiftDate}</TableCell>
+                        <TableCell>{shift.shiftType}</TableCell>
+                        <TableCell>{shift.ownerNumber}</TableCell>
+                        <TableCell>{shift.ownerName}</TableCell>
+                        <TableCell align="right">
+                          ${Number(shift.leaseAmount || 0).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {/* Cab subtotal */}
+                    <TableRow sx={{ bgcolor: "info.light" }}>
+                      <TableCell colSpan={4}>
+                        <strong>
+                          Cab {cabNumber} Subtotal ({cabShifts.length} shift
+                          {cabShifts.length > 1 ? "s" : ""})
+                        </strong>
+                      </TableCell>
+                      <TableCell align="right">
+                        <strong>
+                          $
+                          {cabShifts
+                            .reduce((s, r) => s + Number(r.leaseAmount || 0), 0)
+                            .toFixed(2)}
+                        </strong>
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </Box>
+            ))}
+
+            {/* Driver grand total */}
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: "warning.light",
+                borderRadius: 1,
+                mt: 1,
+                display: "flex",
+                justifyContent: "space-between",
+              }}
+            >
+              <Typography variant="h6">Grand Total</Typography>
+              <Typography variant="h6">
+                ${selectedDriverExpense?.totalLease.toFixed(2)}
+              </Typography>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setSelectedDriverExpense(null)}>Close</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );
