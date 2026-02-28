@@ -370,21 +370,21 @@ export default function TaxiCallerIntegrationPage() {
             "X-Tenant-ID": localStorage.getItem("tenantSchema"), },
         }
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
-        setSuccess(`Loaded ${data.count} account jobs`);
+        setSuccess(data.message);
       } else {
-        setError(data.message || "Failed to fetch account jobs");
+        setError(data.message || "Failed to load account jobs");
       }
     } catch (err) {
-      console.error("Error fetching account jobs:", err);
-      setError(`Failed to fetch account jobs: ${err.message}`);
+      console.error("Error loading account jobs:", err);
+      setError(`Failed to load account jobs: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -402,21 +402,21 @@ export default function TaxiCallerIntegrationPage() {
             "X-Tenant-ID": localStorage.getItem("tenantSchema"), },
         }
       );
-      
+
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       if (data.success) {
-        setSuccess(`Loaded ${data.count} account jobs`);
+        setSuccess(data.message);
       } else {
-        setError(data.message || "Failed to fetch account jobs");
+        setError(data.message || "Failed to import driver logon/logoff jobs");
       }
     } catch (err) {
-      console.error("Error fetching account jobs:", err);
-      setError(`Failed to fetch account jobs: ${err.message}`);
+      console.error("Error importing driver logon/logoff jobs:", err);
+      setError(`Failed to import driver logon/logoff jobs: ${err.message}`);
     } finally {
       setLoading(false);
     }

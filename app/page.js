@@ -675,6 +675,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Interactive',
             gradient: 'linear-gradient(135deg, #f5576c 0%, #ffa502 100%)',
             accent: '#f5576c'
+          },
+          {
+            title: 'Lease Reconciliation',
+            description: 'Shift-by-shift lease expense vs. revenue reconciliation',
+            icon: Assessment,
+            path: '/lease-report',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Reconciliation',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#764ba2'
           }
         ];
 
