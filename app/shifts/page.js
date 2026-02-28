@@ -37,6 +37,7 @@ import {
   ListItemText,
   Divider,
   CircularProgress,
+  Autocomplete,
 } from "@mui/material";
 import {
   Timeline,
@@ -232,7 +233,7 @@ export default function ShiftsPage() {
 
       if (response.ok) {
         const data = await response.json();
-        setDrivers(data.filter(d => d.isOwner));
+        setDrivers(data);  // Show all drivers, not just owners - any driver can own a shift
       }
     } catch (err) {
       console.error("Error loading drivers:", err);
@@ -1999,22 +2000,46 @@ export default function ShiftsPage() {
 
               <Grid container spacing={2}>
                 <Grid item xs={12}>
-                  <FormControl fullWidth size="small" required>
-                    <InputLabel>New Owner</InputLabel>
-                    <Select
-                      value={transferFormData.newOwnerId}
-                      label="New Owner"
-                      onChange={(e) => setTransferFormData({ ...transferFormData, newOwnerId: e.target.value })}
-                    >
-                      {drivers
-                        .filter(d => d.id !== selectedShift.currentOwnerId)
-                        .map((driver) => (
-                          <MenuItem key={driver.id} value={driver.id}>
-                            {driver.driverNumber} - {driver.firstName} {driver.lastName}
-                          </MenuItem>
-                        ))}
-                    </Select>
-                  </FormControl>
+                  <Autocomplete
+                    options={drivers.filter(d => d.id !== selectedShift.currentOwnerId).sort((a, b) => a.firstName.localeCompare(b.firstName))}
+                    getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                    value={transferFormData.newOwnerId ? drivers.find(d => d.id === transferFormData.newOwnerId) || null : null}
+                    onChange={(event, newValue) => {
+                      setTransferFormData({ ...transferFormData, newOwnerId: newValue?.id || "" });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="New Owner"
+                        required
+                        size="small"
+                        placeholder="Click to see all owners..."
+                      />
+                    )}
+                    fullWidth
+                    size="small"
+                    noOptionsText="No owners found"
+                    openOnFocus
+                    clearOnEscape
+                    filterOptions={(options, state) => {
+                      if (!state.inputValue) {
+                        return options;  // Show all options when input is empty
+                      }
+                      const inputLower = state.inputValue.toLowerCase();
+                      return options.filter(option =>
+                        `${option.driverNumber} - ${option.firstName} ${option.lastName}`.toLowerCase().includes(inputLower)
+                      );
+                    }}
+                    slotProps={{
+                      listbox: {
+                        sx: {
+                          maxHeight: "500px",
+                          overflow: "auto",
+                        },
+                      },
+                    }}
+                  />
                 </Grid>
 
                 <Grid item xs={12}>
