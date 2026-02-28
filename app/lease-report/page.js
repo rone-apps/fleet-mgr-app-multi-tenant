@@ -254,13 +254,22 @@ export default function LeaseReportPage() {
   // Group shifts by cab for selected driver (Tab 2 modal)
   const cabGroupsForSelectedDriver = useMemo(() => {
     if (!selectedDriverExpense) return [];
-    const sorted = [...selectedDriverExpense.shifts].sort((a, b) => {
+
+    // ✅ FIX: Deduplicate shifts by (cabNumber, shiftDate, shiftType, driverShiftId)
+    const uniqueShifts = {};
+    selectedDriverExpense.shifts.forEach((shift) => {
+      const key = `${shift.cabNumber}|${shift.shiftDate}|${shift.shiftType}|${shift.driverShiftId}`;
+      uniqueShifts[key] = shift;
+    });
+
+    const sorted = Object.values(uniqueShifts).sort((a, b) => {
       if (a.cabNumber !== b.cabNumber)
         return a.cabNumber.localeCompare(b.cabNumber);
       if (a.shiftDate !== b.shiftDate)
         return a.shiftDate.localeCompare(b.shiftDate);
       return (a.shiftType || "").localeCompare(b.shiftType || "");
     });
+
     const byCab = {};
     sorted.forEach((s) => {
       if (!byCab[s.cabNumber]) byCab[s.cabNumber] = [];
