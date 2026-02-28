@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import {
   Box,
   Typography,
@@ -126,7 +126,7 @@ export default function LeaseReportPage() {
     });
 
     return {
-      cabs: Array.from(cabs).sort(),
+      cabs: Array.from(cabs).sort((a, b) => parseInt(a) - parseInt(b)),  // Numeric sort
       shifts: Array.from(shifts).sort(),
       owners: Array.from(owners).sort(),
     };
@@ -170,7 +170,8 @@ export default function LeaseReportPage() {
 
     return result.sort((a, b) => {
       if (a.cabNumber !== b.cabNumber) {
-        return a.cabNumber.localeCompare(b.cabNumber);
+        // Sort cab numbers numerically (1, 2, 3, 10) not as strings (1, 10, 2, 3)
+        return parseInt(a.cabNumber) - parseInt(b.cabNumber);
       }
       return a.status.localeCompare(b.status);
     });
@@ -606,7 +607,7 @@ export default function LeaseReportPage() {
                       <TableBody>
                         {modalData &&
                           modalData.map((driver, dIdx) => (
-                            <>
+                            <Fragment key={`driver-${dIdx}`}>
                               {driver.shifts.map((shift, sIdx) => (
                                 <TableRow
                                   key={`${dIdx}-${sIdx}`}
@@ -664,7 +665,7 @@ export default function LeaseReportPage() {
                                   ${driver.totalLease.toFixed(2)}
                                 </TableCell>
                               </TableRow>
-                            </>
+                            </Fragment>
                           ))}
                       </TableBody>
                     </Table>
