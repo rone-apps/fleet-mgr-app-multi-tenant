@@ -1143,6 +1143,122 @@ export default function DriverSummaryPage() {
                           </Typography>
                         </TableCell>
                       </TableRow>
+
+                      {/* Revenue Subtotal Row */}
+                      <TableRow sx={{ bgcolor: "#e8f5e9", borderTop: "3px solid #4caf50" }}>
+                        <TableCell colSpan={2}>
+                          <Typography variant="body2" fontWeight="bold" color="success.main">
+                            TOTAL REVENUES
+                          </Typography>
+                        </TableCell>
+                        {revenueColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5" }}>
+                            {/* Empty cells under individual revenue columns */}
+                          </TableCell>
+                        ))}
+                        <TableCell align="right" sx={{ bgcolor: "#e8f5e9" }}>
+                          <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
+                            {formatCurrency(displayTotals.revenue)}
+                          </Typography>
+                        </TableCell>
+                        {expenseColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5" }}>
+                            {/* Empty cells under expense columns */}
+                          </TableCell>
+                        ))}
+                        <TableCell colSpan={4} />
+                      </TableRow>
+
+                      {/* Expense Subtotal Row */}
+                      <TableRow sx={{ bgcolor: "#ffebee", borderTop: "3px solid #f44336" }}>
+                        <TableCell colSpan={2}>
+                          <Typography variant="body2" fontWeight="bold" color="error.main">
+                            TOTAL EXPENSES
+                          </Typography>
+                        </TableCell>
+                        {revenueColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5" }}>
+                            {/* Empty cells under revenue columns */}
+                          </TableCell>
+                        ))}
+                        <TableCell align="right" sx={{ bgcolor: "#e8f5e9" }}>
+                          {/* Empty cell under Total Revenue */}
+                        </TableCell>
+                        {expenseColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5" }}>
+                            {/* Empty cells under individual expense columns */}
+                          </TableCell>
+                        ))}
+                        <TableCell align="right" sx={{ bgcolor: "#ffebee" }}>
+                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                            {formatCurrency(displayTotals.expense)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell colSpan={3} />
+                      </TableRow>
+
+                      {/* Net Summary Row */}
+                      <TableRow sx={{ bgcolor: "#fff3e0", borderTop: "3px solid #ff9800", borderBottom: "3px solid #ff9800" }}>
+                        <TableCell colSpan={2}>
+                          <Typography variant="body2" fontWeight="bold">
+                            NET SUMMARY
+                          </Typography>
+                        </TableCell>
+                        {revenueColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5" }}>
+                            {/* Empty cells */}
+                          </TableCell>
+                        ))}
+                        <TableCell align="right" sx={{ bgcolor: "#e8f5e9" }}>
+                          {/* Empty cell under Total Revenue */}
+                        </TableCell>
+                        {expenseColumns.map(col => (
+                          <TableCell key={col.key} align="right" sx={{ bgcolor: "#f5f5f5" }}>
+                            {/* Empty cells */}
+                          </TableCell>
+                        ))}
+                        <TableCell align="right" sx={{ bgcolor: "#ffebee" }}>
+                          {/* Empty cell under Total Expense */}
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight="bold"
+                            color={
+                              displayTotals.netOwed > 0
+                                ? "success.main"
+                                : displayTotals.netOwed < 0
+                                ? "error.main"
+                                : "text.primary"
+                            }
+                            sx={{ fontSize: "1.1em" }}
+                          >
+                            {formatCurrency(displayTotals.netOwed)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                          <Typography variant="caption" fontWeight="bold">
+                            {formatCurrency(displayTotals.paid)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                          <Typography
+                            variant="body2"
+                            fontWeight="bold"
+                            color={
+                              (displayTotals.netOwed - displayTotals.paid) > 0
+                                ? "success.main"
+                                : (displayTotals.netOwed - displayTotals.paid) < 0
+                                ? "error.main"
+                                : "text.primary"
+                            }
+                            sx={{ fontSize: "1.1em" }}
+                          >
+                            {formatCurrency(displayTotals.netOwed - displayTotals.paid)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }} />
+                      </TableRow>
                     </TableBody>
                   </Table>
                 </TableContainer>

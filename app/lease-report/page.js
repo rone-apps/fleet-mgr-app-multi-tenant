@@ -23,6 +23,11 @@ import {
   InputLabel,
   Select,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Autocomplete,
 } from "@mui/material";
 import {
   Download as DownloadIcon,
@@ -51,9 +56,18 @@ export default function LeaseReportPage() {
   // Status filter
   const [statusFilter, setStatusFilter] = useState("ALL");
 
+  // Additional filters
+  const [cabFilter, setCabFilter] = useState("ALL");
+  const [shiftFilter, setShiftFilter] = useState("ALL");
+  const [ownerFilter, setOwnerFilter] = useState("ALL");
+
   // Report data
   const [reportData, setReportData] = useState(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+
+  // Modal state for detail view
+  const [selectedCab, setSelectedCab] = useState(null);
+  const [selectedStatus, setSelectedStatus] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -64,25 +78,139 @@ export default function LeaseReportPage() {
     setCurrentUser(getCurrentUser());
   }, [router]);
 
-  // Filter data based on status
+  // Filter data based on status, cab, shift, and owner
   const filteredData = useMemo(() => {
     if (!reportData || !reportData.rows) return [];
 
-    if (statusFilter === "ALL") {
-      return reportData.rows;
+    return reportData.rows.filter((row) => {
+      // Status filter
+      if (statusFilter !== "ALL" && row.status !== statusFilter) {
+        return false;
+      }
+
+      // Cab filter
+      if (cabFilter !== "ALL" && row.cabNumber !== cabFilter) {
+        return false;
+      }
+
+      // Shift filter
+      if (shiftFilter !== "ALL" && row.shiftType !== shiftFilter) {
+        return false;
+      }
+
+      // Owner filter
+      if (ownerFilter !== "ALL" && row.ownerName !== ownerFilter) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [reportData, statusFilter, cabFilter, shiftFilter, ownerFilter]);
+
+  // Extract unique values for filter dropdowns
+  const filterOptions = useMemo(() => {
+    if (!reportData || !reportData.rows) {
+      return { cabs: [], shifts: [], owners: [] };
     }
 
-    return reportData.rows.filter((row) => row.status === statusFilter);
-  }, [reportData, statusFilter]);
+    const cabs = new Set();
+    const shifts = new Set();
+    const owners = new Set();
+
+    reportData.rows.forEach((row) => {
+      cabs.add(row.cabNumber);
+      shifts.add(row.shiftType);
+      if (row.ownerName) {
+        owners.add(row.ownerName);
+      }
+    });
+
+    return {
+      cabs: Array.from(cabs).sort(),
+      shifts: Array.from(shifts).sort(),
+      owners: Array.from(owners).sort(),
+    };
+  }, [reportData]);
+
+  // Group data by cab and status to create summary
+  const summaryData = useMemo(() => {
+    const grouped = {};
+
+    filteredData.forEach((row) => {
+      const key = `${row.cabNumber}|${row.status}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          cabNumber: row.cabNumber,
+          status: row.status,
+          count: 0,
+          totalLease: 0,
+          shifts: [],
+          ownerNames: new Set(),
+          shiftTypes: new Set(),
+        };
+      }
+      grouped[key].count += 1;
+      grouped[key].totalLease += row.leaseAmount || 0;
+      grouped[key].shifts.push(row);
+      if (row.ownerName) {
+        grouped[key].ownerNames.add(row.ownerName);
+      }
+      grouped[key].shiftTypes.add(row.shiftType);
+    });
+
+    // Convert Sets to comma-separated strings
+    const result = Object.values(grouped).map((item) => ({
+      ...item,
+      ownerNamesStr:
+        item.ownerNames.size === 0
+          ? "-"
+          : Array.from(item.ownerNames).join(", "),
+      shiftTypesStr: Array.from(item.shiftTypes).join(", "),
+    }));
+
+    return result.sort((a, b) => {
+      if (a.cabNumber !== b.cabNumber) {
+        return a.cabNumber.localeCompare(b.cabNumber);
+      }
+      return a.status.localeCompare(b.status);
+    });
+  }, [filteredData]);
 
   // Compute totals for filtered data
   const filteredTotals = useMemo(() => {
-    const totalLease = filteredData.reduce(
-      (sum, row) => sum + (row.leaseAmount || 0),
-      0
+    const totalLease = summaryData.reduce((sum, row) => sum + row.totalLease, 0);
+    return { totalLease, count: summaryData.length };
+  }, [summaryData]);
+
+  // Prepare modal data - group shifts by driver
+  const modalData = useMemo(() => {
+    const selectedData = summaryData.find(
+      (s) => s.cabNumber === selectedCab && s.status === selectedStatus
     );
-    return { totalLease, count: filteredData.length };
-  }, [filteredData]);
+    if (!selectedData) return null;
+
+    // Group by driver and sort
+    const groupedByDriver = {};
+    selectedData.shifts.forEach((shift) => {
+      const key = shift.driverNumber;
+      if (!groupedByDriver[key]) {
+        groupedByDriver[key] = {
+          driverNumber: shift.driverNumber,
+          driverName: shift.driverName,
+          shifts: [],
+          totalLease: 0,
+        };
+      }
+      groupedByDriver[key].shifts.push(shift);
+      groupedByDriver[key].totalLease += shift.leaseAmount || 0;
+    });
+
+    const drivers = Object.values(groupedByDriver).sort((a, b) =>
+      a.driverNumber.localeCompare(b.driverNumber)
+    );
+
+    return drivers;
+  }, [selectedCab, selectedStatus, summaryData]);
 
   const generateReport = async () => {
     setLoading(true);
@@ -119,33 +247,18 @@ export default function LeaseReportPage() {
   };
 
   const exportToCSV = () => {
-    if (!filteredData || filteredData.length === 0) {
+    if (!summaryData || summaryData.length === 0) {
       setError("No data to export");
       return;
     }
 
-    const headers = [
-      "Cab #",
-      "Shift Date",
-      "Shift Type",
-      "Driver #",
-      "Driver Name",
-      "Owner #",
-      "Owner Name",
-      "Lease Amount",
-      "Status",
-    ];
+    const headers = ["Cab #", "Status", "Shift Count", "Total Lease Amount"];
 
-    const rows = filteredData.map((row) => [
-      row.cabNumber,
-      row.shiftDate,
-      row.shiftType,
-      row.driverNumber,
-      row.driverName,
-      row.ownerNumber || "-",
-      row.ownerName || "-",
-      row.leaseAmount ? row.leaseAmount.toFixed(2) : "0.00",
-      row.status,
+    const rows = summaryData.map((summary) => [
+      summary.cabNumber,
+      summary.status,
+      summary.count,
+      summary.totalLease ? summary.totalLease.toFixed(2) : "0.00",
     ]);
 
     const csvContent = [
@@ -157,7 +270,7 @@ export default function LeaseReportPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `lease-reconciliation-${startDate}-to-${endDate}.csv`;
+    a.download = `lease-reconciliation-summary-${startDate}-to-${endDate}.csv`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -209,10 +322,12 @@ export default function LeaseReportPage() {
         {/* Filter Section */}
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" gutterBottom>
-            Report Period
+            Filters
           </Typography>
-          <Grid container spacing={2} alignItems="flex-end">
-            <Grid item xs={12} sm={3}>
+
+          {/* Date Range Row */}
+          <Grid container spacing={2} alignItems="flex-end" sx={{ mb: 2 }}>
+            <Grid item xs={12} sm={6} md={3}>
               <TextField
                 label="Start Date"
                 type="date"
@@ -222,7 +337,7 @@ export default function LeaseReportPage() {
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
+            <Grid item xs={12} sm={6} md={3}>
               <TextField
                 label="End Date"
                 type="date"
@@ -232,23 +347,77 @@ export default function LeaseReportPage() {
                 InputLabelProps={{ shrink: true }}
               />
             </Grid>
-            <Grid item xs={12} sm={3}>
-              <FormControl fullWidth>
-                <InputLabel>Status Filter</InputLabel>
-                <Select
-                  value={statusFilter}
-                  label="Status Filter"
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="ALL">All Statuses</MenuItem>
-                  <MenuItem value="MATCHED">Matched Only</MenuItem>
-                  <MenuItem value="NO_OWNER">No Owner</MenuItem>
-                  <MenuItem value="SELF_DRIVEN">Self Driven</MenuItem>
-                  <MenuItem value="CAB_NOT_FOUND">Cab Not Found</MenuItem>
-                </Select>
-              </FormControl>
+            <Grid item xs={12} md={6} />
+          </Grid>
+
+          {/* Status, Cab, Shift, Owner Filters Row */}
+          <Grid container spacing={2} alignItems="flex-end">
+            <Grid item xs={12} sm={6} md={2}>
+              <Autocomplete
+                options={["All Statuses", "Matched", "No Owner", "Self Driven", "Cab Not Found"]}
+                value={
+                  statusFilter === "ALL"
+                    ? "All Statuses"
+                    : statusFilter === "MATCHED"
+                    ? "Matched"
+                    : statusFilter === "NO_OWNER"
+                    ? "No Owner"
+                    : statusFilter === "SELF_DRIVEN"
+                    ? "Self Driven"
+                    : "Cab Not Found"
+                }
+                onChange={(e, value) => {
+                  const statusMap = {
+                    "All Statuses": "ALL",
+                    "Matched": "MATCHED",
+                    "No Owner": "NO_OWNER",
+                    "Self Driven": "SELF_DRIVEN",
+                    "Cab Not Found": "CAB_NOT_FOUND",
+                  };
+                  setStatusFilter(statusMap[value] || "ALL");
+                }}
+                renderInput={(params) => <TextField {...params} label="Status" />}
+                freeSolo
+              />
             </Grid>
-            <Grid item xs={12} sm={3}>
+
+            <Grid item xs={12} sm={6} md={2}>
+              <Autocomplete
+                options={["All Cabs", ...filterOptions.cabs]}
+                value={cabFilter === "ALL" ? "All Cabs" : cabFilter}
+                onChange={(e, value) => {
+                  setCabFilter(value === "All Cabs" ? "ALL" : value || "ALL");
+                }}
+                renderInput={(params) => <TextField {...params} label="Cab #" />}
+                freeSolo
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={2}>
+              <Autocomplete
+                options={["All Shifts", ...filterOptions.shifts]}
+                value={shiftFilter === "ALL" ? "All Shifts" : shiftFilter}
+                onChange={(e, value) => {
+                  setShiftFilter(value === "All Shifts" ? "ALL" : value || "ALL");
+                }}
+                renderInput={(params) => <TextField {...params} label="Shift" />}
+                freeSolo
+              />
+            </Grid>
+
+            <Grid item xs={12} sm={6} md={3}>
+              <Autocomplete
+                options={["All Owners", ...filterOptions.owners]}
+                value={ownerFilter === "ALL" ? "All Owners" : ownerFilter}
+                onChange={(e, value) => {
+                  setOwnerFilter(value === "All Owners" ? "ALL" : value || "ALL");
+                }}
+                renderInput={(params) => <TextField {...params} label="Owner" />}
+                freeSolo
+              />
+            </Grid>
+
+            <Grid item xs={12} md={3}>
               <Button
                 variant="contained"
                 fullWidth
@@ -270,9 +439,9 @@ export default function LeaseReportPage() {
               <Card>
                 <CardContent>
                   <Typography color="textSecondary" variant="body2" gutterBottom>
-                    Total Shifts
+                    Filtered Shifts
                   </Typography>
-                  <Typography variant="h5">{reportData.totalShifts}</Typography>
+                  <Typography variant="h5">{filteredData.length}</Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -292,9 +461,11 @@ export default function LeaseReportPage() {
               <Card sx={{ bgcolor: "error.light" }}>
                 <CardContent>
                   <Typography color="textSecondary" variant="body2" gutterBottom>
-                    No Owner
+                    No Owner (Filtered)
                   </Typography>
-                  <Typography variant="h5">{reportData.noOwnerCount}</Typography>
+                  <Typography variant="h5">
+                    {filteredData.filter((r) => r.status === "NO_OWNER").length}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
@@ -302,16 +473,18 @@ export default function LeaseReportPage() {
               <Card sx={{ bgcolor: "warning.light" }}>
                 <CardContent>
                   <Typography color="textSecondary" variant="body2" gutterBottom>
-                    Self Driven
+                    Self Driven (Filtered)
                   </Typography>
-                  <Typography variant="h5">{reportData.selfDrivenCount}</Typography>
+                  <Typography variant="h5">
+                    {filteredData.filter((r) => r.status === "SELF_DRIVEN").length}
+                  </Typography>
                 </CardContent>
               </Card>
             </Grid>
           </Grid>
         )}
 
-        {/* Data Table */}
+        {/* Summary Table */}
         {isDataLoaded && reportData ? (
           <>
             <Paper sx={{ mb: 3, display: "flex", justifyContent: "flex-end", p: 2 }}>
@@ -320,7 +493,7 @@ export default function LeaseReportPage() {
                 color="success"
                 startIcon={<DownloadIcon />}
                 onClick={exportToCSV}
-                disabled={filteredData.length === 0}
+                disabled={summaryData.length === 0}
               >
                 Export CSV
               </Button>
@@ -331,64 +504,184 @@ export default function LeaseReportPage() {
                 <TableHead>
                   <TableRow sx={{ bgcolor: "grey.100" }}>
                     <TableCell sx={{ fontWeight: "bold" }}>Cab #</TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Shift Date</TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Shift Type</TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Driver #</TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Driver Name</TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Owner #</TableCell>
-                    <TableCell sx={{ fontWeight: "bold" }}>Owner Name</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                      Lease Amount
-                    </TableCell>
                     <TableCell sx={{ fontWeight: "bold" }}>Status</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>Shift Type</TableCell>
+                    <TableCell sx={{ fontWeight: "bold" }}>Owner Name</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: "bold" }}>
+                      Count
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                      Total Lease
+                    </TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredData.map((row, idx) => (
-                    <TableRow key={idx}>
-                      <TableCell>{row.cabNumber}</TableCell>
-                      <TableCell>{row.shiftDate}</TableCell>
-                      <TableCell>{row.shiftType}</TableCell>
-                      <TableCell>{row.driverNumber}</TableCell>
-                      <TableCell>{row.driverName}</TableCell>
-                      <TableCell>{row.ownerNumber || "-"}</TableCell>
-                      <TableCell>{row.ownerName || "-"}</TableCell>
-                      <TableCell align="right">
-                        ${row.leaseAmount ? row.leaseAmount.toFixed(2) : "0.00"}
+                  {summaryData.map((summary, idx) => (
+                    <TableRow
+                      key={idx}
+                      hover
+                      onClick={() => {
+                        setSelectedCab(summary.cabNumber);
+                        setSelectedStatus(summary.status);
+                      }}
+                      sx={{ cursor: "pointer", "&:hover": { bgcolor: "action.hover" } }}
+                    >
+                      <TableCell sx={{ fontWeight: "bold" }}>
+                        {summary.cabNumber}
                       </TableCell>
                       <TableCell>
                         <Chip
-                          label={row.status}
-                          color={getStatusColor(row.status)}
+                          label={summary.status}
+                          color={getStatusColor(summary.status)}
                           size="small"
                         />
                       </TableCell>
+                      <TableCell>{summary.shiftTypesStr}</TableCell>
+                      <TableCell>{summary.ownerNamesStr}</TableCell>
+                      <TableCell align="center">{summary.count}</TableCell>
+                      <TableCell align="right">
+                        ${summary.totalLease.toFixed(2)}
+                      </TableCell>
                     </TableRow>
                   ))}
-                  {filteredData.length > 0 && (
+                  {summaryData.length > 0 && (
                     <TableRow sx={{ bgcolor: "success.light", fontWeight: "bold" }}>
-                      <TableCell colSpan={7}>
+                      <TableCell colSpan={4}>
                         <Typography fontWeight="bold">TOTAL</Typography>
+                      </TableCell>
+                      <TableCell align="center">
+                        <Typography fontWeight="bold">
+                          {summaryData.reduce((sum, s) => sum + s.count, 0)}
+                        </Typography>
                       </TableCell>
                       <TableCell align="right">
                         <Typography fontWeight="bold">
                           ${filteredTotals.totalLease.toFixed(2)}
                         </Typography>
                       </TableCell>
-                      <TableCell></TableCell>
                     </TableRow>
                   )}
                 </TableBody>
               </Table>
             </TableContainer>
 
-            {filteredData.length === 0 && (
+            {summaryData.length === 0 && (
               <Paper sx={{ p: 4, textAlign: "center" }}>
                 <Typography color="textSecondary">
-                  No shifts found for the selected status filter.
+                  No data found for the selected status filter.
                 </Typography>
               </Paper>
             )}
+
+            {/* Detail Modal */}
+            <Dialog
+              open={selectedCab !== null}
+              onClose={() => {
+                setSelectedCab(null);
+                setSelectedStatus(null);
+              }}
+              maxWidth="lg"
+              fullWidth
+            >
+              <DialogTitle>
+                Shift Details - Cab {selectedCab} ({selectedStatus})
+              </DialogTitle>
+              <DialogContent sx={{ mt: 2 }}>
+                {selectedCab !== null && selectedStatus !== null && (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ bgcolor: "grey.100" }}>
+                          <TableCell sx={{ fontWeight: "bold" }}>Driver #</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Driver Name</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Shift Date</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Shift Type</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Owner #</TableCell>
+                          <TableCell sx={{ fontWeight: "bold" }}>Owner Name</TableCell>
+                          <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                            Lease Amount
+                          </TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {modalData &&
+                          modalData.map((driver, dIdx) => (
+                            <>
+                              {driver.shifts.map((shift, sIdx) => (
+                                <TableRow
+                                  key={`${dIdx}-${sIdx}`}
+                                  sx={{
+                                    borderTop: sIdx === 0 ? "2px solid #bdbdbd" : "none",
+                                  }}
+                                >
+                                  {sIdx === 0 && (
+                                    <TableCell
+                                      rowSpan={driver.shifts.length + 1}
+                                      sx={{
+                                        fontWeight: "bold",
+                                        bgcolor: "#e3f2fd",
+                                        borderRight: "2px solid #bdbdbd",
+                                      }}
+                                    >
+                                      {driver.driverNumber}
+                                    </TableCell>
+                                  )}
+                                  {sIdx === 0 && (
+                                    <TableCell
+                                      rowSpan={driver.shifts.length + 1}
+                                      sx={{
+                                        fontWeight: "bold",
+                                        bgcolor: "#e3f2fd",
+                                        borderRight: "2px solid #bdbdbd",
+                                      }}
+                                    >
+                                      {driver.driverName}
+                                    </TableCell>
+                                  )}
+                                  <TableCell>{shift.shiftDate}</TableCell>
+                                  <TableCell>{shift.shiftType}</TableCell>
+                                  <TableCell>{shift.ownerNumber || "-"}</TableCell>
+                                  <TableCell>{shift.ownerName || "-"}</TableCell>
+                                  <TableCell align="right">
+                                    ${shift.leaseAmount ? shift.leaseAmount.toFixed(2) : "0.00"}
+                                  </TableCell>
+                                </TableRow>
+                              ))}
+                              {/* Subtotal row for driver */}
+                              <TableRow
+                                key={`${dIdx}-subtotal`}
+                                sx={{
+                                  bgcolor: "#fff3e0",
+                                  fontWeight: "bold",
+                                  borderBottom: "2px solid #bdbdbd",
+                                }}
+                              >
+                                <TableCell colSpan={5} align="right" sx={{ fontWeight: "bold" }}>
+                                  {driver.driverName} ({driver.shifts.length} shift
+                                  {driver.shifts.length > 1 ? "s" : ""})
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                  ${driver.totalLease.toFixed(2)}
+                                </TableCell>
+                              </TableRow>
+                            </>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </DialogContent>
+              <DialogActions>
+                <Button
+                  onClick={() => {
+                    setSelectedCab(null);
+                    setSelectedStatus(null);
+                  }}
+                >
+                  Close
+                </Button>
+              </DialogActions>
+            </Dialog>
           </>
         ) : loading ? (
           <Paper sx={{ p: 4, textAlign: "center" }}>
