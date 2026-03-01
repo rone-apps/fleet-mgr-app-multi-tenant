@@ -8,7 +8,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TableSortLabel, CircularProgress, Alert, Grid, Pagination,
   Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab, Card, CardContent,
-  FormControl, InputLabel, Select, MenuItem,
+  FormControl, InputLabel, Select, MenuItem, FormControlLabel, Switch, Stack,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -56,7 +56,8 @@ export default function DriverSummaryPage() {
   // Search/filter state
   const [searchDriverNumber, setSearchDriverNumber] = useState("");
   const [searchDriverName, setSearchDriverName] = useState("");
-  const [driverTypeFilter, setDriverTypeFilter] = useState("ALL"); // ALL, DRIVERS_ONLY, OWNERS_ONLY
+  const [driverTypeFilter, setDriverTypeFilter] = useState("ALL"); // ALL, DRIVER, OWNER
+  const [quickMode, setQuickMode] = useState(false); // Quick mode: skip detailed breakdowns
 
   // Sort state
   const [orderBy, setOrderBy] = useState("driverName");
@@ -151,12 +152,14 @@ export default function DriverSummaryPage() {
               size: 25, // Fetch 25 at a time to be efficient
               sort: sortField,
               direction: sortDirection,
+              personType: driverTypeFilter, // ALL, DRIVER, or OWNER
+              quickMode: quickMode, // true for fast mode, false for detailed
             },
             headers: {
               Authorization: `Bearer ${token}`,
               "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             },
-            timeout: 900000, // 5 minutes to allow large report calculations
+            timeout: quickMode ? 300000 : 1200000, // Shorter timeout for quick mode (5 min), longer for full (20 min)
           }
         );
 
@@ -454,6 +457,7 @@ export default function DriverSummaryPage() {
             Authorization: `Bearer ${token}`,
             "X-Tenant-ID": tenantId,
           },
+          timeout: 600000, // 10 minutes for detailed individual driver reports
         }
       );
       setDriverDetailReport(response.data);
@@ -660,33 +664,80 @@ export default function DriverSummaryPage() {
                     slotProps={{ textField: { fullWidth: true } }}
                   />
                 </Grid>
-                <Grid item xs={12} sm={4}>
-                  <Button
-                    variant="contained"
-                    onClick={() => {
-                      // ✅ Load ALL records with current sort
-                      let sortField = orderBy;
-                      if (orderBy === "driverName") {
-                        sortField = "lastName";
-                      }
-                      fetchAllRecords(sortField, order);
-                    }}
-                    disabled={loading}
-                    fullWidth
-                    size="large"
-                  >
-                    {loading ? <CircularProgress size={24} sx={{ mr: 1 }} /> : "Generate Report"}
-                    {loadingProgress > 0 && !loading && <Typography variant="caption" sx={{ ml: 1 }}>({loadingProgress}%)</Typography>}
-                  </Button>
-                </Grid>
               </Grid>
             </Paper>
 
-            {/* Filters */}
+            {/* Report Options */}
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom>
+                Report Options
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 2 }}>
+                <Grid item xs={12} sm={4}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Driver Type</InputLabel>
+                    <Select
+                      value={driverTypeFilter}
+                      label="Driver Type"
+                      onChange={(e) => {
+                        setDriverTypeFilter(e.target.value);
+                        // Trigger report refresh with new filter
+                        setTimeout(() => fetchAllRecords("lastName", "asc"), 100);
+                      }}
+                    >
+                      <MenuItem value="ALL">All (Drivers & Owners)</MenuItem>
+                      <MenuItem value="DRIVER">Drivers Only</MenuItem>
+                      <MenuItem value="OWNER">Owners Only</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={quickMode}
+                        onChange={(e) => {
+                          setQuickMode(e.target.checked);
+                          // Trigger report refresh with new quick mode setting
+                          setTimeout(() => fetchAllRecords("lastName", "asc"), 100);
+                        }}
+                      />
+                    }
+                    label={
+                      <Box>
+                        <Typography variant="body2">Quick Mode</Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {quickMode ? "Fast (5-15 sec, summary only)" : "Detailed (30-120 sec, full breakdown)"}
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Grid>
+              </Grid>
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                onClick={() => {
+                  // ✅ Load ALL records with current sort
+                  let sortField = orderBy;
+                  if (orderBy === "driverName") {
+                    sortField = "lastName";
+                  }
+                  fetchAllRecords(sortField, order);
+                }}
+                disabled={loading}
+              >
+                {loading ? <CircularProgress size={24} sx={{ mr: 1 }} /> : "Generate Report"}
+                {loadingProgress > 0 && !loading && <Typography variant="caption" sx={{ ml: 1 }}>({loadingProgress}%)</Typography>}
+              </Button>
+            </Paper>
+
+            {/* Search Filters */}
             {reportData && (
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" gutterBottom>
-                  Filters & Search
+                  Search Filters
                 </Typography>
                 <Grid container spacing={2} sx={{ mb: 2 }}>
                   <Grid item xs={12} sm={4}>
@@ -708,20 +759,6 @@ export default function DriverSummaryPage() {
                       size="small"
                       helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
                     />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Driver Type</InputLabel>
-                      <Select
-                        value={driverTypeFilter}
-                        label="Driver Type"
-                        onChange={(e) => setDriverTypeFilter(e.target.value)}
-                      >
-                        <MenuItem value="ALL">All (Drivers & Owners)</MenuItem>
-                        <MenuItem value="DRIVERS_ONLY">Drivers Only</MenuItem>
-                        <MenuItem value="OWNERS_ONLY">Owners Only</MenuItem>
-                      </Select>
-                    </FormControl>
                   </Grid>
                 </Grid>
                 <Grid container spacing={2}>

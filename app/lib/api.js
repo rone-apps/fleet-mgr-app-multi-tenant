@@ -4,6 +4,18 @@
 // This works for both local development and production without hardcoded URLs
 export const API_BASE_URL = '/api';
 
+// ============================================
+// Timeout Configuration for Long-Running Reports
+// ============================================
+// Default timeout for regular API calls
+export const DEFAULT_TIMEOUT = 30000; // 30 seconds
+
+// Extended timeout for long-running report generation
+export const REPORT_TIMEOUT = 900000; // 15 minutes (900 seconds)
+
+// Extended timeout for comprehensive reports with all details
+export const COMPREHENSIVE_REPORT_TIMEOUT = 1200000; // 20 minutes (1200 seconds)
+
 /**
  * Get current tenant ID (display ID) from localStorage
  */
@@ -196,17 +208,48 @@ export function getAuthHeaders(contentType = 'application/json') {
 }
 
 /**
- * Tenant-aware fetch wrapper
+ * Fetch with timeout support
+ * Throws TimeoutError if request exceeds the specified timeout
+ * @param {string} url - The URL to fetch
+ * @param {object} options - Fetch options
+ * @param {number} timeout - Timeout in milliseconds (default: 30000ms)
+ * @returns {Promise<Response>} The fetch response
+ */
+export async function fetchWithTimeout(url, options = {}, timeout = DEFAULT_TIMEOUT) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeout / 1000} seconds`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Tenant-aware fetch wrapper with timeout support
  * Use this as a drop-in replacement for fetch() when making authenticated API calls
  * Automatically includes Authorization and X-Tenant-ID headers
+ * @param {string} url - The URL to fetch
+ * @param {object} options - Fetch options
+ * @param {number} timeout - Timeout in milliseconds (default: 30000ms for regular, use REPORT_TIMEOUT for reports)
  */
-export async function tenantFetch(url, options = {}) {
+export async function tenantFetch(url, options = {}, timeout = DEFAULT_TIMEOUT) {
   const token = localStorage.getItem('token');
   const tenantSchema = getTenantSchema();
-  
+
   // Don't set Content-Type for FormData (let browser set it with boundary)
   const isFormData = options.body instanceof FormData;
-  
+
   const config = {
     ...options,
     headers: {
@@ -216,6 +259,6 @@ export async function tenantFetch(url, options = {}) {
       ...options.headers,
     },
   };
-  
-  return fetch(url, config);
+
+  return fetchWithTimeout(url, config, timeout);
 }
