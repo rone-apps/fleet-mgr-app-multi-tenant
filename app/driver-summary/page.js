@@ -818,6 +818,104 @@ export default function DriverSummaryPage() {
                   </Grid>
                 </Grid>
 
+                {/* ✅ COMPREHENSIVE SUMMARY REPORT */}
+                <Paper sx={{ p: 3, mb: 3, bgcolor: "#f5f5f5", border: "2px solid #1976d2" }}>
+                  <Typography variant="h5" fontWeight="bold" sx={{ mb: 3 }}>
+                    📊 Summary Report - {startDate.toLocaleDateString()} to {endDate.toLocaleDateString()}
+                  </Typography>
+
+                  <Grid container spacing={3}>
+                    {/* REVENUES SECTION */}
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: "success.main" }}>
+                        Revenues
+                      </Typography>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
+                          <Typography variant="body2">Lease Revenue</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.leaseRevenue)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
+                          <Typography variant="body2">Credit Card Revenues</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.creditCardRevenue)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
+                          <Typography variant="body2">Charges Revenues</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.chargesRevenue)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "2px solid #333" }}>
+                          <Typography variant="body2">Other Revenues</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.otherRevenue)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 1, bgcolor: "success.light", px: 1, borderRadius: 1, mt: 1 }}>
+                          <Typography variant="subtitle2" fontWeight="bold">Total Revenues</Typography>
+                          <Typography variant="subtitle2" fontWeight="bold" color="success.main">{formatCurrency(displayTotals.revenue)}</Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+
+                    {/* EXPENSES SECTION */}
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: "error.main" }}>
+                        Expenses
+                      </Typography>
+                      <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
+                          <Typography variant="body2">Dispatch Fees</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.fixedExpense)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
+                          <Typography variant="body2">Lease Expense</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.leaseExpense)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
+                          <Typography variant="body2">Variable Expenses</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.variableExpense)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "2px solid #333" }}>
+                          <Typography variant="body2">Other Expenses</Typography>
+                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.otherExpense)}</Typography>
+                        </Box>
+                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 1, bgcolor: "error.light", px: 1, borderRadius: 1, mt: 1 }}>
+                          <Typography variant="subtitle2" fontWeight="bold">Total Expenses</Typography>
+                          <Typography variant="subtitle2" fontWeight="bold" color="error.main">{formatCurrency(displayTotals.expense)}</Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+
+                    {/* NET SUMMARY */}
+                    <Grid item xs={12}>
+                      <Box sx={{
+                        display: "flex",
+                        justifyContent: "space-around",
+                        bgcolor: "#fff3e0",
+                        p: 2,
+                        borderRadius: 1,
+                        border: "2px solid #ff9800"
+                      }}>
+                        <Box sx={{ textAlign: "center" }}>
+                          <Typography variant="caption" color="text.secondary" display="block">Net (Revenue - Expenses)</Typography>
+                          <Typography
+                            variant="h6"
+                            fontWeight="bold"
+                            color={displayTotals.revenue - displayTotals.expense >= 0 ? "success.main" : "error.main"}
+                          >
+                            {formatCurrency(displayTotals.revenue - displayTotals.expense)}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "center" }}>
+                          <Typography variant="caption" color="text.secondary" display="block">Total Drivers</Typography>
+                          <Typography variant="h6" fontWeight="bold">{displayTotals.driverCount}</Typography>
+                        </Box>
+                        <Box sx={{ textAlign: "center" }}>
+                          <Typography variant="caption" color="text.secondary" display="block">Period</Typography>
+                          <Typography variant="body2" fontWeight="bold">{isAllRecordsLoaded ? "All Records" : "Loaded Pages"}</Typography>
+                        </Box>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </Paper>
+
                 {/* Detailed Revenue Breakdown */}
                 <Paper sx={{ p: 2, mb: 3 }}>
                   <Typography variant="h6" gutterBottom sx={{ mb: 2 }}>
