@@ -289,6 +289,35 @@ export default function DriverSummaryPage() {
     return Array.from(ordered.entries()).map(([key, displayName]) => ({ key, displayName }));
   }, [allRecords]);
 
+  // ✅ AGGREGATE ITEMIZED REVENUE & EXPENSE TOTALS FOR SUMMARY REPORT
+  const aggregatedSummary = useMemo(() => {
+    const revenueTotals = {};
+    const expenseTotals = {};
+
+    allRecords.forEach(driver => {
+      // Aggregate revenues
+      (driver.revenueBreakdown || []).forEach(item => {
+        if (!revenueTotals[item.key]) {
+          revenueTotals[item.key] = { displayName: item.displayName, total: 0 };
+        }
+        revenueTotals[item.key].total += (item.amount || 0);
+      });
+
+      // Aggregate expenses
+      (driver.expenseBreakdown || []).forEach(item => {
+        if (!expenseTotals[item.key]) {
+          expenseTotals[item.key] = { displayName: item.displayName, total: 0 };
+        }
+        expenseTotals[item.key].total += (item.amount || 0);
+      });
+    });
+
+    return {
+      revenues: Object.entries(revenueTotals).map(([key, val]) => ({ key, ...val })),
+      expenses: Object.entries(expenseTotals).map(([key, val]) => ({ key, ...val })),
+    };
+  }, [allRecords]);
+
   // ✅ HELPER FUNCTIONS FOR DYNAMIC COLUMN LOOKUP
   const getRevAmount = (driver, key) =>
     (driver.revenueBreakdown || []).find(i => i.key === key)?.amount || 0;
@@ -825,60 +854,76 @@ export default function DriverSummaryPage() {
                   </Typography>
 
                   <Grid container spacing={3}>
-                    {/* REVENUES SECTION */}
+                    {/* REVENUES SECTION - ALL ITEMIZED */}
                     <Grid item xs={12} md={6}>
                       <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: "success.main" }}>
                         Revenues
                       </Typography>
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
-                          <Typography variant="body2">Lease Revenue</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.leaseRevenue)}</Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
-                          <Typography variant="body2">Credit Card Revenues</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.creditCardRevenue)}</Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
-                          <Typography variant="body2">Charges Revenues</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.chargesRevenue)}</Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "2px solid #333" }}>
-                          <Typography variant="body2">Other Revenues</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.otherRevenue)}</Typography>
-                        </Box>
+                        {aggregatedSummary.revenues.length > 0 ? (
+                          <>
+                            {aggregatedSummary.revenues.map((item, idx) => (
+                              <Box
+                                key={item.key}
+                                sx={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  py: 0.5,
+                                  borderBottom: idx === aggregatedSummary.revenues.length - 1 ? "2px solid #333" : "1px solid #ddd",
+                                }}
+                              >
+                                <Typography variant="body2">{item.displayName}</Typography>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {formatCurrency(item.total)}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">No revenue data</Typography>
+                        )}
                         <Box sx={{ display: "flex", justifyContent: "space-between", py: 1, bgcolor: "success.light", px: 1, borderRadius: 1, mt: 1 }}>
                           <Typography variant="subtitle2" fontWeight="bold">Total Revenues</Typography>
-                          <Typography variant="subtitle2" fontWeight="bold" color="success.main">{formatCurrency(displayTotals.revenue)}</Typography>
+                          <Typography variant="subtitle2" fontWeight="bold" color="success.main">
+                            {formatCurrency(displayTotals.revenue)}
+                          </Typography>
                         </Box>
                       </Box>
                     </Grid>
 
-                    {/* EXPENSES SECTION */}
+                    {/* EXPENSES SECTION - ALL ITEMIZED */}
                     <Grid item xs={12} md={6}>
                       <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, color: "error.main" }}>
                         Expenses
                       </Typography>
                       <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
-                          <Typography variant="body2">Dispatch Fees</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.fixedExpense)}</Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
-                          <Typography variant="body2">Lease Expense</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.leaseExpense)}</Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "1px solid #ddd" }}>
-                          <Typography variant="body2">Variable Expenses</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.variableExpense)}</Typography>
-                        </Box>
-                        <Box sx={{ display: "flex", justifyContent: "space-between", py: 0.5, borderBottom: "2px solid #333" }}>
-                          <Typography variant="body2">Other Expenses</Typography>
-                          <Typography variant="body2" fontWeight="bold">{formatCurrency(displayTotals.otherExpense)}</Typography>
-                        </Box>
+                        {aggregatedSummary.expenses.length > 0 ? (
+                          <>
+                            {aggregatedSummary.expenses.map((item, idx) => (
+                              <Box
+                                key={item.key}
+                                sx={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  py: 0.5,
+                                  borderBottom: idx === aggregatedSummary.expenses.length - 1 ? "2px solid #333" : "1px solid #ddd",
+                                }}
+                              >
+                                <Typography variant="body2">{item.displayName}</Typography>
+                                <Typography variant="body2" fontWeight="bold">
+                                  {formatCurrency(item.total)}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">No expense data</Typography>
+                        )}
                         <Box sx={{ display: "flex", justifyContent: "space-between", py: 1, bgcolor: "error.light", px: 1, borderRadius: 1, mt: 1 }}>
                           <Typography variant="subtitle2" fontWeight="bold">Total Expenses</Typography>
-                          <Typography variant="subtitle2" fontWeight="bold" color="error.main">{formatCurrency(displayTotals.expense)}</Typography>
+                          <Typography variant="subtitle2" fontWeight="bold" color="error.main">
+                            {formatCurrency(displayTotals.expense)}
+                          </Typography>
                         </Box>
                       </Box>
                     </Grid>
