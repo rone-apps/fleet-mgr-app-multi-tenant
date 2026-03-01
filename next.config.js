@@ -3,7 +3,7 @@ const nextConfig = {
   reactStrictMode: true,
   // Increase timeout for API routes (default is 60 seconds)
   experimental: {
-    proxyTimeout: 300000, // 5 minutes in milliseconds
+    proxyTimeout: 1200000, // 20 minutes in milliseconds - matches backend timeout
   },
   // Increase body size limit for file uploads
   api: {
