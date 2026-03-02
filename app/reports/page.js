@@ -49,10 +49,16 @@ export default function ReportsPage() {
     return reportData.oneTimeExpenses.filter((exp) => exp.applicationType === "LEASE_RENT");
   };
 
-  // Helper function to filter non-lease one-time expenses
+  // Helper function to filter non-lease, non-airport one-time expenses
   const getOtherOneTimeExpenses = () => {
     if (!reportData?.oneTimeExpenses) return [];
-    return reportData.oneTimeExpenses.filter((exp) => exp.applicationType !== "LEASE_RENT");
+    return reportData.oneTimeExpenses.filter((exp) => exp.applicationType !== "LEASE_RENT" && exp.categoryCode !== "AIRPORT_TRIP");
+  };
+
+  // Helper function to filter airport trip expenses from one-time expenses
+  const getAirportExpenses = () => {
+    if (!reportData?.oneTimeExpenses) return [];
+    return reportData.oneTimeExpenses.filter((exp) => exp.categoryCode === "AIRPORT_TRIP");
   };
 
   // Revenue type filter functions
@@ -1333,6 +1339,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <Tab label={`Lease Expenses (${getLeaseExpenses().length})`} />
                         <Tab label={`One-Time Expenses (${getOtherOneTimeExpenses().length})`} />
                         <Tab label={`Per-Unit Expenses (${reportData?.perUnitExpenses?.length || 0})`} />
+                        <Tab label={`Airport Trips (${getAirportExpenses().length})`} />
                         <Tab label={`Mileage Expenses (${reportData?.mileageExpenses?.length || 0})`} />
                         <Tab label={`Insurance Mileage (${reportData?.insuranceMileageExpenses?.length || 0})`} />
                       </Tabs>
@@ -1589,8 +1596,53 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       </Box>
                     )}
 
-                    {/* Mileage Expenses Tab - Index 4 */}
+                    {/* Airport Trips Tab - Index 4 */}
                     {expenseTabIndex === 4 && (
+                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {getAirportExpenses().length > 0 ? (
+                          <TableContainer sx={{ overflowX: 'auto' }}>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
+                                  <TableCell align="right"><strong>Trips</strong></TableCell>
+                                  <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {getAirportExpenses()
+                                  .sort((a, b) => new Date(b.date || "") - new Date(a.date || ""))
+                                  .map((exp, idx) => (
+                                  <TableRow key={idx} hover>
+                                    <TableCell>{exp.date || "-"}</TableCell>
+                                    <TableCell>{exp.cabNumber || "-"}</TableCell>
+                                    <TableCell align="right">{exp.tripCount || "-"}</TableCell>
+                                    <TableCell align="right">{exp.ratePerUnit ? `$${parseFloat(exp.ratePerUnit).toFixed(2)}` : "-"}</TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      ${parseFloat(exp.amount || 0).toFixed(2)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={2} align="right">
+                                    <strong>Total: {getAirportExpenses().reduce((sum, e) => sum + (e.tripCount || 0), 0)} trips</strong>
+                                  </TableCell>
+                                  <TableCell colSpan={2} align="right"><strong>Airport Trips Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(getAirportExpenses()).toFixed(2)}</strong></TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        ) : (
+                          <Typography color="textSecondary">No airport trip expenses</Typography>
+                        )}
+                      </Box>
+                    )}
+
+                    {/* Mileage Expenses Tab - Index 5 */}
+                    {expenseTabIndex === 5 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         {reportData?.mileageExpenses?.length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
@@ -1633,8 +1685,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       </Box>
                     )}
 
-                    {/* Insurance Mileage Expenses Tab - Index 5 */}
-                    {expenseTabIndex === 5 && (
+                    {/* Insurance Mileage Expenses Tab - Index 6 */}
+                    {expenseTabIndex === 6 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         {reportData?.insuranceMileageExpenses?.length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
@@ -2126,6 +2178,48 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
                           <TableCell colSpan={4} align="right"><strong>Per-Unit Expenses Subtotal:</strong></TableCell>
                           <TableCell align="right"><strong>${calculateSubtotal(reportData.perUnitExpenses).toFixed(2)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Airport Trip Expenses Section */}
+              {getAirportExpenses().length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#1565c0" }}>
+                    Airport Trip Expenses
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Date</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell align="right">Trips</TableCell>
+                          <TableCell align="right">Rate/Trip</TableCell>
+                          <TableCell align="right">Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {getAirportExpenses()
+                          .sort((a, b) => new Date(b.date || "") - new Date(a.date || ""))
+                          .map((exp, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{exp.date || "-"}</TableCell>
+                            <TableCell>{exp.cabNumber || "-"}</TableCell>
+                            <TableCell align="right">{exp.tripCount || "-"}</TableCell>
+                            <TableCell align="right">{exp.ratePerUnit ? `$${parseFloat(exp.ratePerUnit).toFixed(2)}` : "-"}</TableCell>
+                            <TableCell align="right">${parseFloat(exp.amount || 0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={2} align="right">
+                            <strong>Total: {getAirportExpenses().reduce((sum, e) => sum + (e.tripCount || 0), 0)} trips</strong>
+                          </TableCell>
+                          <TableCell colSpan={2} align="right"><strong>Airport Trips Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${calculateSubtotal(getAirportExpenses()).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>

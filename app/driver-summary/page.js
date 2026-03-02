@@ -241,55 +241,64 @@ export default function DriverSummaryPage() {
   }, [page, pageSize, allRecords]);
 
   // ✅ DYNAMIC COLUMN SCHEMA - Compute from all records
+  // ✅ FIXED + DYNAMIC REVENUE COLUMNS
+  // Fixed columns read directly from DTO fields (always present, correct order)
+  // Dynamic columns come from breakdown array for any "other" revenue items
   const revenueColumns = useMemo(() => {
-    const keys = new Map(); // key → displayName
+    const fixed = [
+      { key: "CHARGES", displayName: "Charges", getAmount: (d) => d.chargesRevenue || 0 },
+      { key: "CC", displayName: "Credit Cards", getAmount: (d) => d.creditCardRevenue || 0 },
+      { key: "LEASE_INC", displayName: "Lease Income", getAmount: (d) => d.leaseRevenue || 0 },
+    ];
+
+    // Collect any other revenue items from breakdown (excluding fixed ones)
+    const fixedKeys = new Set(["CC", "CHARGES", "LEASE_INC"]);
+    const otherKeys = new Map();
     allRecords.forEach(d => {
       (d.revenueBreakdown || []).forEach(item => {
-        if (!keys.has(item.key)) {
-          keys.set(item.key, item.displayName);
+        if (!fixedKeys.has(item.key) && !otherKeys.has(item.key)) {
+          otherKeys.set(item.key, item.displayName);
         }
       });
     });
-    // Return in consistent order: CC, CHARGES, LEASE_INC, then OTHER items
-    const ordered = new Map();
-    const otherItems = new Map();
-    keys.forEach((displayName, key) => {
-      if (key === "CC") ordered.set(key, displayName);
-      else if (key === "CHARGES") ordered.set(key, displayName);
-      else if (key === "LEASE_INC") ordered.set(key, displayName);
-      else otherItems.set(key, displayName);
-    });
-    otherItems.forEach((displayName, key) => ordered.set(key, displayName));
-    return Array.from(ordered.entries()).map(([key, displayName]) => ({ key, displayName }));
+
+    const dynamic = Array.from(otherKeys.entries()).map(([key, displayName]) => ({
+      key,
+      displayName,
+      getAmount: (d) => (d.revenueBreakdown || []).find(i => i.key === key)?.amount || 0,
+    }));
+
+    return [...fixed, ...dynamic];
   }, [allRecords]);
 
+  // ✅ FIXED + DYNAMIC EXPENSE COLUMNS
+  // Fixed columns: Lease Expense, Insurance Mileage, Airport Trips (always present)
+  // Dynamic columns: Dispatch, other recurring/onetime items from breakdown
   const expenseColumns = useMemo(() => {
-    const keys = new Map();
+    const fixed = [
+      { key: "LEASE_EXP", displayName: "Lease Expense", getAmount: (d) => d.leaseExpense || 0 },
+      { key: "INSURANCE", displayName: "Insurance Mileage", getAmount: (d) => d.insuranceMileageExpense || 0 },
+      { key: "AIRPORT", displayName: "Airport Trips", getAmount: (d) => d.airportTripCost || 0 },
+    ];
+
+    // Collect dynamic expense items from breakdown (excluding fixed ones)
+    const fixedKeys = new Set(["LEASE_EXP", "INSURANCE", "AIRPORT"]);
+    const otherKeys = new Map();
     allRecords.forEach(d => {
       (d.expenseBreakdown || []).forEach(item => {
-        if (!keys.has(item.key)) {
-          keys.set(item.key, item.displayName);
+        if (!fixedKeys.has(item.key) && !otherKeys.has(item.key)) {
+          otherKeys.set(item.key, item.displayName);
         }
       });
     });
-    // Return in consistent order: RECURRING items, LEASE_EXP, ONETIME items, INSURANCE
-    const ordered = new Map();
-    const recurringItems = new Map();
-    const ontimeItems = new Map();
-    keys.forEach((displayName, key) => {
-      if (key === "LEASE_EXP") ordered.set(key, displayName);
-      else if (key === "INSURANCE") ordered.set(key, displayName);
-      else if (key.startsWith("RECURRING:")) recurringItems.set(key, displayName);
-      else if (key.startsWith("ONETIME:")) ontimeItems.set(key, displayName);
-    });
-    recurringItems.forEach((displayName, key) => ordered.set(key, displayName));
-    ontimeItems.forEach((displayName, key) => ordered.set(key, displayName));
-    if (keys.has("INSURANCE")) {
-      const insurance = keys.get("INSURANCE");
-      ordered.delete("INSURANCE");
-      ordered.set("INSURANCE", insurance);
-    }
-    return Array.from(ordered.entries()).map(([key, displayName]) => ({ key, displayName }));
+
+    const dynamic = Array.from(otherKeys.entries()).map(([key, displayName]) => ({
+      key,
+      displayName,
+      getAmount: (d) => (d.expenseBreakdown || []).find(i => i.key === key)?.amount || 0,
+    }));
+
+    return [...fixed, ...dynamic];
   }, [allRecords]);
 
   // ✅ AGGREGATE ITEMIZED REVENUE & EXPENSE TOTALS FOR SUMMARY REPORT
@@ -321,12 +330,16 @@ export default function DriverSummaryPage() {
     };
   }, [allRecords]);
 
-  // ✅ HELPER FUNCTIONS FOR DYNAMIC COLUMN LOOKUP
-  const getRevAmount = (driver, key) =>
-    (driver.revenueBreakdown || []).find(i => i.key === key)?.amount || 0;
+  // ✅ HELPER FUNCTIONS - use column's getAmount for fixed cols, breakdown lookup for dynamic
+  const getRevAmount = (driver, key) => {
+    const col = revenueColumns.find(c => c.key === key);
+    return col ? col.getAmount(driver) : 0;
+  };
 
-  const getExpAmount = (driver, key) =>
-    (driver.expenseBreakdown || []).find(i => i.key === key)?.amount || 0;
+  const getExpAmount = (driver, key) => {
+    const col = expenseColumns.find(c => c.key === key);
+    return col ? col.getAmount(driver) : 0;
+  };
 
   // ✅ Get display totals from grand totals (all records cached)
   const getDisplayTotals = () => {
@@ -1730,7 +1743,7 @@ export default function DriverSummaryPage() {
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {useMemo(() => {
+                                {(() => {
                                   // Group by cab number
                                   const grouped = {};
                                   driverDetailReport.revenues.filter(r => r.revenueSubType === "LEASE_INCOME").forEach((rev) => {
@@ -1820,7 +1833,7 @@ export default function DriverSummaryPage() {
                                   );
 
                                   return rows;
-                                }, [driverDetailReport])}
+                                })()}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1978,14 +1991,17 @@ export default function DriverSummaryPage() {
 
                     {/* Expense Tabs */}
                     <Typography variant="h6" gutterBottom sx={{ mt: 3, fontWeight: "bold" }}>Expense Details</Typography>
-                    <Tabs value={expenseTabIndex} onChange={(e, val) => setExpenseTabIndex(val)} sx={{ mb: 2 }}>
+                    <Tabs value={expenseTabIndex} onChange={(e, val) => setExpenseTabIndex(val)} sx={{ mb: 2 }} variant="scrollable" scrollButtons="auto">
                       <Tab label="All Expenses" />
                       <Tab label="Recurring Expenses" />
+                      <Tab label="Lease Expense" />
                       <Tab label="One-Time Expenses" />
+                      <Tab label="Airport Trips" />
                     </Tabs>
 
                     {expenseTabIndex === 0 && (
                       <Box sx={{ mb: 3 }}>
+                        {/* All Expenses - Summary view */}
                         {driverDetailReport.recurringExpenses && driverDetailReport.recurringExpenses.length > 0 ? (
                           <Box sx={{ mb: 3 }}>
                             <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Recurring Expenses</Typography>
@@ -2008,16 +2024,13 @@ export default function DriverSummaryPage() {
                                       </TableCell>
                                     </TableRow>
                                   ))}
-                                  {/* Recurring Expenses Subtotal */}
                                   <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
                                     <TableCell colSpan={2} align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main">
-                                        RECURRING SUBTOTAL
-                                      </Typography>
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">RECURRING SUBTOTAL</Typography>
                                     </TableCell>
                                     <TableCell align="right">
                                       <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
-                                        {formatCurrency(driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                        {formatCurrency(driverDetailReport.totalRecurringExpenses || driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
                                       </Typography>
                                     </TableCell>
                                   </TableRow>
@@ -2027,52 +2040,138 @@ export default function DriverSummaryPage() {
                           </Box>
                         ) : null}
 
-                        {driverDetailReport.oneTimeExpenses && driverDetailReport.oneTimeExpenses.length > 0 ? (
-                          <Box sx={{ mb: 3 }}>
-                            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>One-Time Expenses</Typography>
-                            <TableContainer>
-                              <Table size="small">
-                                <TableHead>
-                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
-                                    <TableCell><strong>Date</strong></TableCell>
-                                    <TableCell><strong>Category</strong></TableCell>
-                                    <TableCell><strong>Description</strong></TableCell>
-                                    <TableCell align="right"><strong>Amount</strong></TableCell>
-                                  </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                  {[...driverDetailReport.oneTimeExpenses].sort((a, b) => {
-                                    const dateA = new Date(a.date || "");
-                                    const dateB = new Date(b.date || "");
-                                    return dateB - dateA;
-                                  }).map((exp, idx) => (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{exp.date || "-"}</TableCell>
-                                      <TableCell>{exp.categoryName || "-"}</TableCell>
-                                      <TableCell>{exp.description || "-"}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                        {formatCurrency(exp.amount)}
+                        {/* Lease Expenses (from oneTimeExpenses with categoryCode LEASE_EXP) */}
+                        {(() => {
+                          const leaseItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode === "LEASE_EXP");
+                          if (leaseItems.length === 0) return null;
+                          return (
+                            <Box sx={{ mb: 3 }}>
+                              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Lease Expenses</Typography>
+                              <TableContainer>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                      <TableCell><strong>Date</strong></TableCell>
+                                      <TableCell><strong>Description</strong></TableCell>
+                                      <TableCell align="right"><strong>Fixed</strong></TableCell>
+                                      <TableCell align="right"><strong>Mileage</strong></TableCell>
+                                      <TableCell align="right"><strong>Total</strong></TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {leaseItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
+                                      <TableRow key={idx} hover>
+                                        <TableCell>{exp.date || "-"}</TableCell>
+                                        <TableCell>{exp.description || "-"}</TableCell>
+                                        <TableCell align="right">{formatCurrency(exp.leaseBreakdown?.fixedLeaseAmount)}</TableCell>
+                                        <TableCell align="right">{formatCurrency(exp.leaseBreakdown?.mileageLeaseAmount)}</TableCell>
+                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                    <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                      <TableCell colSpan={4} align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">LEASE SUBTOTAL</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                          {formatCurrency(leaseItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                        </Typography>
                                       </TableCell>
                                     </TableRow>
-                                  ))}
-                                  {/* One-Time Expenses Subtotal */}
-                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                    <TableCell colSpan={3} align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main">
-                                        ONE-TIME SUBTOTAL
-                                      </Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
-                                        {formatCurrency(driverDetailReport.oneTimeExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                </TableBody>
-                              </Table>
-                            </TableContainer>
-                          </Box>
-                        ) : null}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            </Box>
+                          );
+                        })()}
+
+                        {/* One-Time Expenses (excluding lease and airport) */}
+                        {(() => {
+                          const otherItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode !== "LEASE_EXP" && e.categoryCode !== "AIRPORT_TRIP");
+                          if (otherItems.length === 0) return null;
+                          return (
+                            <Box sx={{ mb: 3 }}>
+                              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>One-Time Expenses</Typography>
+                              <TableContainer>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                      <TableCell><strong>Date</strong></TableCell>
+                                      <TableCell><strong>Category</strong></TableCell>
+                                      <TableCell><strong>Description</strong></TableCell>
+                                      <TableCell align="right"><strong>Amount</strong></TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {otherItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
+                                      <TableRow key={idx} hover>
+                                        <TableCell>{exp.date || "-"}</TableCell>
+                                        <TableCell>{exp.categoryName || "-"}</TableCell>
+                                        <TableCell>{exp.description || "-"}</TableCell>
+                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                    <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                      <TableCell colSpan={3} align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">ONE-TIME SUBTOTAL</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                          {formatCurrency(otherItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            </Box>
+                          );
+                        })()}
+
+                        {/* Airport Trip Expenses (filtered from oneTimeExpenses by categoryCode) */}
+                        {(() => {
+                          const airportItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode === "AIRPORT_TRIP");
+                          if (airportItems.length === 0) return null;
+                          return (
+                            <Box sx={{ mb: 3 }}>
+                              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Airport Trip Expenses</Typography>
+                              <TableContainer>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                      <TableCell><strong>Date</strong></TableCell>
+                                      <TableCell><strong>Cab</strong></TableCell>
+                                      <TableCell align="right"><strong>Trips</strong></TableCell>
+                                      <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
+                                      <TableCell align="right"><strong>Amount</strong></TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {airportItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
+                                      <TableRow key={idx} hover>
+                                        <TableCell>{exp.date || "-"}</TableCell>
+                                        <TableCell>{exp.cabNumber || "-"}</TableCell>
+                                        <TableCell align="right">{exp.tripCount || "-"}</TableCell>
+                                        <TableCell align="right">{exp.ratePerUnit ? formatCurrency(exp.ratePerUnit) : "-"}</TableCell>
+                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                      </TableRow>
+                                    ))}
+                                    <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                      <TableCell colSpan={4} align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">AIRPORT SUBTOTAL</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                          {formatCurrency(airportItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            </Box>
+                          );
+                        })()}
 
                         {(!driverDetailReport.recurringExpenses || driverDetailReport.recurringExpenses.length === 0) &&
                          (!driverDetailReport.oneTimeExpenses || driverDetailReport.oneTimeExpenses.length === 0) && (
@@ -2081,6 +2180,7 @@ export default function DriverSummaryPage() {
                       </Box>
                     )}
 
+                    {/* Tab 1: Recurring Expenses */}
                     {expenseTabIndex === 1 && (
                       <Box sx={{ mb: 3 }}>
                         {driverDetailReport.recurringExpenses && driverDetailReport.recurringExpenses.length > 0 ? (
@@ -2103,16 +2203,13 @@ export default function DriverSummaryPage() {
                                     </TableCell>
                                   </TableRow>
                                 ))}
-                                {/* Recurring Expenses Subtotal */}
                                 <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
                                   <TableCell colSpan={2} align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="error.main">
-                                      TOTAL RECURRING EXPENSES
-                                    </Typography>
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL RECURRING EXPENSES</Typography>
                                   </TableCell>
                                   <TableCell align="right">
                                     <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
-                                      {formatCurrency(driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                      {formatCurrency(driverDetailReport.totalRecurringExpenses || driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
                                     </Typography>
                                   </TableCell>
                                 </TableRow>
@@ -2125,53 +2222,207 @@ export default function DriverSummaryPage() {
                       </Box>
                     )}
 
+                    {/* Tab 2: Lease Expense */}
                     {expenseTabIndex === 2 && (
                       <Box sx={{ mb: 3 }}>
-                        {driverDetailReport.oneTimeExpenses && driverDetailReport.oneTimeExpenses.length > 0 ? (
-                          <TableContainer>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow sx={{ bgcolor: "#ffebee" }}>
-                                  <TableCell><strong>Date</strong></TableCell>
-                                  <TableCell><strong>Category</strong></TableCell>
-                                  <TableCell><strong>Description</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {[...driverDetailReport.oneTimeExpenses].sort((a, b) => {
-                                  const dateA = new Date(a.date || "");
-                                  const dateB = new Date(b.date || "");
-                                  return dateB - dateA;
-                                }).map((exp, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{exp.date || "-"}</TableCell>
-                                    <TableCell>{exp.categoryName || "-"}</TableCell>
-                                    <TableCell>{exp.description || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                      {formatCurrency(exp.amount)}
+                        {(() => {
+                          const leaseItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode === "LEASE_EXP");
+                          if (leaseItems.length === 0) return <Typography color="textSecondary">No lease expenses found</Typography>;
+
+                          // Group by cab number
+                          const grouped = {};
+                          leaseItems.forEach((exp) => {
+                            const cabNum = exp.description?.match(/Cab\s+(\d+)/)?.[1] || exp.cabNumber || "Unknown";
+                            if (!grouped[cabNum]) grouped[cabNum] = [];
+                            grouped[cabNum].push(exp);
+                          });
+                          const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+
+                          return (
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                    <TableCell><strong>Cab</strong></TableCell>
+                                    <TableCell><strong>Date</strong></TableCell>
+                                    <TableCell><strong>Description</strong></TableCell>
+                                    <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                    <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                    <TableCell align="right"><strong>Total</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {sortedCabs.map((cab) => {
+                                    const items = grouped[cab].sort((a, b) => new Date(b.date || "") - new Date(a.date || ""));
+                                    const cabSubtotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                    return [
+                                      <TableRow key={`cab-header-${cab}`} sx={{ bgcolor: "#ffcdd2" }}>
+                                        <TableCell colSpan={6}>
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
+                                        </TableCell>
+                                      </TableRow>,
+                                      ...items.map((exp, idx) => (
+                                        <TableRow key={`${cab}-${idx}`} hover>
+                                          <TableCell>Cab {cab}</TableCell>
+                                          <TableCell>{exp.date || "-"}</TableCell>
+                                          <TableCell>{exp.description || "-"}</TableCell>
+                                          <TableCell align="right">{formatCurrency(exp.leaseBreakdown?.fixedLeaseAmount)}</TableCell>
+                                          <TableCell align="right">{formatCurrency(exp.leaseBreakdown?.mileageLeaseAmount)}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                        </TableRow>
+                                      )),
+                                      <TableRow key={`cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #f44336" }}>
+                                        <TableCell colSpan={5} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">{formatCurrency(cabSubtotal)}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    ];
+                                  })}
+                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                    <TableCell colSpan={5} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL LEASE EXPENSE</Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                        {formatCurrency(leaseItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                      </Typography>
                                     </TableCell>
                                   </TableRow>
-                                ))}
-                                {/* One-Time Expenses Subtotal */}
-                                <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                  <TableCell colSpan={3} align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="error.main">
-                                      TOTAL ONE-TIME EXPENSES
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
-                                      {formatCurrency(driverDetailReport.oneTimeExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        ) : (
-                          <Typography color="textSecondary">No one-time expenses found</Typography>
-                        )}
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          );
+                        })()}
+                      </Box>
+                    )}
+
+                    {/* Tab 3: One-Time Expenses (excluding lease and airport) */}
+                    {expenseTabIndex === 3 && (
+                      <Box sx={{ mb: 3 }}>
+                        {(() => {
+                          const otherItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode !== "LEASE_EXP" && e.categoryCode !== "AIRPORT_TRIP");
+                          if (otherItems.length === 0) return <Typography color="textSecondary">No one-time expenses found</Typography>;
+                          return (
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                    <TableCell><strong>Date</strong></TableCell>
+                                    <TableCell><strong>Category</strong></TableCell>
+                                    <TableCell><strong>Description</strong></TableCell>
+                                    <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {otherItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{exp.date || "-"}</TableCell>
+                                      <TableCell>{exp.categoryName || "-"}</TableCell>
+                                      <TableCell>{exp.description || "-"}</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                    <TableCell colSpan={3} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL ONE-TIME EXPENSES</Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                        {formatCurrency(otherItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          );
+                        })()}
+                      </Box>
+                    )}
+
+                    {/* Tab 4: Airport Trips (filtered from oneTimeExpenses by categoryCode) */}
+                    {expenseTabIndex === 4 && (
+                      <Box sx={{ mb: 3 }}>
+                        {(() => {
+                          const airportItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode === "AIRPORT_TRIP");
+                          if (airportItems.length === 0) return <Typography color="textSecondary">No airport trip expenses found</Typography>;
+
+                          // Group by cab number
+                          const grouped = {};
+                          airportItems.forEach((exp) => {
+                            const cabNum = exp.cabNumber || "Unknown";
+                            if (!grouped[cabNum]) grouped[cabNum] = [];
+                            grouped[cabNum].push(exp);
+                          });
+                          const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                          const totalTrips = airportItems.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+
+                          return (
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                    <TableCell><strong>Date</strong></TableCell>
+                                    <TableCell><strong>Cab</strong></TableCell>
+                                    <TableCell align="right"><strong>Trips</strong></TableCell>
+                                    <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
+                                    <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {sortedCabs.map((cab) => {
+                                    const items = grouped[cab].sort((a, b) => new Date(b.date || "") - new Date(a.date || ""));
+                                    const cabTrips = items.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+                                    const cabTotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                    return [
+                                      <TableRow key={`cab-header-${cab}`} sx={{ bgcolor: "#ffcdd2" }}>
+                                        <TableCell colSpan={5}>
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
+                                        </TableCell>
+                                      </TableRow>,
+                                      ...items.map((exp, idx) => (
+                                        <TableRow key={`${cab}-${idx}`} hover>
+                                          <TableCell>{exp.date || "-"}</TableCell>
+                                          <TableCell>Cab {cab}</TableCell>
+                                          <TableCell align="right">{exp.tripCount || 0}</TableCell>
+                                          <TableCell align="right">{exp.ratePerUnit ? formatCurrency(exp.ratePerUnit) : "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                        </TableRow>
+                                      )),
+                                      <TableRow key={`cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #f44336" }}>
+                                        <TableCell colSpan={2} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab}: {cabTrips} trips</Typography>
+                                        </TableCell>
+                                        <TableCell colSpan={2} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">Subtotal:</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">{formatCurrency(cabTotal)}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    ];
+                                  })}
+                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                    <TableCell colSpan={2} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL: {totalTrips} trips</Typography>
+                                    </TableCell>
+                                    <TableCell colSpan={2} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL AIRPORT EXPENSE</Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                        {formatCurrency(airportItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          );
+                        })()}
                       </Box>
                     )}
 
