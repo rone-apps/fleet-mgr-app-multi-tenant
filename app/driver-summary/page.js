@@ -49,9 +49,18 @@ export default function DriverSummaryPage() {
   // Local Pagination state - all records cached locally
   const [page, setPage] = useState(1); // UI page is 1-indexed
   const [pageSize] = useState(50);
-  const [allRecords, setAllRecords] = useState([]);  // ✅ Cache all records locally
-  const [isAllRecordsLoaded, setIsAllRecordsLoaded] = useState(false);  // ✅ Track if fully loaded
-  const [loadingProgress, setLoadingProgress] = useState(0);  // ✅ Progress for loading all records
+  const [allRecords, setAllRecords] = useState([]);  // Cache all records locally
+  const [isAllRecordsLoaded, setIsAllRecordsLoaded] = useState(false);  // Track if fully loaded
+  const [loadingProgress, setLoadingProgress] = useState(0);  // Progress for loading all records
+  const [runningTotals, setRunningTotals] = useState(null);  // Accumulate page totals as pages arrive
+  const [nextPageToFetch, setNextPageToFetch] = useState(0);  // Next cached page to fetch (0-indexed)
+  const [totalPagesFromApi, setTotalPagesFromApi] = useState(0);  // Total pages reported by backend
+
+  // Async job state
+  const [jobId, setJobId] = useState(null);
+  const [jobStatus, setJobStatus] = useState(null); // { status, pagesReady, totalPages, processedDrivers, totalDrivers, progressPercent }
+  const [pollingRef] = useState({ current: null }); // polling interval ref
+  const [hasRunOnce, setHasRunOnce] = useState(false); // enables "Refresh Report" button
 
   // Search/filter state
   const [searchDriverNumber, setSearchDriverNumber] = useState("");
@@ -108,99 +117,282 @@ export default function DriverSummaryPage() {
     checkAuth();
   }, [router]);
 
-  // ✅ Load ALL records with pagination, cache locally, then handle pagination locally
-  const fetchAllRecords = async (sortField = "lastName", sortDirection = "asc") => {
+  // Fetch a cached page from the BE and append to local state
+  const fetchCachedPage = async (activeJobId, pageNum, isFirstPage = false) => {
+    const token = localStorage.getItem("token");
+    const response = await axios.get(
+      `${API_BASE_URL}/reports/driver-summary/jobs/${activeJobId}/page/${pageNum}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        timeout: 30000,
+      }
+    );
+
+    const pageData = response.data.driverSummaries || [];
+    const fetchedPage = pageNum + 1;
+
+    setNextPageToFetch(fetchedPage);
+
+    // Append records to local cache
+    setAllRecords(prev => [...prev, ...pageData]);
+
+    // Accumulate running totals from this page
+    setRunningTotals(prev => ({
+      revenue: (prev?.revenue || 0) + (response.data.pageTotalRevenue || 0),
+      expense: (prev?.expense || 0) + (response.data.pageTotalExpense || 0),
+      netOwed: (prev?.netOwed || 0) + (response.data.pageNetOwed || 0),
+      paid: (prev?.paid || 0) + (response.data.pageTotalPaid || 0),
+      outstanding: (prev?.outstanding || 0) + (response.data.pageTotalOutstanding || 0),
+      leaseRevenue: (prev?.leaseRevenue || 0) + (response.data.pageLeaseRevenue || 0),
+      creditCardRevenue: (prev?.creditCardRevenue || 0) + (response.data.pageCreditCardRevenue || 0),
+      chargesRevenue: (prev?.chargesRevenue || 0) + (response.data.pageChargesRevenue || 0),
+      otherRevenue: (prev?.otherRevenue || 0) + (response.data.pageOtherRevenue || 0),
+      fixedExpense: (prev?.fixedExpense || 0) + (response.data.pageFixedExpense || 0),
+      leaseExpense: (prev?.leaseExpense || 0) + (response.data.pageLeaseExpense || 0),
+      variableExpense: (prev?.variableExpense || 0) + (response.data.pageVariableExpense || 0),
+      otherExpense: (prev?.otherExpense || 0) + (response.data.pageOtherExpense || 0),
+      driverCount: response.data.totalElements || 0,
+    }));
+
+    if (isFirstPage) {
+      setReportData(response.data);
+      setPage(1);
+    }
+
+    // If grand totals are present (job completed), use them
+    if (response.data.grandTotalRevenue != null) {
+      setRunningTotals(prev => ({
+        ...prev,
+        revenue: response.data.grandTotalRevenue,
+        expense: response.data.grandTotalExpense,
+        netOwed: response.data.grandNetOwed,
+        paid: response.data.grandTotalPaid,
+        leaseRevenue: response.data.grandTotalLeaseRevenue,
+        creditCardRevenue: response.data.grandTotalCreditCardRevenue,
+        chargesRevenue: response.data.grandTotalChargesRevenue,
+        otherRevenue: response.data.grandTotalOtherRevenue,
+        fixedExpense: response.data.grandTotalFixedExpense,
+        leaseExpense: response.data.grandTotalLeaseExpense,
+        variableExpense: response.data.grandTotalVariableExpense,
+        otherExpense: response.data.grandTotalOtherExpense,
+        driverCount: response.data.totalElements || prev?.driverCount || 0,
+      }));
+    }
+
+    return response.data;
+  };
+
+  // Poll job status — keeps running until COMPLETED/FAILED
+  // Updates jobStatus so the "Next 25" button area always shows live BE progress
+  const startPolling = (activeJobId) => {
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    let firstPageFetched = false;
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const resp = await axios.get(
+          `${API_BASE_URL}/reports/driver-summary/jobs/${activeJobId}/status`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            },
+            timeout: 10000,
+          }
+        );
+
+        const status = resp.data;
+        setJobStatus(status);
+
+        // Keep totalPagesFromApi in sync with what BE reports
+        if (status.totalPages > 0) {
+          setTotalPagesFromApi(status.totalPages);
+        }
+
+        if (status.status === "PROCESSING" && !firstPageFetched) {
+          setLoadingMessage(
+            `Processing drivers... ${status.processedDrivers} of ${status.totalDrivers} (${status.progressPercent}%)`
+          );
+        }
+
+        // Auto-fetch the first page as soon as it's ready
+        if (status.pagesReady > 0 && !firstPageFetched) {
+          firstPageFetched = true;
+          try {
+            await fetchCachedPage(activeJobId, 0, true);
+          } catch (err) {
+            console.error("Error auto-fetching first page:", err);
+          }
+          setLoading(false);
+          setLoadingMessage("");
+        }
+
+        // Stop polling when done
+        if (status.status === "COMPLETED" || status.status === "FAILED") {
+          clearInterval(pollingRef.current);
+          pollingRef.current = null;
+
+          if (status.status === "COMPLETED") {
+            setTotalPagesFromApi(status.totalPages);
+          }
+
+          if (status.status === "FAILED") {
+            setError(status.message || "Report generation failed");
+            setLoading(false);
+            setLoadingMessage("");
+          } else if (!firstPageFetched) {
+            try {
+              await fetchCachedPage(activeJobId, 0, true);
+            } catch (err) {
+              console.error("Error fetching first page:", err);
+            }
+            setLoading(false);
+            setLoadingMessage("");
+          }
+        }
+      } catch (err) {
+        console.error("Error polling job status:", err);
+      }
+    }, 2000);
+  };
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, []);
+
+  // Generate Report: kick off async BE generation, poll for first page
+  const generateReport = async (sortField = "lastName", sortDirection = "asc") => {
     if (!startDate || !endDate) {
       setError("Please select both start and end dates");
       return;
     }
-
-    // ✅ VALIDATE 1-MONTH PERIOD
     const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
     if (daysDiff > 31) {
       setError("Report period cannot exceed 31 days. Please select a shorter date range.");
       return;
     }
 
-    setLoading(true);
-    setLoadingMessage("Loading all driver records...");
-    setError("");
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+
+    // Reset state
     setAllRecords([]);
+    setReportData(null);
     setIsAllRecordsLoaded(false);
     setLoadingProgress(0);
+    setRunningTotals(null);
+    setNextPageToFetch(0);
+    setTotalPagesFromApi(0);
+    setJobId(null);
+    setJobStatus(null);
+    setLoading(true);
+    setLoadingMessage("Starting report generation...");
+    setError("");
 
     try {
       const token = localStorage.getItem("token");
       const formattedStart = formatDateForAPI(startDate);
       const formattedEnd = formatDateForAPI(endDate);
 
-      let allData = [];
-      let pageNum = 0;
-      let totalPages = 1;
+      const response = await axios.post(
+        `${API_BASE_URL}/reports/driver-summary/generate`,
+        null,
+        {
+          params: {
+            startDate: formattedStart,
+            endDate: formattedEnd,
+            personType: driverTypeFilter,
+            quickMode: quickMode,
+            sort: sortField,
+            direction: sortDirection,
+          },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+          timeout: 30000,
+        }
+      );
 
-      // ✅ Fetch ALL pages and cache locally
-      while (pageNum < totalPages) {
-        setLoadingMessage(`Loading all driver records... (Page ${pageNum + 1})`);
+      const newJobId = response.data.jobId;
+      setJobId(newJobId);
+      setHasRunOnce(true);
+      setLoadingMessage("Report generation started. Waiting for first page...");
+      startPolling(newJobId);
 
-        const response = await axios.get(
-          `${API_BASE_URL}/reports/driver-summary`,
+    } catch (err) {
+      console.error("Error starting report generation:", err);
+      setLoading(false);
+      setLoadingMessage("");
+      if (err.response?.status === 401) {
+        setError("Session expired. Please sign in again.");
+        setTimeout(() => router.push("/signin"), 2000);
+      } else {
+        setError(err.response?.data?.message || "Failed to start report generation");
+      }
+    }
+  };
+
+  // Refresh Report: invalidate cache and regenerate
+  const refreshReport = async () => {
+    // Invalidate old job cache if exists
+    if (jobId) {
+      try {
+        const token = localStorage.getItem("token");
+        await axios.delete(
+          `${API_BASE_URL}/reports/driver-summary/jobs/${jobId}`,
           {
-            params: {
-              startDate: formattedStart,
-              endDate: formattedEnd,
-              page: pageNum,
-              size: 25, // Fetch 25 at a time to be efficient
-              sort: sortField,
-              direction: sortDirection,
-              personType: driverTypeFilter, // ALL, DRIVER, or OWNER
-              quickMode: quickMode, // true for fast mode, false for detailed
-            },
             headers: {
               Authorization: `Bearer ${token}`,
               "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             },
-            timeout: quickMode ? 300000 : 1200000, // Shorter timeout for quick mode (5 min), longer for full (20 min)
           }
         );
-
-        const pageData = response.data.driverSummaries || [];
-        allData = [...allData, ...pageData];
-        totalPages = response.data.totalPages;
-        pageNum++;
-
-        // ✅ Update progress
-        const progress = Math.round((pageNum / totalPages) * 100);
-        setLoadingProgress(progress);
-
-        // Store report data from last page (has grand totals)
-        if (pageNum === totalPages) {
-          setReportData(response.data);
-        }
+      } catch (err) {
+        // Ignore — cache may already be expired
       }
+    }
 
-      console.log(`✅ Loaded ${allData.length} total driver records from ${totalPages} pages`);
+    let sortField = orderBy;
+    if (orderBy === "driverName") sortField = "lastName";
+    generateReport(sortField, order);
+  };
 
-      // ✅ Cache all records locally
-      setAllRecords(allData);
-      setIsAllRecordsLoaded(true);
-      setPage(1); // Reset to page 1
-      setLoadingMessage("");
+  // Load More: user clicks to fetch the next 25 from BE cache
+  const loadMoreRecords = async () => {
+    if (!jobId) return;
+    setLoading(true);
+    setLoadingMessage(`Loading page ${nextPageToFetch + 1}...`);
+    try {
+      await fetchCachedPage(jobId, nextPageToFetch, false);
 
+      // Check if we've now fetched all pages (job done + all pages fetched)
+      const newNextPage = nextPageToFetch + 1;
+      if (jobStatus?.status === "COMPLETED" && newNextPage >= (jobStatus.totalPages || 0)) {
+        setIsAllRecordsLoaded(true);
+      }
     } catch (err) {
-      console.error("Error loading all records:", err);
-      if (err.code === "ECONNABORTED") {
-        setError("Request timed out. Please try a shorter date range.");
-      } else if (err.response?.status === 403) {
-        setError("Access denied.");
+      console.error("Error loading more records:", err);
+      if (err.response?.status === 404) {
+        setError("Page not ready yet. The backend is still generating. Try again in a moment.");
       } else if (err.response?.status === 401) {
         setError("Session expired. Please sign in again.");
         setTimeout(() => router.push("/signin"), 2000);
       } else {
-        setError(err.response?.data?.message || "Failed to load driver summary report");
+        setError("Failed to load next page.");
       }
-      setLoadingMessage("");
     } finally {
       setLoading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -224,7 +416,7 @@ export default function DriverSummaryPage() {
     }
 
     // Refetch with new sort order
-    fetchAllRecords(sortField, newOrder);
+    generateReport(sortField, newOrder);
   };
 
 
@@ -341,41 +533,51 @@ export default function DriverSummaryPage() {
     return col ? col.getAmount(driver) : 0;
   };
 
-  // ✅ Get display totals from grand totals (all records cached)
+  // ✅ Get display totals - use running totals while loading, grand totals when complete
   const getDisplayTotals = () => {
-    if (!isAllRecordsLoaded || !reportData) {
+    // ✅ All pages loaded: use backend grand totals (authoritative)
+    if (isAllRecordsLoaded && reportData) {
       return {
-        revenue: 0,
-        expense: 0,
-        netOwed: 0,
-        paid: 0,
-        driverCount: 0,
-        leaseRevenue: 0,
-        creditCardRevenue: 0,
-        chargesRevenue: 0,
-        otherRevenue: 0,
-        fixedExpense: 0,
-        leaseExpense: 0,
-        variableExpense: 0,
-        otherExpense: 0
+        revenue: reportData.grandTotalRevenue || 0,
+        expense: reportData.grandTotalExpense || 0,
+        netOwed: reportData.grandNetOwed || 0,
+        paid: reportData.grandTotalPaid || 0,
+        driverCount: reportData.totalElements || 0,
+        leaseRevenue: reportData.grandTotalLeaseRevenue || 0,
+        creditCardRevenue: reportData.grandTotalCreditCardRevenue || 0,
+        chargesRevenue: reportData.grandTotalChargesRevenue || 0,
+        otherRevenue: reportData.grandTotalOtherRevenue || 0,
+        fixedExpense: reportData.grandTotalFixedExpense || 0,
+        leaseExpense: reportData.grandTotalLeaseExpense || 0,
+        variableExpense: reportData.grandTotalVariableExpense || 0,
+        otherExpense: reportData.grandTotalOtherExpense || 0,
       };
     }
 
-    // ✅ Use grand totals from reportData (all records)
+    // ✅ Still loading: use accumulated running totals from pages fetched so far
+    if (runningTotals) {
+      return {
+        revenue: runningTotals.revenue || 0,
+        expense: runningTotals.expense || 0,
+        netOwed: runningTotals.netOwed || 0,
+        paid: runningTotals.paid || 0,
+        driverCount: runningTotals.driverCount || 0,
+        leaseRevenue: runningTotals.leaseRevenue || 0,
+        creditCardRevenue: runningTotals.creditCardRevenue || 0,
+        chargesRevenue: runningTotals.chargesRevenue || 0,
+        otherRevenue: runningTotals.otherRevenue || 0,
+        fixedExpense: runningTotals.fixedExpense || 0,
+        leaseExpense: runningTotals.leaseExpense || 0,
+        variableExpense: runningTotals.variableExpense || 0,
+        otherExpense: runningTotals.otherExpense || 0,
+      };
+    }
+
+    // No data yet
     return {
-      revenue: reportData.grandTotalRevenue || 0,
-      expense: reportData.grandTotalExpense || 0,
-      netOwed: reportData.grandNetOwed || 0,
-      paid: reportData.grandTotalPaid || 0,
-      driverCount: reportData.totalElements || 0,
-      leaseRevenue: reportData.grandTotalLeaseRevenue || 0,
-      creditCardRevenue: reportData.grandTotalCreditCardRevenue || 0,
-      chargesRevenue: reportData.grandTotalChargesRevenue || 0,
-      otherRevenue: reportData.grandTotalOtherRevenue || 0,
-      fixedExpense: reportData.grandTotalFixedExpense || 0,
-      leaseExpense: reportData.grandTotalLeaseExpense || 0,
-      variableExpense: reportData.grandTotalVariableExpense || 0,
-      otherExpense: reportData.grandTotalOtherExpense || 0
+      revenue: 0, expense: 0, netOwed: 0, paid: 0, driverCount: 0,
+      leaseRevenue: 0, creditCardRevenue: 0, chargesRevenue: 0, otherRevenue: 0,
+      fixedExpense: 0, leaseExpense: 0, variableExpense: 0, otherExpense: 0,
     };
   };
 
@@ -694,8 +896,6 @@ export default function DriverSummaryPage() {
                       label="Driver Type"
                       onChange={(e) => {
                         setDriverTypeFilter(e.target.value);
-                        // Trigger report refresh with new filter
-                        setTimeout(() => fetchAllRecords("lastName", "asc"), 100);
                       }}
                     >
                       <MenuItem value="ALL">All (Drivers & Owners)</MenuItem>
@@ -711,8 +911,6 @@ export default function DriverSummaryPage() {
                         checked={quickMode}
                         onChange={(e) => {
                           setQuickMode(e.target.checked);
-                          // Trigger report refresh with new quick mode setting
-                          setTimeout(() => fetchAllRecords("lastName", "asc"), 100);
                         }}
                       />
                     }
@@ -720,34 +918,50 @@ export default function DriverSummaryPage() {
                       <Box>
                         <Typography variant="body2">Quick Mode</Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {quickMode ? "Fast (5-15 sec, summary only)" : "Detailed (30-120 sec, full breakdown)"}
+                          {quickMode ? "Fast (summary only)" : "Detailed (full breakdown)"}
                         </Typography>
                       </Box>
                     }
                   />
                 </Grid>
               </Grid>
-              <Button
-                variant="contained"
-                size="large"
-                fullWidth
-                onClick={() => {
-                  // ✅ Load ALL records with current sort
-                  let sortField = orderBy;
-                  if (orderBy === "driverName") {
-                    sortField = "lastName";
-                  }
-                  fetchAllRecords(sortField, order);
-                }}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} sx={{ mr: 1 }} /> : "Generate Report"}
-                {loadingProgress > 0 && !loading && <Typography variant="caption" sx={{ ml: 1 }}>({loadingProgress}%)</Typography>}
-              </Button>
+              <Stack direction="row" spacing={2}>
+                <Button
+                  variant="contained"
+                  size="large"
+                  fullWidth
+                  onClick={() => {
+                    let sortField = orderBy;
+                    if (orderBy === "driverName") {
+                      sortField = "lastName";
+                    }
+                    generateReport(sortField, order);
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <>
+                      <CircularProgress size={24} sx={{ mr: 1 }} />
+                      {loadingProgress > 0 ? `Loading... ${loadingProgress}%` : "Loading..."}
+                    </>
+                  ) : "Generate Report"}
+                </Button>
+                {hasRunOnce && (
+                  <Button
+                    variant="outlined"
+                    size="large"
+                    onClick={refreshReport}
+                    disabled={loading}
+                    sx={{ minWidth: 180 }}
+                  >
+                    Refresh Report
+                  </Button>
+                )}
+              </Stack>
             </Paper>
 
             {/* Search Filters */}
-            {reportData && (
+            {(reportData || allRecords.length > 0) && (
               <Paper sx={{ p: 3, mb: 3 }}>
                 <Typography variant="h6" gutterBottom>
                   Search Filters
@@ -813,8 +1027,21 @@ export default function DriverSummaryPage() {
             )}
 
             {/* Report Table */}
-            {reportData && (
+            {(reportData || allRecords.length > 0) && (
               <>
+                {/* Status banner */}
+                {!isAllRecordsLoaded && allRecords.length > 0 && (
+                  <Alert severity="info" sx={{ mb: 2 }}>
+                    {allRecords.length} drivers loaded.
+                    {jobStatus?.status === "PROCESSING"
+                      ? ` Backend still generating (${jobStatus.processedDrivers}/${jobStatus.totalDrivers} drivers, ${jobStatus.pagesReady} pages ready). `
+                      : jobStatus?.status === "COMPLETED"
+                        ? ` All ${jobStatus.totalPages} pages cached on server. `
+                        : " "}
+                    Totals shown are running totals. Use "Load Next 25" below for more.
+                  </Alert>
+                )}
+
                 {/* Summary Cards - Overview */}
                 <Grid container spacing={2} sx={{ mb: 3 }}>
                   <Grid item xs={12} sm={6} md={3}>
@@ -825,73 +1052,62 @@ export default function DriverSummaryPage() {
                           : "Drivers Loaded So Far"}
                       </Typography>
                       <Typography variant="h5" fontWeight="bold">
-                        {displayTotals.driverCount}
+                        {isAllRecordsLoaded ? displayTotals.driverCount : allRecords.length}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {isAllRecordsLoaded
-                          ? "✓ All records cached"
-                          : `Page ${page} of ${totalPages} (${currentPageData.length} on this page)`}
+                          ? "All records cached"
+                          : `Loading... ${loadingProgress}%`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {isAllRecordsLoaded
-                          ? "Grand Total Revenue"
-                          : "Revenue (All Loaded)"}
+                        {isAllRecordsLoaded ? "Grand Total Revenue" : "Revenue (running)"}
                       </Typography>
-                      <Typography variant="h5" fontWeight="bold" color="success.main">
-                        {formatCurrency(displayTotals.revenue)}
+                      <Typography variant="h5" fontWeight="bold" color="success.main" sx={{ opacity: isAllRecordsLoaded ? 1 : 0.7 }}>
+                        {!isAllRecordsLoaded && "~"}{formatCurrency(displayTotals.revenue)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {isAllRecordsLoaded
-                          ? "✓ All drivers"
-                          : `Cached locally`}
+                        {isAllRecordsLoaded ? "All drivers" : `${loadingProgress}% loaded`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {isAllRecordsLoaded
-                          ? "Grand Total Expense"
-                          : "Expense (All Loaded)"}
+                        {isAllRecordsLoaded ? "Grand Total Expense" : "Expense (running)"}
                       </Typography>
-                      <Typography variant="h5" fontWeight="bold" color="error.main">
-                        {formatCurrency(displayTotals.expense)}
+                      <Typography variant="h5" fontWeight="bold" color="error.main" sx={{ opacity: isAllRecordsLoaded ? 1 : 0.7 }}>
+                        {!isAllRecordsLoaded && "~"}{formatCurrency(displayTotals.expense)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {isAllRecordsLoaded
-                          ? "✓ All drivers"
-                          : `Cached locally`}
+                        {isAllRecordsLoaded ? "All drivers" : `${loadingProgress}% loaded`}
                       </Typography>
                     </Paper>
                   </Grid>
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {isAllRecordsLoaded
-                          ? "Grand Net Owed"
-                          : "Net Owed (All Loaded)"}
+                        {isAllRecordsLoaded ? "Grand Net Owed" : "Net Owed (running)"}
                       </Typography>
                       <Typography
                         variant="h5"
                         fontWeight="bold"
+                        sx={{ opacity: isAllRecordsLoaded ? 1 : 0.7 }}
                         color={
                           displayTotals.netOwed > 0
-                            ? "error.main" // ❌ Red: Driver owes company money
+                            ? "error.main"
                             : displayTotals.netOwed < 0
-                            ? "success.main" // ✅ Green: Company owes driver money
-                            : "text.primary" // Neutral: Zero balance
+                            ? "success.main"
+                            : "text.primary"
                         }
                       >
-                        {formatCurrency(-displayTotals.netOwed)} {/* Negate: show driver's perspective */}
+                        {!isAllRecordsLoaded && "~"}{formatCurrency(-displayTotals.netOwed)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        {isAllRecordsLoaded
-                          ? "✓ Final totals"
-                          : `Running total`}
+                        {isAllRecordsLoaded ? "Final totals" : "Partial — loading..."}
                       </Typography>
                     </Paper>
                   </Grid>
@@ -1582,25 +1798,98 @@ export default function DriverSummaryPage() {
                   </Table>
                 </TableContainer>
 
-                {/* Pagination Controls - ✅ LOCAL pagination (no API calls) */}
-                {isAllRecordsLoaded && totalPages > 1 && (
-                  <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
-                    <Pagination
-                      count={totalPages}
-                      page={page}
-                      onChange={handlePageChange}
-                      color="primary"
-                      size="large"
-                      showFirstButton
-                      showLastButton
-                    />
-                  </Box>
-                )}
+                {/* Load More / Pagination Controls */}
+                <Box sx={{ mt: 3 }}>
+                  {/* Load Next 25 button — visible whenever there are more pages to fetch */}
+                  {!isAllRecordsLoaded && allRecords.length > 0 && (
+                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, mb: 2 }}>
+                      {(() => {
+                        const pagesReady = jobStatus?.pagesReady || 0;
+                        const jobDone = jobStatus?.status === "COMPLETED";
+                        const nextPageIsReady = nextPageToFetch < pagesReady;
+                        const canLoad = nextPageIsReady || jobDone;
+                        const totalPgs = jobDone ? (jobStatus?.totalPages || totalPagesFromApi) : pagesReady;
+                        return (
+                          <>
+                            <Button
+                              variant="contained"
+                              size="large"
+                              onClick={loadMoreRecords}
+                              sx={{ minWidth: 350 }}
+                              disabled={loading || !canLoad}
+                            >
+                              {loading
+                                ? "Loading..."
+                                : canLoad
+                                  ? `Load Next 25 Drivers (Page ${nextPageToFetch + 1}${totalPgs > 0 ? ` of ${totalPgs}` : ""})`
+                                  : `Waiting for page ${nextPageToFetch + 1}...`
+                              }
+                            </Button>
+
+                            {/* Live BE progress bar */}
+                            {jobStatus?.status === "PROCESSING" && (
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <CircularProgress size={16} />
+                                <Typography variant="body2" color="text.secondary">
+                                  Backend generating: {jobStatus.processedDrivers} of {jobStatus.totalDrivers} drivers processed ({jobStatus.progressPercent}%) — {pagesReady} page{pagesReady !== 1 ? "s" : ""} ready
+                                </Typography>
+                              </Box>
+                            )}
+
+                            {jobDone && !isAllRecordsLoaded && (
+                              <Typography variant="body2" color="info.main">
+                                All {jobStatus.totalPages} pages cached on server — click to load more
+                              </Typography>
+                            )}
+
+                            <Typography variant="caption" color="text.secondary">
+                              {allRecords.length} drivers loaded locally so far
+                            </Typography>
+                          </>
+                        );
+                      })()}
+                    </Box>
+                  )}
+
+                  {/* Loading indicator when fetching a page */}
+                  {loading && allRecords.length > 0 && (
+                    <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 2, mb: 2 }}>
+                      <CircularProgress size={24} />
+                      <Typography variant="body2" color="text.secondary">
+                        {loadingMessage}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* All pages loaded locally */}
+                  {isAllRecordsLoaded && (
+                    <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+                      <Typography variant="body2" color="success.main" fontWeight="bold">
+                        All {allRecords.length} drivers loaded — browsing locally
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Local pagination (always shown when we have data) */}
+                  {totalPages > 1 && (
+                    <Box sx={{ display: "flex", justifyContent: "center" }}>
+                      <Pagination
+                        count={totalPages}
+                        page={page}
+                        onChange={handlePageChange}
+                        color="primary"
+                        size="large"
+                        showFirstButton
+                        showLastButton
+                      />
+                    </Box>
+                  )}
+                </Box>
               </>
             )}
 
             {/* No Data Message */}
-            {!loading && !reportData && (
+            {!loading && !reportData && allRecords.length === 0 && (
               <Paper sx={{ p: 4, textAlign: "center" }}>
                 <Assessment sx={{ fontSize: 80, color: "grey.400", mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
@@ -1609,16 +1898,24 @@ export default function DriverSummaryPage() {
               </Paper>
             )}
 
-            {/* Loading Indicator */}
-            {loading && (
+            {/* Loading Indicator - only show when no data yet (before first page arrives) */}
+            {loading && allRecords.length === 0 && (
               <Paper sx={{ p: 4, textAlign: "center" }}>
                 <CircularProgress size={60} sx={{ mb: 2 }} />
                 <Typography variant="h6" color="text.secondary" gutterBottom>
                   {loadingMessage || "Generating report..."}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  This may take up to 15 minutes for large date ranges
-                </Typography>
+                {jobStatus && jobStatus.status === "PROCESSING" && (
+                  <Typography variant="body2" color="text.secondary">
+                    Processing {jobStatus.processedDrivers} of {jobStatus.totalDrivers} drivers ({jobStatus.progressPercent}%)
+                    — {jobStatus.pagesReady} pages ready
+                  </Typography>
+                )}
+                {!jobStatus && (
+                  <Typography variant="body2" color="text.secondary">
+                    Report is being generated in the background. First results will appear shortly.
+                  </Typography>
+                )}
               </Paper>
             )}
 
