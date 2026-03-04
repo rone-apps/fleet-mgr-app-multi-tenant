@@ -699,7 +699,13 @@ export default function LeaseReportPage() {
                           <TableCell sx={{ fontWeight: "bold" }}>Owner #</TableCell>
                           <TableCell sx={{ fontWeight: "bold" }}>Owner Name</TableCell>
                           <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                            Lease Amount
+                            Fixed Lease
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                            Mileage Lease
+                          </TableCell>
+                          <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                            Total Lease
                           </TableCell>
                         </TableRow>
                       </TableHead>
@@ -743,6 +749,12 @@ export default function LeaseReportPage() {
                                   <TableCell>{shift.ownerNumber || "-"}</TableCell>
                                   <TableCell>{shift.ownerName || "-"}</TableCell>
                                   <TableCell align="right">
+                                    ${Number(shift.fixedLease || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    ${Number(shift.mileageLease || 0).toFixed(2)}
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ fontWeight: 500 }}>
                                     ${shift.leaseAmount ? shift.leaseAmount.toFixed(2) : "0.00"}
                                   </TableCell>
                                 </TableRow>
@@ -759,6 +771,12 @@ export default function LeaseReportPage() {
                                 <TableCell colSpan={5} align="right" sx={{ fontWeight: "bold" }}>
                                   {driver.driverName} ({driver.shifts.length} shift
                                   {driver.shifts.length > 1 ? "s" : ""})
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                  ${driver.shifts.reduce((s, r) => s + Number(r.fixedLease || 0), 0).toFixed(2)}
+                                </TableCell>
+                                <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                  ${driver.shifts.reduce((s, r) => s + Number(r.mileageLease || 0), 0).toFixed(2)}
                                 </TableCell>
                                 <TableCell align="right" sx={{ fontWeight: "bold" }}>
                                   ${driver.totalLease.toFixed(2)}
