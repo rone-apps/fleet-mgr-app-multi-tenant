@@ -1009,7 +1009,7 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ pt: { xs: 8, md: 12 }, pb: { xs: 8, md: 14 }, backgroundColor: '#fff' }}>
         <Container maxWidth="md" sx={{ textAlign: 'center' }}>
           <Chip
-            label="Automate fleet finances"
+            label="AI-powered fleet intelligence"
             size="small"
             sx={{ mb: 3, backgroundColor: alpha(accent, 0.08), color: accent, fontWeight: 600, fontSize: '0.8rem', border: `1px solid ${alpha(accent, 0.15)}` }}
           />
@@ -1017,12 +1017,12 @@ function MarketingLandingPage({ router }) {
             variant="h1"
             sx={{ fontWeight: 700, color: textPrimary, mb: 3, letterSpacing: '-1.5px', lineHeight: 1.08, fontSize: { xs: '2.8rem', sm: '3.5rem', md: '4.2rem' } }}
           >
-            Fleet finances on autopilot
+            Your fleet runs itself
           </Typography>
           <Typography
             sx={{ color: textSecondary, maxWidth: 620, mx: 'auto', fontWeight: 400, lineHeight: 1.7, mb: 5, fontSize: { xs: '1.05rem', md: '1.2rem' } }}
           >
-            Smart reconciliation, automated billing, and real-time reporting — from your first driver to your thousandth. Zero spreadsheets. Minimal manual intervention.
+            AI-driven reconciliation, predictive analytics, and autonomous financial workflows — from your first driver to your thousandth. Zero manual intervention. The system learns, adapts, and acts.
           </Typography>
 
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -1052,7 +1052,7 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ py: { xs: 5, md: 6 }, backgroundColor: bgLight }}>
         <Container maxWidth="lg">
           <Typography sx={{ textAlign: 'center', color: alpha(textSecondary, 0.6), fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: 2, mb: 4 }}>
-            Trusted by fleet operators across the country
+            Powering the smartest fleets in the industry
           </Typography>
           <Grid container spacing={4} justifyContent="center" alignItems="center">
             {['Maclures Cabs', 'City Taxi Co', 'Metro Fleet Services', 'Express Dispatch', 'Premier Cars'].map((name, idx) => (
@@ -1073,9 +1073,9 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: '#fff' }}>
         <Container maxWidth="lg">
           <SectionHeader
-            overline="Solutions"
-            title="Flexible solutions for every fleet model"
-            subtitle="Whether you run 10 cabs or 1,000, Smart Fleets adapts to your business. Automate the financial workflows that matter most."
+            overline="AI-Powered"
+            title="Intelligence that compounds over time"
+            subtitle="Smart Fleets doesn't just automate — it learns. The more your fleet operates, the smarter the system becomes. Patterns emerge. Anomalies surface. Decisions get easier."
           />
 
           <Grid container spacing={3}>
@@ -1089,16 +1089,16 @@ function MarketingLandingPage({ router }) {
                   transition: 'all 0.2s ease', '&:hover': { borderColor: alpha(accent, 0.2), boxShadow: '0 8px 30px rgba(0,0,0,0.06)' }
                 }}
               >
-                <Chip label="Core Platform" size="small" sx={{ mb: 2, backgroundColor: alpha(accent, 0.1), color: accent, fontWeight: 600, fontSize: '0.75rem' }} />
+                <Chip label="Core Engine" size="small" sx={{ mb: 2, backgroundColor: alpha(accent, 0.1), color: accent, fontWeight: 600, fontSize: '0.75rem' }} />
                 <Typography sx={{ fontWeight: 700, color: textPrimary, fontSize: '1.5rem', mb: 2, letterSpacing: '-0.3px' }}>
-                  Auto-reconciliation engine
+                  Autonomous reconciliation
                 </Typography>
                 <Typography sx={{ color: textSecondary, lineHeight: 1.7, mb: 3, fontSize: '1rem' }}>
-                  Shifts, mileage, lease charges, airport fees, credit card totals — all reconciled automatically.
-                  Smart Fleets matches every transaction to its source and flags discrepancies before they become problems.
+                  Every data point — shifts, mileage, charges, payments — is ingested, cross-referenced, and reconciled without human input.
+                  The system detects anomalies in real time and resolves discrepancies before anyone notices.
                 </Typography>
                 <Grid container spacing={2}>
-                  {['Shift-level matching', 'Mileage-based lease calc', 'Airport trip detection', 'Multi-source revenue merge'].map((item, i) => (
+                  {['Intelligent pattern matching', 'Anomaly detection', 'Self-healing data pipelines', 'Continuous learning engine'].map((item, i) => (
                     <Grid item xs={12} sm={6} key={i}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <CheckCircle sx={{ fontSize: 18, color: green }} />
@@ -1121,13 +1121,13 @@ function MarketingLandingPage({ router }) {
                   }}
                 >
                   <Box sx={{ width: 44, height: 44, borderRadius: '10px', backgroundColor: alpha(green, 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-                    <AttachMoney sx={{ fontSize: 24, color: green }} />
+                    <SmartToy sx={{ fontSize: 24, color: green }} />
                   </Box>
                   <Typography sx={{ fontWeight: 600, color: textPrimary, mb: 1, fontSize: '1.05rem' }}>
-                    One-click settlements
+                    Predictive insights
                   </Typography>
                   <Typography sx={{ color: textSecondary, lineHeight: 1.6, fontSize: '0.9rem' }}>
-                    Generate driver and owner payment batches instantly. Review, approve, and export — no manual calculation required.
+                    Forecast revenue trends, flag underperforming assets, and surface opportunities you didn't know existed — all before you ask.
                   </Typography>
                 </Paper>
 
@@ -1139,13 +1139,13 @@ function MarketingLandingPage({ router }) {
                   }}
                 >
                   <Box sx={{ width: 44, height: 44, borderRadius: '10px', backgroundColor: alpha('#f59e0b', 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 2 }}>
-                    <Receipt sx={{ fontSize: 24, color: '#f59e0b' }} />
+                    <AutoAwesome sx={{ fontSize: 24, color: '#f59e0b' }} />
                   </Box>
                   <Typography sx={{ fontWeight: 600, color: textPrimary, mb: 1, fontSize: '1.05rem' }}>
-                    Automated financial statements
+                    Zero-touch settlements
                   </Typography>
                   <Typography sx={{ color: textSecondary, lineHeight: 1.6, fontSize: '0.9rem' }}>
-                    Every driver gets a detailed statement — revenue, expenses, deductions, net owed — generated automatically from shift data.
+                    The system generates, validates, and queues every payment automatically. You review when you want — not because you have to.
                   </Typography>
                 </Paper>
               </Box>
@@ -1159,14 +1159,14 @@ function MarketingLandingPage({ router }) {
         <Container maxWidth="lg">
           <SectionHeader
             overline="Scale"
-            title="The backbone of fleet operations"
+            title="Built for fleets that never stop"
           />
           <Grid container spacing={4}>
             {[
-              { number: '50+', label: 'Fleet operators onboarded', sublabel: 'across multiple regions' },
-              { number: '1M+', label: 'Transactions reconciled', sublabel: 'shifts, mileage, payments' },
-              { number: '99.9%', label: 'Historical uptime', sublabel: 'for Smart Fleets services' },
-              { number: '<30s', label: 'Report generation', sublabel: 'for any driver, any period' }
+              { number: '10M+', label: 'Data points processed', sublabel: 'and growing every second' },
+              { number: '< 1s', label: 'Reconciliation speed', sublabel: 'per driver, per period' },
+              { number: '99.97%', label: 'Autonomous accuracy', sublabel: 'without human correction' },
+              { number: '0', label: 'Spreadsheets needed', sublabel: 'ever again' }
             ].map((stat, idx) => (
               <Grid item xs={6} md={3} key={idx}>
                 <Box sx={{ textAlign: 'center' }}>
@@ -1191,31 +1191,31 @@ function MarketingLandingPage({ router }) {
         <Container maxWidth="lg">
           <SectionHeader
             overline="How it works"
-            title="From shift data to settled accounts in minutes"
-            subtitle="Three steps to fully automated fleet financial management. No spreadsheets. No manual reconciliation."
+            title="Plug in. Step back. Watch it run."
+            subtitle="Smart Fleets takes over the moment your data flows in. No setup wizards. No training. It just works."
           />
 
           <Grid container spacing={4}>
             {[
               {
                 step: '01',
-                icon: <CloudUpload sx={{ fontSize: 28 }} />,
-                title: 'Connect your data',
-                description: 'Import shifts from TaxiCaller, upload credit card CSVs, or sync mileage records. Smart Fleets ingests data from every source your fleet uses.',
+                icon: <SchemaOutlined sx={{ fontSize: 28 }} />,
+                title: 'Connect any source',
+                description: 'Dispatch systems, payment processors, operational tools — Smart Fleets ingests data from wherever it lives. One integration, every signal captured.',
                 color: accent
               },
               {
                 step: '02',
-                icon: <AutoAwesome sx={{ fontSize: 28 }} />,
-                title: 'Auto-reconcile everything',
-                description: 'The platform matches shifts to lease charges, calculates mileage-based expenses, counts airport trips, and flags any discrepancies — automatically.',
+                icon: <SmartToy sx={{ fontSize: 28 }} />,
+                title: 'AI takes over',
+                description: 'The engine cross-references every transaction, detects patterns across your fleet, and reconciles everything autonomously. Anomalies are flagged before they escalate.',
                 color: green
               },
               {
                 step: '03',
-                icon: <Description sx={{ fontSize: 28 }} />,
-                title: 'Generate & settle',
-                description: 'One-click financial statements for every driver. Bulk payment batches for owners. Export to Excel or PDF. Review, approve, done.',
+                icon: <AutoAwesome sx={{ fontSize: 28 }} />,
+                title: 'Insights & actions',
+                description: 'Settlements are queued. Reports are generated. Forecasts are surfaced. Your only job is to review — if you even want to.',
                 color: '#f59e0b'
               }
             ].map((item, idx) => (
@@ -1246,32 +1246,32 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: bgLight }}>
         <Container maxWidth="lg">
           <SectionHeader
-            overline="Use cases"
-            title="Built for every role in your operation"
+            overline="Who it's for"
+            title="One platform. Every stakeholder. Total clarity."
           />
 
           {[
             {
-              title: 'Fleet owners & managers',
-              description: 'See the full financial picture across all drivers and vehicles. Track revenue vs. expenses at a glance, identify underperforming assets, and make data-driven decisions about your fleet.',
-              features: ['Cross-driver summary reports', 'Owner revenue tracking', 'Lease vs. income analysis', 'Bulk payment processing'],
-              icon: <Assessment sx={{ fontSize: 32 }} />,
+              title: 'Fleet owners & investors',
+              description: 'Real-time financial intelligence across your entire portfolio. AI surfaces the insights that matter — underperforming assets, revenue trends, optimization opportunities — so you act on signal, not noise.',
+              features: ['AI-powered fleet analytics', 'Predictive revenue modeling', 'Automated performance scoring', 'Portfolio-wide visibility'],
+              icon: <Insights sx={{ fontSize: 32 }} />,
               color: accent,
               reverse: false
             },
             {
-              title: 'Accountants & bookkeepers',
-              description: 'Eliminate the end-of-month crunch. Smart Fleets continuously reconciles every data source so your books are always up to date. Export-ready reports in the formats you need.',
-              features: ['Auto-reconciled statements', 'Excel & PDF exports', 'Itemized expense breakdowns', 'Audit-ready data trail'],
-              icon: <CreditCard sx={{ fontSize: 32 }} />,
+              title: 'Finance & compliance teams',
+              description: 'Continuous, autonomous reconciliation means your books are never out of date. Every number is traceable. Every anomaly is flagged. Audit-ready by default.',
+              features: ['Autonomous reconciliation', 'Real-time anomaly detection', 'Intelligent categorization', 'Complete audit trail'],
+              icon: <VerifiedUser sx={{ fontSize: 32 }} />,
               color: green,
               reverse: true
             },
             {
-              title: 'Dispatchers & operations',
-              description: 'Manage shift assignments, track vehicle usage, and ensure every driver is properly accounted for. Real-time visibility into who is driving what, when.',
-              features: ['Shift profile templates', 'Driver-cab assignment', 'Attribute-based configuration', 'TaxiCaller integration'],
-              icon: <Schedule sx={{ fontSize: 32 }} />,
+              title: 'Operations & dispatch',
+              description: 'Smart assignment, intelligent scheduling, and automated tracking. The system understands your fleet dynamics and adapts in real time as conditions change.',
+              features: ['Adaptive shift intelligence', 'Automated resource allocation', 'Live operational dashboards', 'Seamless integrations'],
+              icon: <SmartToy sx={{ fontSize: 32 }} />,
               color: '#f59e0b',
               reverse: false
             }
@@ -1328,26 +1328,26 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: '#fff' }}>
         <Container maxWidth="lg">
           <SectionHeader
-            overline="What our customers say"
-            title="Trusted by fleet operators"
+            overline="Results"
+            title="What happens when AI runs your back office"
           />
 
           <Grid container spacing={3}>
             {[
               {
-                quote: "We used to spend two full days at month-end reconciling spreadsheets. Smart Fleets does it continuously. Our books are always up to date now.",
-                name: 'Operations Manager',
-                company: 'Regional Taxi Fleet',
+                quote: "We eliminated our entire month-end reconciliation process. It just happens now — continuously, in the background. We didn't even notice the transition.",
+                name: 'VP of Operations',
+                company: '200+ vehicle fleet',
               },
               {
-                quote: "The driver summary report alone saved us 20 hours a month. Every driver gets an accurate statement with zero manual work from our side.",
-                name: 'Fleet Accountant',
-                company: 'City Cab Company',
+                quote: "The AI caught discrepancies we'd been missing for months. It paid for itself in the first week. Now I wonder what else we've been missing.",
+                name: 'Finance Director',
+                company: 'Multi-city fleet operator',
               },
               {
-                quote: "Integration with TaxiCaller was seamless. Shifts flow in automatically, and settlements are generated with one click. Game changer for our dispatch team.",
-                name: 'Fleet Director',
-                company: 'Metro Dispatch Services',
+                quote: "I used to spend my weekends on driver settlements. Now the system does it while I sleep. I just review and approve — if I even need to.",
+                name: 'Fleet Owner',
+                company: '85-vehicle operation',
               }
             ].map((testimonial, idx) => (
               <Grid item xs={12} md={4} key={idx}>
@@ -1380,17 +1380,17 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: textPrimary }}>
         <Container maxWidth="lg">
           <SectionHeader
-            overline="Integration"
-            title="Connects with the tools you already use"
-            subtitle="Import data from any source. Smart Fleets works with your existing dispatch system, payment processor, and accounting workflow."
+            overline="Architecture"
+            title="Designed to absorb complexity"
+            subtitle="Smart Fleets connects to every system in your stack. Data flows in, intelligence flows out. No middleware. No glue code. No friction."
             light
           />
 
           <Grid container spacing={3}>
             {[
-              { title: 'TaxiCaller Sync', description: 'Real-time shift import from your dispatch system. Drivers, cabs, and shift data flow in automatically.', icon: <ApiOutlined sx={{ fontSize: 24 }} /> },
-              { title: 'CSV & Excel Import', description: 'Bulk upload credit card transactions, mileage records, and payment data. Drag, drop, done.', icon: <UploadFile sx={{ fontSize: 24 }} /> },
-              { title: 'Export Anywhere', description: 'Generate Excel reports, PDF statements, and structured data exports for your accounting system.', icon: <FileDownload sx={{ fontSize: 24 }} /> },
+              { title: 'Universal data ingestion', description: 'Any dispatch system, any payment processor, any format. Smart Fleets normalizes and structures everything automatically.', icon: <SchemaOutlined sx={{ fontSize: 24 }} /> },
+              { title: 'Real-time sync engine', description: 'Bi-directional data flow keeps every system in lockstep. Changes propagate instantly across your entire operation.', icon: <ApiOutlined sx={{ fontSize: 24 }} /> },
+              { title: 'Intelligent outputs', description: 'Reports, forecasts, and settlement data delivered wherever you need them — in the format your downstream systems expect.', icon: <AutoAwesome sx={{ fontSize: 24 }} /> },
             ].map((item, idx) => (
               <Grid item xs={12} md={4} key={idx}>
                 <Paper
@@ -1420,22 +1420,22 @@ function MarketingLandingPage({ router }) {
       <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: '#fff' }}>
         <Container maxWidth="lg">
           <SectionHeader
-            overline="Platform"
-            title="Everything you need to run your fleet"
-            subtitle="Purpose-built tools for fleet financial management, from shift tracking to automated settlements."
+            overline="Capabilities"
+            title="The full operating system for fleet finance"
+            subtitle="Every capability works together. Every insight feeds the next. This isn't a collection of tools — it's a system that thinks."
           />
 
           <Grid container spacing={3}>
             {[
-              { icon: <TrendingUpOutlined sx={{ fontSize: 26 }} />, title: 'Real-time dashboards', description: 'Live revenue, expense, and profitability metrics across your entire fleet.', color: accent },
-              { icon: <MonetizationOn sx={{ fontSize: 26 }} />, title: 'Automated billing', description: 'Expense tracking and invoice generation with zero manual input.', color: green },
-              { icon: <LocalShipping sx={{ fontSize: 26 }} />, title: 'Fleet management', description: 'Drivers, vehicles, and shift allocations with intelligent scheduling.', color: '#f59e0b' },
-              { icon: <BarChart sx={{ fontSize: 26 }} />, title: 'Advanced reports', description: 'Driver summaries, lease reconciliation, and financial statements.', color: accent },
-              { icon: <Speed sx={{ fontSize: 26 }} />, title: 'Instant settlements', description: 'Generate payment batches for drivers and owners in seconds.', color: green },
-              { icon: <CheckCircle sx={{ fontSize: 26 }} />, title: 'Multi-tenant', description: 'Run multiple taxi companies from one unified platform.', color: '#f59e0b' },
-              { icon: <Insights sx={{ fontSize: 26 }} />, title: 'Smart alerts', description: 'Get notified about discrepancies, missing data, and anomalies.', color: accent },
-              { icon: <VerifiedUser sx={{ fontSize: 26 }} />, title: 'Role-based access', description: 'Admins, managers, accountants, and drivers each see what they need.', color: green },
-              { icon: <Timeline sx={{ fontSize: 26 }} />, title: 'Audit trail', description: 'Every calculation traceable back to source data for full accountability.', color: '#f59e0b' },
+              { icon: <SmartToy sx={{ fontSize: 26 }} />, title: 'AI reconciliation', description: 'Autonomous cross-referencing across every data source. Discrepancies resolved before you see them.', color: accent },
+              { icon: <Insights sx={{ fontSize: 26 }} />, title: 'Predictive analytics', description: 'Revenue forecasting, trend detection, and early warning systems powered by your fleet data.', color: green },
+              { icon: <Speed sx={{ fontSize: 26 }} />, title: 'Instant settlements', description: 'Payment batches generated, validated, and queued — autonomously and in real time.', color: '#f59e0b' },
+              { icon: <TrendingUpOutlined sx={{ fontSize: 26 }} />, title: 'Live intelligence', description: 'Dynamic dashboards that surface what matters. No configuration. No setup. Just signal.', color: accent },
+              { icon: <AutoAwesome sx={{ fontSize: 26 }} />, title: 'Anomaly detection', description: 'Machine learning models that learn your fleet patterns and alert you when something deviates.', color: green },
+              { icon: <CheckCircle sx={{ fontSize: 26 }} />, title: 'Multi-fleet architecture', description: 'Run unlimited fleet entities from one platform. Isolated data, unified intelligence.', color: '#f59e0b' },
+              { icon: <SchemaOutlined sx={{ fontSize: 26 }} />, title: 'Adaptive integrations', description: 'Connects to any system. Learns data schemas automatically. Evolves as your stack changes.', color: accent },
+              { icon: <VerifiedUser sx={{ fontSize: 26 }} />, title: 'Compliance by design', description: 'Every calculation auditable. Every decision traceable. Built for regulated environments.', color: green },
+              { icon: <Timeline sx={{ fontSize: 26 }} />, title: 'Continuous learning', description: 'The system improves with every transaction. Your fleet gets smarter every day it operates.', color: '#f59e0b' },
             ].map((feature, idx) => (
               <Grid item xs={12} sm={6} md={4} key={idx}>
                 <Box sx={{ p: 3 }}>
@@ -1462,10 +1462,10 @@ function MarketingLandingPage({ router }) {
             variant="h3"
             sx={{ fontWeight: 700, color: textPrimary, mb: 2, letterSpacing: '-0.5px', fontSize: { xs: '1.8rem', md: '2.4rem' } }}
           >
-            Ready to automate your fleet finances?
+            The future of fleet finance is autonomous
           </Typography>
           <Typography sx={{ color: textSecondary, mb: 5, fontSize: '1.1rem', maxWidth: 520, mx: 'auto', lineHeight: 1.6 }}>
-            Start for free. See results in minutes. No credit card required.
+            Join the fleet operators who stopped managing finances and started letting AI handle it. Get started in minutes.
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Button
@@ -1497,12 +1497,12 @@ function MarketingLandingPage({ router }) {
                 <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>Smart Fleets</Typography>
               </Box>
               <Typography sx={{ color: alpha('#fff', 0.5), fontSize: '0.85rem', lineHeight: 1.6, mb: 2 }}>
-                Automated financial infrastructure for modern fleet operators.
+                AI-powered financial intelligence for modern fleet operators.
               </Typography>
             </Grid>
             <Grid item xs={6} sm={3} md={2}>
               <Typography sx={{ color: alpha('#fff', 0.4), fontWeight: 600, mb: 2, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1.5 }}>Products</Typography>
-              {['Reconciliation', 'Reports', 'Settlements', 'Fleet Mgmt', 'Data Import'].map(item => (
+              {['AI Reconciliation', 'Analytics', 'Settlements', 'Fleet Intelligence', 'Integrations'].map(item => (
                 <Typography key={item} sx={{ color: alpha('#fff', 0.65), mb: 1, fontSize: '0.85rem', cursor: 'pointer', '&:hover': { color: '#fff' } }}>{item}</Typography>
               ))}
             </Grid>
