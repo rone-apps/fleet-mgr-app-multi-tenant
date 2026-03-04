@@ -378,7 +378,7 @@ export default function ShiftProfilesPage() {
 
   return (
     <>
-      <GlobalNav currentUser={user} title="FareFlow - Shift Profiles" />
+      <GlobalNav currentUser={user} title="Smart Fleets - Shift Profiles" />
       <Container maxWidth="lg" sx={{ py: 4 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>

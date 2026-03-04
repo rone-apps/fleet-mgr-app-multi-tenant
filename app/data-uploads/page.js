@@ -55,7 +55,7 @@ export default function DataUploadsPage() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} title="FareFlow - Data Management" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - Data Management" />
 
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 700, color: "#3e5244" }}>

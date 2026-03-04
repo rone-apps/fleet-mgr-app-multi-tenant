@@ -792,7 +792,7 @@ export default function CabsPage() {
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
       {/* Global Navigation */}
-      <GlobalNav currentUser={currentUser} title="FareFlow - Cab Management" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - Cab Management" />
 
       {/* Tabs */}
       <Paper sx={{ mb: 0 }}>

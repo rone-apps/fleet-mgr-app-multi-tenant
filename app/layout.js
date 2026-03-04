@@ -4,7 +4,7 @@ import NewRelicTenantContext from './components/NewRelicTenantContext'
 import { getNewRelicScript } from './lib/newrelic-browser'
 
 export const metadata = {
-  title: 'FareFlow - Taxi Management System',
+  title: 'Smart Fleets - Taxi Management System',
   description: 'Modern taxi fleet management application',
 }
 

@@ -1,4 +1,4 @@
-// API Configuration for FareFlow Backend
+// API Configuration for Smart Fleets Backend
 // Uses relative path '/api' which is proxied to the backend via next.config.js rewrites
 // The proxy destination is configured via NEXT_PUBLIC_API_BASE_URL environment variable
 // This works for both local development and production without hardcoded URLs

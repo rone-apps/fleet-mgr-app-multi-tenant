@@ -35,7 +35,7 @@ export default function OperationsHelpCard() {
         <CardContent>
           <Box sx={{ mb: 2 }}>
             <p style={{ marginTop: 0 }}>
-              FareFlow has several key components that work together. This guide
+              Smart Fleets has several key components that work together. This guide
               explains each one in simple terms so you can set up your fleet
               management system with confidence.
             </p>

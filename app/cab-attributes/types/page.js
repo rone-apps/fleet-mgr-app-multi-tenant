@@ -332,7 +332,7 @@ export default function CabAttributeTypesPage() {
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
       <GlobalNav
         currentUser={currentUser}
-        title="FareFlow - Cab Attribute Types"
+        title="Smart Fleets - Cab Attribute Types"
       />
 
       <Container maxWidth="lg" sx={{ py: 3 }}>

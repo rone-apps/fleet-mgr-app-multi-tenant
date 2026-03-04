@@ -1055,7 +1055,7 @@ export default function ShiftsPage() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} title="FareFlow - Shift Ownership" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - Shift Ownership" />
 
       <Box sx={{ p: 3 }}>
         {success && (

@@ -530,7 +530,7 @@ export default function UsersPage() {
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
       {/* Global Navigation */}
-      <GlobalNav currentUser={currentUser} title="FareFlow - User Management" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - User Management" />
 
       {/* Main Content */}
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>

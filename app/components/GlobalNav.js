@@ -8,7 +8,7 @@ import { getTenantName, logout as apiLogout } from "../lib/api";
 import BreadcrumbNav from "./BreadcrumbNav";
 
 
-export default function GlobalNav({ currentUser, title = "FareFlow" }) {
+export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
   const router = useRouter();
   const pathname = usePathname();
   const theme = useTheme();

@@ -338,7 +338,7 @@ export default function CabAttributesPage() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} title="FareFlow - Cab Attributes" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - Cab Attributes" />
 
       <Container maxWidth="lg" sx={{ py: 3 }}>
         {success && (

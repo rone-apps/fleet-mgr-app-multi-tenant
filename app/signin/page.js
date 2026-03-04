@@ -200,7 +200,7 @@ export default function SignInPage() {
                 letterSpacing: '-1px'
               }}
             >
-              FareFlow
+              Smart Fleets
             </Typography>
 
             <Typography
@@ -402,7 +402,7 @@ export default function SignInPage() {
           {/* Footer */}
           <Box sx={{ mt: 3, textAlign: "center" }}>
             <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-              © 2025 FareFlow. All rights reserved.
+              © 2025 Smart Fleets. All rights reserved.
             </Typography>
             <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>
               Secure multi-tenant taxi fleet management

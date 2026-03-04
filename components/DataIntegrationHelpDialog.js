@@ -99,7 +99,7 @@ export default function DataIntegrationHelpDialog({ open, onClose }) {
           <AccordionDetails sx={{ pt: 2 }}>
             <Box>
               <Typography variant="body2" paragraph>
-                Data & Integrations help you bring information into FareFlow from external sources
+                Data & Integrations help you bring information into Smart Fleets from external sources
                 and connect with other business systems.
               </Typography>
 
@@ -185,7 +185,7 @@ export default function DataIntegrationHelpDialog({ open, onClose }) {
           <AccordionDetails sx={{ pt: 2 }}>
             <Box>
               <Typography variant="body2" paragraph>
-                Importing data is the fastest way to load bulk information into FareFlow.
+                Importing data is the fastest way to load bulk information into Smart Fleets.
               </Typography>
 
               <Card sx={{ mb: 2, backgroundColor: "#f5f5f5" }}>
@@ -241,7 +241,7 @@ export default function DataIntegrationHelpDialog({ open, onClose }) {
                 <ListItem>
                   <ListItemText
                     primary="5. Map Columns"
-                    secondary="Match your file columns to FareFlow fields"
+                    secondary="Match your file columns to Smart Fleets fields"
                   />
                 </ListItem>
                 <ListItem>
@@ -410,7 +410,7 @@ export default function DataIntegrationHelpDialog({ open, onClose }) {
           <AccordionDetails sx={{ pt: 2 }}>
             <Box>
               <Typography variant="body2" paragraph>
-                Taxi Caller Sync connects FareFlow directly with your Taxi Caller dispatch system
+                Taxi Caller Sync connects Smart Fleets directly with your Taxi Caller dispatch system
                 for automatic, real-time data synchronization.
               </Typography>
 
@@ -770,7 +770,7 @@ export default function DataIntegrationHelpDialog({ open, onClose }) {
                 ❓ What if my dispatch system isn't Taxi Caller?
               </Typography>
               <Typography variant="body2" paragraph sx={{ ml: 2, mb: 2 }}>
-                Use Data Import with CSV/Excel export from your system. FareFlow is flexible with
+                Use Data Import with CSV/Excel export from your system. Smart Fleets is flexible with
                 file formats and can map your column names.
               </Typography>
 
@@ -840,7 +840,7 @@ export default function DataIntegrationHelpDialog({ open, onClose }) {
               <ListItem>
                 <ListItemText
                   primary="5. Map columns"
-                  secondary="Match your columns to FareFlow fields"
+                  secondary="Match your columns to Smart Fleets fields"
                 />
               </ListItem>
               <ListItem>

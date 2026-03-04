@@ -425,7 +425,7 @@ export default function DriversPage() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} title="FareFlow - Driver Management" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - Driver Management" />
 
       <Container maxWidth="lg" sx={{ mt: 4 }}>
         {loading ? (

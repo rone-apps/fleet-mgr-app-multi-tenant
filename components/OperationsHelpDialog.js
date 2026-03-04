@@ -46,7 +46,7 @@ export default function OperationsHelpDialog({ open, onClose }) {
         {/* Introduction */}
         <Alert severity="info" sx={{ mb: 3 }}>
           <Typography variant="body2">
-            <strong>Welcome to FareFlow Operations!</strong> This guide explains
+            <strong>Welcome to Smart Fleets Operations!</strong> This guide explains
             all the components you need to set up your fleet management system.
             Think of it like building blocks - start with Users, then Drivers,
             then Cabs, and finally configure how shifts work.
@@ -61,14 +61,14 @@ export default function OperationsHelpDialog({ open, onClose }) {
         >
           <AccordionSummary expandIcon={<ExpandMoreIcon />}>
             <Typography variant="subtitle1" sx={{ fontWeight: "bold" }}>
-              👤 Users (Who Can Access FareFlow)
+              👤 Users (Who Can Access Smart Fleets)
             </Typography>
           </AccordionSummary>
           <AccordionDetails>
             <Box sx={{ pt: 1 }}>
               <Typography variant="body2" paragraph>
                 <strong>What are Users?</strong> Users are people who log into
-                FareFlow to do their job. They can be managers, accountants,
+                Smart Fleets to do their job. They can be managers, accountants,
                 admins, or drivers.
               </Typography>
 
@@ -636,7 +636,7 @@ Financial Record
               </Card>
 
               <Alert severity="success" sx={{ mt: 2 }}>
-                <strong>✨ The Magic:</strong> Once you create shifts, FareFlow
+                <strong>✨ The Magic:</strong> Once you create shifts, Smart Fleets
                 automatically generates Ahmed's financial statement showing the
                 $150 lease payment!
               </Alert>

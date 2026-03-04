@@ -363,7 +363,7 @@ export default function ShiftAttributesPage() {
 
   return (
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
-      <GlobalNav currentUser={currentUser} title="FareFlow - Shift Attributes" />
+      <GlobalNav currentUser={currentUser} title="Smart Fleets - Shift Attributes" />
       <Box sx={{ p: 3 }}>
         <Box sx={{ mb: 3 }}>
           <Typography variant="h4" fontWeight="bold" gutterBottom>
