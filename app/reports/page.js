@@ -1249,7 +1249,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -1268,17 +1270,25 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
                                     rows.push(
                                       <TableRow key={`tab-cab-hdr-${cab}`} sx={{ bgcolor: "#c8e6c9" }}>
-                                        <TableCell colSpan={4}>
+                                        <TableCell colSpan={6}>
                                           <Typography variant="body2" fontWeight="bold" color="success.main">Cab {cab}</Typography>
                                         </TableCell>
                                       </TableRow>
                                     );
                                     items.forEach((rev, idx) => {
+                                      const fixed = rev.leaseBreakdown?.fixedLeaseAmount != null ? parseFloat(rev.leaseBreakdown.fixedLeaseAmount) : null;
+                                      const mileage = rev.leaseBreakdown?.mileageLeaseAmount != null ? parseFloat(rev.leaseBreakdown.mileageLeaseAmount) : null;
                                       rows.push(
                                         <TableRow key={`tab-cab-${cab}-${idx}`} hover>
                                           <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
                                           <TableCell>{rev.revenueDate || "-"}</TableCell>
                                           <TableCell>{rev.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#666" }}>
+                                            {fixed != null ? `$${fixed.toFixed(2)}` : "-"}
+                                          </TableCell>
+                                          <TableCell align="right" sx={{ color: "#666" }}>
+                                            {mileage != null ? `$${mileage.toFixed(2)}` : "-"}
+                                          </TableCell>
                                           <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
                                             ${parseFloat(rev.amount || 0).toFixed(2)}
                                           </TableCell>
@@ -1287,7 +1297,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     });
                                     rows.push(
                                       <TableRow key={`tab-cab-sub-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
-                                        <TableCell colSpan={3} align="right">
+                                        <TableCell colSpan={5} align="right">
                                           <Typography variant="caption" fontWeight="bold" color="success.main">Cab {cab} Subtotal:</Typography>
                                         </TableCell>
                                         <TableCell align="right">
@@ -1298,7 +1308,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   });
                                   rows.push(
                                     <TableRow key="tab-lease-total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
-                                      <TableCell colSpan={3} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                                      <TableCell colSpan={5} align="right"><strong>Lease Revenue Total:</strong></TableCell>
                                       <TableCell align="right"><strong>${calculateSubtotal(leaseData).toFixed(2)}</strong></TableCell>
                                     </TableRow>
                                   );
@@ -1486,7 +1496,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -1504,17 +1516,25 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
                                     rows.push(
                                       <TableRow key={`tab-exp-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
-                                        <TableCell colSpan={4}>
+                                        <TableCell colSpan={6}>
                                           <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
                                         </TableCell>
                                       </TableRow>
                                     );
                                     items.forEach((exp, idx) => {
+                                      const fixed = exp.leaseBreakdown?.fixedLeaseAmount != null ? parseFloat(exp.leaseBreakdown.fixedLeaseAmount) : null;
+                                      const mileage = exp.leaseBreakdown?.mileageLeaseAmount != null ? parseFloat(exp.leaseBreakdown.mileageLeaseAmount) : null;
                                       rows.push(
                                         <TableRow key={`tab-exp-cab-${cab}-${idx}`} hover>
                                           <TableCell sx={{ fontWeight: "bold", color: "#d32f2f" }}>Cab {cab}</TableCell>
                                           <TableCell>{exp.date || "-"}</TableCell>
                                           <TableCell>{exp.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#666" }}>
+                                            {fixed != null ? `$${fixed.toFixed(2)}` : "-"}
+                                          </TableCell>
+                                          <TableCell align="right" sx={{ color: "#666" }}>
+                                            {mileage != null ? `$${mileage.toFixed(2)}` : "-"}
+                                          </TableCell>
                                           <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
                                             ${parseFloat(exp.amount || 0).toFixed(2)}
                                           </TableCell>
@@ -1523,7 +1543,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     });
                                     rows.push(
                                       <TableRow key={`tab-exp-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
-                                        <TableCell colSpan={3} align="right">
+                                        <TableCell colSpan={5} align="right">
                                           <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
                                         </TableCell>
                                         <TableCell align="right">
@@ -1534,7 +1554,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   });
                                   rows.push(
                                     <TableRow key="tab-exp-total" sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #e57373" }}>
-                                      <TableCell colSpan={3} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                                      <TableCell colSpan={5} align="right"><strong>Lease Expenses Total:</strong></TableCell>
                                       <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                                     </TableRow>
                                   );
@@ -1974,6 +1994,123 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               </Box>
 
+              {/* Financial Summary Box */}
+              <Paper variant="outlined" sx={{ mb: 3, p: 2, borderColor: "#bdbdbd" }}>
+                <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1.5, color: "#2c3e50" }}>
+                  Financial Summary
+                </Typography>
+
+                {/* Revenues Breakdown */}
+                <Typography variant="caption" fontWeight="bold" sx={{ color: "#388e3c", borderBottom: "1px solid #388e3c", display: "block", pb: 0.5, mb: 0.5 }}>
+                  REVENUES
+                </Typography>
+                {getLeaseRevenues().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Lease Revenue</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getLeaseRevenues()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {getAccountChargeRevenues().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Account Charges</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getAccountChargeRevenues()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {getCreditCardRevenues().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Credit Card Revenue</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getCreditCardRevenues()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {getOtherRevenues().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Other Revenues</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getOtherRevenues()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.5, mt: 0.5 }}>
+                  <Typography variant="body2" fontWeight="bold" sx={{ color: "#388e3c" }}>Total Revenues</Typography>
+                  <Typography variant="body2" fontWeight="bold" sx={{ color: "#388e3c" }}>${parseFloat(reportData.totalRevenues || 0).toFixed(2)}</Typography>
+                </Box>
+
+                {/* Divider */}
+                <Box sx={{ borderTop: "1px solid #e0e0e0", my: 1 }} />
+
+                {/* Expenses Breakdown */}
+                <Typography variant="caption" fontWeight="bold" sx={{ color: "#d32f2f", borderBottom: "1px solid #d32f2f", display: "block", pb: 0.5, mb: 0.5 }}>
+                  EXPENSES
+                </Typography>
+                {reportData.recurringExpenses && reportData.recurringExpenses.length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Recurring Expenses</Typography>
+                    <Typography variant="body2">${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {getLeaseExpenses().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Lease Expenses</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {getOtherOneTimeExpenses().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">One-Time Expenses</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getOtherOneTimeExpenses()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {reportData.perUnitExpenses && reportData.perUnitExpenses.length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Per-Unit Expenses</Typography>
+                    <Typography variant="body2">${calculateSubtotal(reportData.perUnitExpenses).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {getAirportExpenses().length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Airport Trip Expenses</Typography>
+                    <Typography variant="body2">${calculateSubtotal(getAirportExpenses()).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {reportData.insuranceMileageExpenses && reportData.insuranceMileageExpenses.length > 0 && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" color="textSecondary">Insurance Mileage</Typography>
+                    <Typography variant="body2">${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.5, mt: 0.5 }}>
+                  <Typography variant="body2" fontWeight="bold" sx={{ color: "#d32f2f" }}>Total Expenses</Typography>
+                  <Typography variant="body2" fontWeight="bold" sx={{ color: "#d32f2f" }}>${parseFloat(reportData.totalExpenses || 0).toFixed(2)}</Typography>
+                </Box>
+
+                {/* Divider */}
+                <Box sx={{ borderTop: "1px solid #e0e0e0", my: 1 }} />
+
+                {/* Balance Summary */}
+                {(reportData.previousBalance && reportData.previousBalance !== 0) && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                    <Typography variant="body2" fontWeight="bold">Previous Balance</Typography>
+                    <Typography variant="body2" fontWeight="bold">${parseFloat(reportData.previousBalance || 0).toFixed(2)}</Typography>
+                  </Box>
+                )}
+                <Box sx={{
+                  display: "flex", justifyContent: "space-between", px: 1.5, py: 1, mt: 0.5, borderRadius: 1,
+                  backgroundColor: reportData.netDue > 0 ? "#c8e6c9" : "#ffcdd2",
+                  borderTop: "2px solid #999"
+                }}>
+                  <Typography variant="body1" fontWeight="bold" sx={{ color: reportData.netDue > 0 ? "#1b5e20" : "#b71c1c" }}>
+                    {reportData.netDue > 0 ? "NET PAYABLE" : "NET DUE"}
+                  </Typography>
+                  <Typography variant="body1" fontWeight="bold" sx={{ color: reportData.netDue > 0 ? "#1b5e20" : "#b71c1c" }}>
+                    {reportData.netDue > 0 ? '$' : '-$'}{parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2)}
+                  </Typography>
+                </Box>
+                {(reportData.paidAmount && reportData.paidAmount !== 0) && (
+                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3, mt: 0.5 }}>
+                    <Typography variant="body2" fontWeight="bold">Amount Paid</Typography>
+                    <Typography variant="body2" fontWeight="bold">${parseFloat(reportData.paidAmount || 0).toFixed(2)}</Typography>
+                  </Box>
+                )}
+              </Paper>
+
               {/* Lease Revenue Section - grouped by cab, natural number sort */}
               {getLeaseRevenues().length > 0 && (
                 <Box sx={{ mb: 3 }}>
@@ -1987,7 +2124,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           <TableCell><strong>Cab</strong></TableCell>
                           <TableCell><strong>Date</strong></TableCell>
                           <TableCell><strong>Description</strong></TableCell>
-                          <TableCell align="right"><strong>Amount</strong></TableCell>
+                          <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                          <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                          <TableCell align="right"><strong>Total</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2005,17 +2144,25 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
                             rows.push(
                               <TableRow key={`cab-hdr-${cab}`} sx={{ bgcolor: "#c8e6c9" }}>
-                                <TableCell colSpan={4}>
+                                <TableCell colSpan={6}>
                                   <Typography variant="body2" fontWeight="bold" color="success.main">Cab {cab}</Typography>
                                 </TableCell>
                               </TableRow>
                             );
                             items.forEach((rev, idx) => {
+                              const fixed = rev.leaseBreakdown?.fixedLeaseAmount != null ? parseFloat(rev.leaseBreakdown.fixedLeaseAmount) : null;
+                              const mileage = rev.leaseBreakdown?.mileageLeaseAmount != null ? parseFloat(rev.leaseBreakdown.mileageLeaseAmount) : null;
                               rows.push(
                                 <TableRow key={`cab-${cab}-${idx}`} hover>
                                   <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
                                   <TableCell>{rev.revenueDate || "-"}</TableCell>
                                   <TableCell>{rev.description || "-"}</TableCell>
+                                  <TableCell align="right" sx={{ color: "#666" }}>
+                                    {fixed != null ? `$${fixed.toFixed(2)}` : "-"}
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ color: "#666" }}>
+                                    {mileage != null ? `$${mileage.toFixed(2)}` : "-"}
+                                  </TableCell>
                                   <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
                                     ${parseFloat(rev.amount || 0).toFixed(2)}
                                   </TableCell>
@@ -2024,7 +2171,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             });
                             rows.push(
                               <TableRow key={`cab-sub-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
-                                <TableCell colSpan={3} align="right">
+                                <TableCell colSpan={5} align="right">
                                   <Typography variant="caption" fontWeight="bold" color="success.main">Cab {cab} Subtotal:</Typography>
                                 </TableCell>
                                 <TableCell align="right">
@@ -2035,7 +2182,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           });
                           rows.push(
                             <TableRow key="lease-rev-total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
-                              <TableCell colSpan={3} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                              <TableCell colSpan={5} align="right"><strong>Lease Revenue Total:</strong></TableCell>
                               <TableCell align="right"><strong>${calculateSubtotal(getLeaseRevenues()).toFixed(2)}</strong></TableCell>
                             </TableRow>
                           );
@@ -2198,7 +2345,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           <TableCell><strong>Cab</strong></TableCell>
                           <TableCell><strong>Date</strong></TableCell>
                           <TableCell><strong>Description</strong></TableCell>
-                          <TableCell align="right"><strong>Amount</strong></TableCell>
+                          <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                          <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                          <TableCell align="right"><strong>Total</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2216,17 +2365,25 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
                             rows.push(
                               <TableRow key={`exp-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
-                                <TableCell colSpan={4}>
+                                <TableCell colSpan={6}>
                                   <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
                                 </TableCell>
                               </TableRow>
                             );
                             items.forEach((exp, idx) => {
+                              const fixed = exp.leaseBreakdown?.fixedLeaseAmount != null ? parseFloat(exp.leaseBreakdown.fixedLeaseAmount) : null;
+                              const mileage = exp.leaseBreakdown?.mileageLeaseAmount != null ? parseFloat(exp.leaseBreakdown.mileageLeaseAmount) : null;
                               rows.push(
                                 <TableRow key={`exp-cab-${cab}-${idx}`} hover>
                                   <TableCell sx={{ fontWeight: "bold", color: "#d32f2f" }}>Cab {cab}</TableCell>
                                   <TableCell>{exp.date || "-"}</TableCell>
                                   <TableCell>{exp.description || "-"}</TableCell>
+                                  <TableCell align="right" sx={{ color: "#666" }}>
+                                    {fixed != null ? `$${fixed.toFixed(2)}` : "-"}
+                                  </TableCell>
+                                  <TableCell align="right" sx={{ color: "#666" }}>
+                                    {mileage != null ? `$${mileage.toFixed(2)}` : "-"}
+                                  </TableCell>
                                   <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
                                     ${parseFloat(exp.amount || 0).toFixed(2)}
                                   </TableCell>
@@ -2235,7 +2392,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             });
                             rows.push(
                               <TableRow key={`exp-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
-                                <TableCell colSpan={3} align="right">
+                                <TableCell colSpan={5} align="right">
                                   <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
                                 </TableCell>
                                 <TableCell align="right">
@@ -2246,7 +2403,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           });
                           rows.push(
                             <TableRow key="lease-exp-total" sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #e57373" }}>
-                              <TableCell colSpan={3} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                              <TableCell colSpan={5} align="right"><strong>Lease Expenses Total:</strong></TableCell>
                               <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                             </TableRow>
                           );
