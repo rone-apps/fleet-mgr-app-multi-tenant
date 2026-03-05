@@ -527,6 +527,25 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
     return filtered;
   };
 
+  // Group lease revenue by driver, sorted by date within each driver
+  const getGroupedLeaseRevenue = () => {
+    const leaseData = getFilteredLeaseRevenue();
+    const extractDriver = (rev) => {
+      const match = rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/);
+      return match ? `${match[1].trim()} (${match[2]})` : "Unknown";
+    };
+    const grouped = {};
+    leaseData.forEach((rev) => {
+      const driver = extractDriver(rev);
+      if (!grouped[driver]) grouped[driver] = [];
+      grouped[driver].push(rev);
+    });
+    Object.values(grouped).forEach((rows) =>
+      rows.sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || ""))
+    );
+    return { grouped, driverNames: Object.keys(grouped).sort(), leaseData };
+  };
+
   // Filter other revenues
   const getFilteredOtherRevenues = () => {
     let filtered = reportData?.revenues?.filter(
@@ -1089,7 +1108,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {getFilteredCharges().map((rev, idx) => {
+                                {[...getFilteredCharges()].sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || "")).map((rev, idx) => {
                                   const tip = rev.tipAmount ? parseFloat(rev.tipAmount) : 0;
                                   const amount = rev.fareAmount ? parseFloat(rev.fareAmount) : parseFloat(rev.amount) || 0;
                                   const total = amount + tip;
@@ -1194,42 +1213,64 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             <Table size="small">
                               <TableHead>
                                 <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
-                                  <TableCell><strong>Shift Date</strong></TableCell>
-                                  <TableCell><strong>Cab #</strong></TableCell>
-                                  <TableCell><strong>Driver Name</strong></TableCell>
-                                  <TableCell><strong>Shift Type</strong></TableCell>
-                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
-                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
-                                  <TableCell align="right"><strong>Total Lease</strong></TableCell>
+                                  <TableCell><strong>Cab</strong></TableCell>
+                                  <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {getFilteredLeaseRevenue().map((rev, idx) => {
-                                  // Calculate mileage portion (from leaseBreakdown if available, otherwise 0)
-                                  const fixedLease = rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0;
-                                  const mileageLease = rev.leaseBreakdown?.mileageLeaseAmount || 0;
-                                  const totalLease = parseFloat(rev.amount || 0);
-
-                                  return (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{rev.revenueDate || "-"}</TableCell>
-                                      <TableCell><strong>{rev.description?.match(/Cab\s+(\d+)/)?.[1] || "-"}</strong></TableCell>
-                                      <TableCell><strong>{rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</strong></TableCell>
-                                      <TableCell>{rev.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
-                                      <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
-                                      <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
-                                        ${parseFloat(totalLease).toFixed(2)}
-                                      </TableCell>
+                                {(() => {
+                                  const leaseData = getFilteredLeaseRevenue();
+                                  const grouped = {};
+                                  leaseData.forEach((rev) => {
+                                    const cabNum = rev.description?.match(/Cab\s+(\d+)/)?.[1] || "Unknown";
+                                    if (!grouped[cabNum]) grouped[cabNum] = [];
+                                    grouped[cabNum].push(rev);
+                                  });
+                                  const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                                  const rows = [];
+                                  sortedCabs.forEach((cab) => {
+                                    const items = grouped[cab].sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || ""));
+                                    const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+                                    rows.push(
+                                      <TableRow key={`tab-cab-hdr-${cab}`} sx={{ bgcolor: "#c8e6c9" }}>
+                                        <TableCell colSpan={4}>
+                                          <Typography variant="body2" fontWeight="bold" color="success.main">Cab {cab}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                    items.forEach((rev, idx) => {
+                                      rows.push(
+                                        <TableRow key={`tab-cab-${cab}-${idx}`} hover>
+                                          <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
+                                          <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                          <TableCell>{rev.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                            ${parseFloat(rev.amount || 0).toFixed(2)}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    });
+                                    rows.push(
+                                      <TableRow key={`tab-cab-sub-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
+                                        <TableCell colSpan={3} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="success.main">Cab {cab} Subtotal:</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="success.main">${cabSubtotal.toFixed(2)}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  });
+                                  rows.push(
+                                    <TableRow key="tab-lease-total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                      <TableCell colSpan={3} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                                      <TableCell align="right"><strong>${calculateSubtotal(leaseData).toFixed(2)}</strong></TableCell>
                                     </TableRow>
                                   );
-                                })}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={4} align="right"><strong>Lease Revenue Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${getFilteredLeaseRevenue().reduce((sum, rev) => sum + (rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0), 0).toFixed(2)}</strong></TableCell>
-                                  <TableCell align="right"><strong>${getFilteredLeaseRevenue().reduce((sum, rev) => sum + (rev.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(getFilteredLeaseRevenue()).toFixed(2)}</strong></TableCell>
-                                </TableRow>
+                                  return rows;
+                                })()}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1391,42 +1432,63 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             <Table size="small">
                               <TableHead>
                                 <TableRow sx={{ backgroundColor: "#fff8e1" }}>
+                                  <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
-                                  <TableCell><strong>Cab #</strong></TableCell>
-                                  <TableCell><strong>Shift Type</strong></TableCell>
-                                  <TableCell><strong>Owner</strong></TableCell>
-                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
-                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
-                                  <TableCell align="right"><strong>Total Lease</strong></TableCell>
+                                  <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {getLeaseExpenses().map((exp, idx) => {
-                                  // Calculate mileage portion (from leaseBreakdown if available, otherwise 0)
-                                  const fixedLease = exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0;
-                                  const mileageLease = exp.leaseBreakdown?.mileageLeaseAmount || 0;
-                                  const totalLease = parseFloat(exp.amount || 0);
-
-                                  return (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{exp.date || "-"}</TableCell>
-                                      <TableCell><strong>{exp.description?.match(/Cab (\w+)/)?.[1] || "-"}</strong></TableCell>
-                                      <TableCell>{exp.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
-                                      <TableCell>{exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</TableCell>
-                                      <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
-                                      <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                        ${parseFloat(totalLease).toFixed(2)}
-                                      </TableCell>
+                                {(() => {
+                                  const grouped = {};
+                                  getLeaseExpenses().forEach((exp) => {
+                                    const cabNum = exp.description?.match(/Cab\s+(\d+)/)?.[1] || exp.cabNumber || "Unknown";
+                                    if (!grouped[cabNum]) grouped[cabNum] = [];
+                                    grouped[cabNum].push(exp);
+                                  });
+                                  const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                                  const rows = [];
+                                  sortedCabs.forEach((cab) => {
+                                    const items = grouped[cab].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+                                    const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+                                    rows.push(
+                                      <TableRow key={`tab-exp-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
+                                        <TableCell colSpan={4}>
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                    items.forEach((exp, idx) => {
+                                      rows.push(
+                                        <TableRow key={`tab-exp-cab-${cab}-${idx}`} hover>
+                                          <TableCell sx={{ fontWeight: "bold", color: "#d32f2f" }}>Cab {cab}</TableCell>
+                                          <TableCell>{exp.date || "-"}</TableCell>
+                                          <TableCell>{exp.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                            ${parseFloat(exp.amount || 0).toFixed(2)}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    });
+                                    rows.push(
+                                      <TableRow key={`tab-exp-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
+                                        <TableCell colSpan={3} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">${cabSubtotal.toFixed(2)}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  });
+                                  rows.push(
+                                    <TableRow key="tab-exp-total" sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #e57373" }}>
+                                      <TableCell colSpan={3} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                                      <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                                     </TableRow>
                                   );
-                                })}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={4} align="right"><strong>Lease Expenses Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0), 0).toFixed(2)}</strong></TableCell>
-                                  <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
-                                </TableRow>
+                                  return rows;
+                                })()}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -1510,6 +1572,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     if (expenseFilters.oneTimeAmountMax && parseFloat(exp.amount) > parseFloat(expenseFilters.oneTimeAmountMax)) return false;
                                     return true;
                                   })
+                                  .sort((a, b) => (a.date || "").localeCompare(b.date || ""))
                                   .map((exp, idx) => {
                                     // Use explicit fields from backend (much more reliable)
                                     const cabNumber = exp.cabNumber || "-";
@@ -1701,7 +1764,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {reportData.insuranceMileageExpenses.map((exp, idx) => {
+                                {[...reportData.insuranceMileageExpenses].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
                                   const miles = exp.miles ? parseFloat(exp.miles) : 0;
                                   const amount = exp.amount ? parseFloat(exp.amount) : 0;
                                   const insuranceRate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
@@ -1860,7 +1923,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               </Box>
 
-              {/* Lease Revenue Section */}
+              {/* Lease Revenue Section - grouped by cab, natural number sort */}
               {getLeaseRevenues().length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#388e3c" }}>
@@ -1869,40 +1932,64 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
-                        <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell>Cab #</TableCell>
-                          <TableCell>Driver</TableCell>
-                          <TableCell>Shift Type</TableCell>
-                          <TableCell align="right">Fixed Lease</TableCell>
-                          <TableCell align="right">Mileage Lease</TableCell>
-                          <TableCell align="right">Total Lease</TableCell>
+                        <TableRow sx={{ bgcolor: "#e8f5e9" }}>
+                          <TableCell><strong>Cab</strong></TableCell>
+                          <TableCell><strong>Date</strong></TableCell>
+                          <TableCell><strong>Description</strong></TableCell>
+                          <TableCell align="right"><strong>Amount</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {getLeaseRevenues().map((rev, idx) => {
-                          const fixedLease = rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0;
-                          const mileageLease = rev.leaseBreakdown?.mileageLeaseAmount || 0;
-                          const totalLease = parseFloat(rev.amount || 0);
-
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>{rev.revenueDate || "-"}</TableCell>
-                              <TableCell><strong>{rev.description?.match(/Cab\s+(\d+)/)?.[1] || "-"}</strong></TableCell>
-                              <TableCell><strong>{rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({rev.description?.match(/Driver:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</strong></TableCell>
-                              <TableCell>{rev.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
-                              <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
-                              <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
-                              <TableCell align="right">${parseFloat(totalLease).toFixed(2)}</TableCell>
+                        {(() => {
+                          const grouped = {};
+                          getLeaseRevenues().forEach((rev) => {
+                            const cabNum = rev.description?.match(/Cab\s+(\d+)/)?.[1] || "Unknown";
+                            if (!grouped[cabNum]) grouped[cabNum] = [];
+                            grouped[cabNum].push(rev);
+                          });
+                          const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                          const rows = [];
+                          sortedCabs.forEach((cab) => {
+                            const items = grouped[cab].sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || ""));
+                            const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+                            rows.push(
+                              <TableRow key={`cab-hdr-${cab}`} sx={{ bgcolor: "#c8e6c9" }}>
+                                <TableCell colSpan={4}>
+                                  <Typography variant="body2" fontWeight="bold" color="success.main">Cab {cab}</Typography>
+                                </TableCell>
+                              </TableRow>
+                            );
+                            items.forEach((rev, idx) => {
+                              rows.push(
+                                <TableRow key={`cab-${cab}-${idx}`} hover>
+                                  <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
+                                  <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                  <TableCell>{rev.description || "-"}</TableCell>
+                                  <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                    ${parseFloat(rev.amount || 0).toFixed(2)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                            rows.push(
+                              <TableRow key={`cab-sub-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
+                                <TableCell colSpan={3} align="right">
+                                  <Typography variant="caption" fontWeight="bold" color="success.main">Cab {cab} Subtotal:</Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="caption" fontWeight="bold" color="success.main">${cabSubtotal.toFixed(2)}</Typography>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          });
+                          rows.push(
+                            <TableRow key="lease-rev-total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                              <TableCell colSpan={3} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                              <TableCell align="right"><strong>${calculateSubtotal(getLeaseRevenues()).toFixed(2)}</strong></TableCell>
                             </TableRow>
                           );
-                        })}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={4} align="right"><strong>Lease Revenue Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${getLeaseRevenues().reduce((sum, rev) => sum + (rev.leaseBreakdown?.fixedLeaseAmount || rev.amount || 0), 0).toFixed(2)}</strong></TableCell>
-                          <TableCell align="right"><strong>${getLeaseRevenues().reduce((sum, rev) => sum + (rev.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(getLeaseRevenues()).toFixed(2)}</strong></TableCell>
-                        </TableRow>
+                          return rows;
+                        })()}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -1926,7 +2013,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {getAccountChargeRevenues().map((rev, idx) => (
+                        {[...getAccountChargeRevenues()].sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || "")).map((rev, idx) => (
                           <TableRow key={idx}>
                             <TableCell>{rev.revenueDate || "-"}</TableCell>
                             <TableCell>{rev.categoryName || "-"}</TableCell>
@@ -2047,7 +2134,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               )}
 
-              {/* Lease Expenses Section */}
+              {/* Lease Expenses Section - grouped by cab, natural number sort */}
               {getLeaseExpenses().length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#f57f17" }}>
@@ -2056,42 +2143,64 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
-                        <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell>Cab #</TableCell>
-                          <TableCell>Shift Type</TableCell>
-                          <TableCell>Owner</TableCell>
-                          <TableCell align="right">Fixed Lease</TableCell>
-                          <TableCell align="right">Mileage Lease</TableCell>
-                          <TableCell align="right">Total Lease</TableCell>
+                        <TableRow sx={{ bgcolor: "#fff3e0" }}>
+                          <TableCell><strong>Cab</strong></TableCell>
+                          <TableCell><strong>Date</strong></TableCell>
+                          <TableCell><strong>Description</strong></TableCell>
+                          <TableCell align="right"><strong>Amount</strong></TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {getLeaseExpenses().map((exp, idx) => {
-                          const fixedLease = exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0;
-                          const mileageLease = exp.leaseBreakdown?.mileageLeaseAmount || 0;
-                          const totalLease = parseFloat(exp.amount || 0);
-
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>{exp.date || "-"}</TableCell>
-                              <TableCell><strong>{exp.description?.match(/Cab\s+(\d+)/)?.[1] || "-"}</strong></TableCell>
-                              <TableCell>{exp.description?.match(/\((\w+)\)/)?.[1] || "-"}</TableCell>
-                              <TableCell>{exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[1]?.trim() || "-"} ({exp.description?.match(/Owner:\s+([^(]+)\s*\(([^)]+)\)/)?.[2] || "-"})</TableCell>
-                              <TableCell align="right">${parseFloat(fixedLease).toFixed(2)}</TableCell>
-                              <TableCell align="right">${parseFloat(mileageLease).toFixed(2)}</TableCell>
-                              <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                ${parseFloat(totalLease).toFixed(2)}
-                              </TableCell>
+                        {(() => {
+                          const grouped = {};
+                          getLeaseExpenses().forEach((exp) => {
+                            const cabNum = exp.description?.match(/Cab\s+(\d+)/)?.[1] || exp.cabNumber || "Unknown";
+                            if (!grouped[cabNum]) grouped[cabNum] = [];
+                            grouped[cabNum].push(exp);
+                          });
+                          const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                          const rows = [];
+                          sortedCabs.forEach((cab) => {
+                            const items = grouped[cab].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+                            const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
+                            rows.push(
+                              <TableRow key={`exp-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
+                                <TableCell colSpan={4}>
+                                  <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
+                                </TableCell>
+                              </TableRow>
+                            );
+                            items.forEach((exp, idx) => {
+                              rows.push(
+                                <TableRow key={`exp-cab-${cab}-${idx}`} hover>
+                                  <TableCell sx={{ fontWeight: "bold", color: "#d32f2f" }}>Cab {cab}</TableCell>
+                                  <TableCell>{exp.date || "-"}</TableCell>
+                                  <TableCell>{exp.description || "-"}</TableCell>
+                                  <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                    ${parseFloat(exp.amount || 0).toFixed(2)}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            });
+                            rows.push(
+                              <TableRow key={`exp-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
+                                <TableCell colSpan={3} align="right">
+                                  <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
+                                </TableCell>
+                                <TableCell align="right">
+                                  <Typography variant="caption" fontWeight="bold" color="error.main">${cabSubtotal.toFixed(2)}</Typography>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          });
+                          rows.push(
+                            <TableRow key="lease-exp-total" sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #e57373" }}>
+                              <TableCell colSpan={3} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                              <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                             </TableRow>
                           );
-                        })}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={4} align="right"><strong>Lease Expenses Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.fixedLeaseAmount || exp.amount || 0), 0).toFixed(2)}</strong></TableCell>
-                          <TableCell align="right"><strong>${getLeaseExpenses().reduce((sum, exp) => sum + (exp.leaseBreakdown?.mileageLeaseAmount || 0), 0).toFixed(2)}</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
-                        </TableRow>
+                          return rows;
+                        })()}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -2118,7 +2227,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {getOtherOneTimeExpenses().map((exp, idx) => {
+                        {[...getOtherOneTimeExpenses()].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
                           // Use explicit fields from backend (much more reliable)
                           const cabNumber = exp.cabNumber || "-";
                           const shiftType = exp.shiftType || "-";
@@ -2245,7 +2354,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportData.insuranceMileageExpenses.map((exp, idx) => {
+                        {[...reportData.insuranceMileageExpenses].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
                           const miles = exp.miles ? parseFloat(exp.miles) : 0;
                           const amount = exp.amount ? parseFloat(exp.amount) : 0;
                           const insuranceRate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
