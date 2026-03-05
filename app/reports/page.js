@@ -603,20 +603,35 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
         )}
 
         {/* Tabs for Generate vs History */}
-        <Paper sx={{ mb: 3 }}>
-          <Tabs
-            value={activeTab}
-            onChange={(e, newValue) => {
-              setActiveTab(newValue);
-              if (newValue === 1 && selectedDriverId) {
-                fetchSavedStatements(selectedDriverId);
-              }
-            }}
-            sx={{ borderBottom: 1, borderColor: "divider" }}
-          >
-            <Tab icon={<Assessment />} iconPosition="start" label="Generate Draft" />
-            <Tab icon={<Download />} iconPosition="start" label="History" />
-          </Tabs>
+        <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #1565c0", borderRadius: 2 }}>
+          <Box sx={{ bgcolor: "#1565c0", px: 2, py: 1.5 }}>
+            <Tabs
+              value={activeTab}
+              onChange={(e, newValue) => {
+                setActiveTab(newValue);
+                if (newValue === 1 && selectedDriverId) {
+                  fetchSavedStatements(selectedDriverId);
+                }
+              }}
+              TabIndicatorProps={{ sx: { display: "none" } }}
+              sx={{
+                minHeight: 42,
+                "& .MuiTab-root": {
+                  minHeight: 42, py: 1, px: 3, mr: 1.5, borderRadius: "24px",
+                  color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.9rem",
+                  textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
+                  border: "1.5px solid rgba(255,255,255,0.35)",
+                  transition: "all 0.2s ease",
+                  "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
+                  "&.Mui-selected": { bgcolor: "#fff", color: "#1565c0", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
+                  "& .MuiTab-iconWrapper": { mr: 1 },
+                },
+              }}
+            >
+              <Tab icon={<Assessment />} iconPosition="start" label="Generate Draft" />
+              <Tab icon={<Download />} iconPosition="start" label="History" />
+            </Tabs>
+          </Box>
         </Paper>
 
         {/* Tab 0: Generate Draft */}
@@ -934,11 +949,29 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
 
                 {/* Revenue Details - Tabbed View */}
                 {reportData?.revenues && reportData.revenues.length > 0 && (
-                  <Paper sx={{ mb: 3 }}>
-                    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+                  <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #2e7d32", borderRadius: 2 }}>
+                    <Box sx={{ bgcolor: "#2e7d32", px: 2, pt: 1.5, pb: 0.5 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#fff", fontWeight: 700, mb: 1, letterSpacing: 1, textTransform: "uppercase", fontSize: "0.75rem" }}>
+                        Revenue Details — Select a category below
+                      </Typography>
                       <Tabs
                         value={revenueTabIndex}
                         onChange={(e, newValue) => setRevenueTabIndex(newValue)}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        TabIndicatorProps={{ sx: { display: "none" } }}
+                        sx={{
+                          minHeight: 38,
+                          "& .MuiTab-root": {
+                            minHeight: 38, py: 0.75, px: 2.5, mr: 1, mb: 1, borderRadius: "20px",
+                            color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.82rem",
+                            textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
+                            border: "1.5px solid rgba(255,255,255,0.35)",
+                            transition: "all 0.2s ease",
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
+                            "&.Mui-selected": { bgcolor: "#fff", color: "#2e7d32", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
+                          },
+                        }}
                       >
                         <Tab label={`Credit Cards (${getRevenuesByType("CARD_REVENUE").length})`} />
                         <Tab label={`Charges (${getRevenuesByType("ACCOUNT_REVENUE").length})`} />
@@ -1370,19 +1403,37 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
 
                 {/* Expense Details - Tabbed View */}
                 {(reportData?.recurringExpenses?.length > 0 || reportData?.oneTimeExpenses?.length > 0 || reportData?.mileageExpenses?.length > 0 || reportData?.insuranceMileageExpenses?.length > 0) && (
-                  <Paper sx={{ mb: 3 }}>
-                    <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
+                  <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #c62828", borderRadius: 2 }}>
+                    <Box sx={{ bgcolor: "#c62828", px: 2, pt: 1.5, pb: 0.5 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#fff", fontWeight: 700, mb: 1, letterSpacing: 1, textTransform: "uppercase", fontSize: "0.75rem" }}>
+                        Expense Details — Select a category below
+                      </Typography>
                       <Tabs
                         value={expenseTabIndex}
                         onChange={(e, newValue) => setExpenseTabIndex(newValue)}
+                        variant="scrollable"
+                        scrollButtons="auto"
+                        TabIndicatorProps={{ sx: { display: "none" } }}
+                        sx={{
+                          minHeight: 38,
+                          "& .MuiTab-root": {
+                            minHeight: 38, py: 0.75, px: 2.5, mr: 1, mb: 1, borderRadius: "20px",
+                            color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.82rem",
+                            textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
+                            border: "1.5px solid rgba(255,255,255,0.35)",
+                            transition: "all 0.2s ease",
+                            "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
+                            "&.Mui-selected": { bgcolor: "#fff", color: "#c62828", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
+                          },
+                        }}
                       >
-                        <Tab label={`Recurring Expenses (${reportData?.recurringExpenses?.length || 0})`} />
-                        <Tab label={`Lease Expenses (${getLeaseExpenses().length})`} />
-                        <Tab label={`One-Time Expenses (${getOtherOneTimeExpenses().length})`} />
-                        <Tab label={`Per-Unit Expenses (${reportData?.perUnitExpenses?.length || 0})`} />
+                        <Tab label={`Recurring (${reportData?.recurringExpenses?.length || 0})`} />
+                        <Tab label={`Lease (${getLeaseExpenses().length})`} />
+                        <Tab label={`One-Time (${getOtherOneTimeExpenses().length})`} />
+                        <Tab label={`Per-Unit (${reportData?.perUnitExpenses?.length || 0})`} />
                         <Tab label={`Airport Trips (${getAirportExpenses().length})`} />
-                        <Tab label={`Mileage Expenses (${reportData?.mileageExpenses?.length || 0})`} />
-                        <Tab label={`Insurance Mileage (${reportData?.insuranceMileageExpenses?.length || 0})`} />
+                        <Tab label={`Mileage (${reportData?.mileageExpenses?.length || 0})`} />
+                        <Tab label={`Insurance (${reportData?.insuranceMileageExpenses?.length || 0})`} />
                       </Tabs>
                     </Box>
 

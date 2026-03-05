@@ -1119,43 +1119,60 @@ export default function ShiftsPage() {
         <Grid container spacing={3}>
           {/* Left Panel - Cab/Owner Selection */}
           <Grid item xs={12} md={4}>
-            <Paper sx={{ 
-              p: 2,
+            <Paper sx={{
+              overflow: 'hidden',
+              border: '2px solid #1565c0',
+              borderRadius: 2,
               position: 'sticky',
               top: 16,
               maxHeight: 'calc(100vh - 32px)',
               display: 'flex',
               flexDirection: 'column'
             }}>
-              <Tabs
-                value={viewMode === "by-cab" ? 0 : 1}
-                onChange={(e, newValue) => {
-                  if (newValue === 0) {
-                    setViewMode("by-cab");
-                    setShifts([]);
-                    setSelectedCab(null);
-                    setSelectedOwner(null);
-                    setCabFilter("");
-                    setOwnerFilter("");
-                    setCabSearchText("");
-                    setOwnerSearchText("");
-                  } else {
-                    setViewMode("by-owner");
-                    setShifts([]);
-                    setSelectedCab(null);
-                    setSelectedOwner(null);
-                    setCabFilter("");
-                    setOwnerFilter("");
-                    setCabSearchText("");
-                    setOwnerSearchText("");
-                  }
-                }}
-                sx={{ borderBottom: 1, borderColor: "divider", mb: 2, flexShrink: 0 }}
-              >
-                <Tab label="By Cab" />
-                <Tab label="By Owner" />
-              </Tabs>
+              <Box sx={{ bgcolor: "#1565c0", px: 2, py: 1.5, flexShrink: 0 }}>
+                <Tabs
+                  value={viewMode === "by-cab" ? 0 : 1}
+                  onChange={(e, newValue) => {
+                    if (newValue === 0) {
+                      setViewMode("by-cab");
+                      setShifts([]);
+                      setSelectedCab(null);
+                      setSelectedOwner(null);
+                      setCabFilter("");
+                      setOwnerFilter("");
+                      setCabSearchText("");
+                      setOwnerSearchText("");
+                    } else {
+                      setViewMode("by-owner");
+                      setShifts([]);
+                      setSelectedCab(null);
+                      setSelectedOwner(null);
+                      setCabFilter("");
+                      setOwnerFilter("");
+                      setCabSearchText("");
+                      setOwnerSearchText("");
+                    }
+                  }}
+                  TabIndicatorProps={{ sx: { display: "none" } }}
+                  sx={{
+                    minHeight: 42,
+                    "& .MuiTab-root": {
+                      minHeight: 42, py: 1, px: 3, mr: 1.5, borderRadius: "24px",
+                      color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.9rem",
+                      textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
+                      border: "1.5px solid rgba(255,255,255,0.35)",
+                      transition: "all 0.2s ease",
+                      "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
+                      "&.Mui-selected": { bgcolor: "#fff", color: "#1565c0", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
+                    },
+                  }}
+                >
+                  <Tab label="By Cab" />
+                  <Tab label="By Owner" />
+                </Tabs>
+              </Box>
 
+              <Box sx={{ p: 2, overflow: 'auto', flex: 1 }}>
               {viewMode === "by-cab" ? (
                 <>
                   <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", flexShrink: 0 }}>
@@ -1301,6 +1318,7 @@ export default function ShiftsPage() {
                   )}
                 </>
               )}
+              </Box>
             </Paper>
           </Grid>
 
