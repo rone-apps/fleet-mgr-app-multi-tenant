@@ -96,6 +96,8 @@ export default function BulkPaymentEntryTable({
         <TableBody>
           {rows.map((row) => {
             const requiresReference = isPaymentMethodRequired(row.method);
+            const maxPayable = row.netDue > 0 ? row.netDue : 0;
+            const exceedsMax = row.netDue > 0 && row.payAmount > maxPayable;
             return (
               <TableRow
                 key={row.id}
@@ -115,27 +117,34 @@ export default function BulkPaymentEntryTable({
                   />
                 </TableCell>
                 <TableCell align="right">
-                  <Typography variant="body2" sx={{ color: row.netDue < 0 ? "success.main" : "error.main", fontWeight: 600 }}>
+                  <Typography variant="body2" sx={{ color: row.netDue >= 0 ? "success.main" : "error.main", fontWeight: 600 }}>
                     {formatCurrency(Math.abs(row.netDue))}
                   </Typography>
                   <Typography variant="caption" color="textSecondary">
-                    {row.netDue < 0 ? "Payable" : "Due"}
+                    {row.netDue >= 0 ? "Payable" : "Due"}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">
                   <TextField
                     type="number"
                     value={row.payAmount || ""}
-                    onChange={(e) =>
-                      handleInputChange(row.id, "payAmount", parseFloat(e.target.value) || 0)
-                    }
+                    onChange={(e) => {
+                      let val = parseFloat(e.target.value) || 0;
+                      if (row.netDue > 0 && val > row.netDue) {
+                        val = row.netDue;
+                      }
+                      handleInputChange(row.id, "payAmount", val);
+                    }}
                     size="small"
                     disabled={isReadOnly}
+                    error={exceedsMax}
+                    helperText={exceedsMax ? `Max: ${formatCurrency(maxPayable)}` : ""}
                     inputProps={{
                       step: "0.01",
                       min: "0",
+                      max: row.netDue > 0 ? row.netDue : undefined,
                     }}
-                    sx={{ width: 120 }}
+                    sx={{ width: 140 }}
                     variant="outlined"
                   />
                 </TableCell>

@@ -1,83 +1,84 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  Button,
-  Box,
-  Chip,
-  Stack,
-} from "@mui/material";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import { Box, Typography, Button, IconButton, Chip } from "@mui/material";
+import { LightbulbOutlined, Close, ArrowForward } from "@mui/icons-material";
 import OperationsHelpDialog from "./OperationsHelpDialog";
 
 export default function OperationsHelpCard() {
   const [openDialog, setOpenDialog] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
 
   return (
     <>
-      <Card
+      <Box
         sx={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white",
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          px: 3,
+          py: 2,
+          background: "linear-gradient(135deg, #edfcf2 0%, #f0faf4 100%)",
+          border: "1px solid #d1f0db",
+          borderRadius: "10px",
           mb: 3,
         }}
       >
-        <CardHeader
-          avatar={<HelpOutlineIcon sx={{ fontSize: 32 }} />}
-          title="Need Help Setting Up Operations?"
-          subheader="Learn about Users, Drivers, Cabs, Shifts & More"
-          subheaderTypographyProps={{ sx: { color: "rgba(255,255,255,0.8)" } }}
-          titleTypographyProps={{ sx: { color: "white", fontWeight: "bold" } }}
-        />
-        <CardContent>
-          <Box sx={{ mb: 2 }}>
-            <p style={{ marginTop: 0 }}>
-              Smart Fleets has several key components that work together. This guide
-              explains each one in simple terms so you can set up your fleet
-              management system with confidence.
-            </p>
-          </Box>
-
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: "8px",
+            backgroundColor: "#d4f5e0",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <LightbulbOutlined sx={{ fontSize: 20, color: "#22a558" }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="body2" sx={{ color: "#1a1a2e", fontWeight: 600, fontSize: "0.88rem", mb: 0.3 }}>
+            Fleet Setup Guide
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#697386", fontSize: "0.8rem" }}>
+            Drivers, cabs, shifts & profiles
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Chip
+            label="Tip"
+            size="small"
+            sx={{
+              backgroundColor: "#d4f5e0",
+              color: "#22a558",
+              fontWeight: 600,
+              fontSize: "0.7rem",
+              height: 22,
+            }}
+          />
+          <Button
+            size="small"
+            endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
+            onClick={() => setOpenDialog(true)}
+            sx={{
+              color: "#22a558",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              textTransform: "none",
+              "&:hover": { backgroundColor: "rgba(34,165,88,0.06)" },
+            }}
           >
-            <Chip label="👤 Users" variant="outlined" sx={{ color: "white" }} />
-            <Chip
-              label="🚗 Drivers"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-            <Chip label="🚕 Cabs" variant="outlined" sx={{ color: "white" }} />
-            <Chip label="⏰ Shifts" variant="outlined" sx={{ color: "white" }} />
-            <Chip
-              label="📋 Shift Profiles"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-            <Chip
-              label="🏷️ Attributes"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-          </Stack>
-
-          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-start" }}>
-            <Button
-              variant="contained"
-              sx={{ bgcolor: "white", color: "#667eea" }}
-              onClick={() => setOpenDialog(true)}
-              startIcon={<HelpOutlineIcon />}
-            >
-              Open Complete Guide
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+            View guide
+          </Button>
+          <IconButton size="small" onClick={() => setDismissed(true)} sx={{ color: "#b0d6be", p: 0.5 }}>
+            <Close sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      </Box>
 
       <OperationsHelpDialog
         open={openDialog}

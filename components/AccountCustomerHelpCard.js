@@ -1,87 +1,84 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  Button,
-  Box,
-  Chip,
-  Stack,
-} from "@mui/material";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import { Box, Typography, Button, IconButton, Chip } from "@mui/material";
+import { LightbulbOutlined, Close, ArrowForward } from "@mui/icons-material";
 import AccountCustomerHelpDialog from "./AccountCustomerHelpDialog";
 
 export default function AccountCustomerHelpCard() {
   const [openDialog, setOpenDialog] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
 
   return (
     <>
-      <Card
+      <Box
         sx={{
-          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-          color: "white",
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          px: 3,
+          py: 2,
+          background: "linear-gradient(135deg, #f8f0ff 0%, #f0f4ff 100%)",
+          border: "1px solid #e8deff",
+          borderRadius: "10px",
           mb: 3,
         }}
       >
-        <CardHeader
-          avatar={<HelpOutlineIcon sx={{ fontSize: 32 }} />}
-          title="Need Help with Customer Management?"
-          subheader="Learn about Customers, Invoicing, Payments & Collections"
-          subheaderTypographyProps={{ sx: { color: "rgba(255,255,255,0.8)" } }}
-          titleTypographyProps={{ sx: { color: "white", fontWeight: "bold" } }}
-        />
-        <CardContent>
-          <Box sx={{ mb: 2 }}>
-            <p style={{ marginTop: 0 }}>
-              Managing customers and their accounts is central to your business. This guide explains
-              how to track customers, generate professional invoices, record payments, and manage
-              collections—all in simple terms.
-            </p>
-          </Box>
-
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: "8px",
+            backgroundColor: "#ede5ff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <LightbulbOutlined sx={{ fontSize: 20, color: "#7c5cfc" }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="body2" sx={{ color: "#1a1a2e", fontWeight: 600, fontSize: "0.88rem", mb: 0.3 }}>
+            Customer Management Guide
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#697386", fontSize: "0.8rem" }}>
+            Customers, invoicing, payments & collections
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Chip
+            label="Tip"
+            size="small"
+            sx={{
+              backgroundColor: "#ede5ff",
+              color: "#7c5cfc",
+              fontWeight: 600,
+              fontSize: "0.7rem",
+              height: 22,
+            }}
+          />
+          <Button
+            size="small"
+            endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
+            onClick={() => setOpenDialog(true)}
+            sx={{
+              color: "#7c5cfc",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              textTransform: "none",
+              "&:hover": { backgroundColor: "rgba(124,92,252,0.06)" },
+            }}
           >
-            <Chip label="👥 Customers" variant="outlined" sx={{ color: "white" }} />
-            <Chip
-              label="📋 Invoicing"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-            <Chip label="💰 Payments" variant="outlined" sx={{ color: "white" }} />
-            <Chip
-              label="🏦 Accounts"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-            <Chip
-              label="📊 Collections"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-            <Chip
-              label="📈 Reports"
-              variant="outlined"
-              sx={{ color: "white" }}
-            />
-          </Stack>
-
-          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-start" }}>
-            <Button
-              variant="contained"
-              sx={{ bgcolor: "white", color: "#667eea" }}
-              onClick={() => setOpenDialog(true)}
-              startIcon={<HelpOutlineIcon />}
-            >
-              Open Complete Guide
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+            View guide
+          </Button>
+          <IconButton size="small" onClick={() => setDismissed(true)} sx={{ color: "#c0b8d6", p: 0.5 }}>
+            <Close sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      </Box>
 
       <AccountCustomerHelpDialog
         open={openDialog}

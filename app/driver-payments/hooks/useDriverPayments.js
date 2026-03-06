@@ -139,18 +139,20 @@ export const useDriverPayments = () => {
 
   // Add statement to batch rows
   const addStatementRow = useCallback((statement) => {
+    // Only add payable statements (netDue > 0); negative balances carry forward
+    if (statement.netDue <= 0) return;
     setState((prev) => ({
       ...prev,
       batchRows: [
         ...prev.batchRows,
         {
-          id: Math.random().toString(36).substr(2, 9), // Temporary ID
+          id: Math.random().toString(36).substr(2, 9),
           statementId: statement.id,
           personId: statement.personId,
           personName: statement.personName,
           personType: statement.personType,
           netDue: statement.netDue,
-          payAmount: statement.netDue < 0 ? Math.abs(statement.netDue) : 0,
+          payAmount: statement.netDue,
           method: "",
           referenceNumber: "",
           notes: "",
@@ -194,22 +196,62 @@ export const useDriverPayments = () => {
         batch.periodEnd
       );
 
-      // Add all statements as rows
-      statements.forEach((statement) => {
-        addStatementRow(statement);
-      });
+      if (statements.length === 0) {
+        setState((prev) => ({
+          ...prev,
+          success: "No finalized statements found for this period",
+        }));
+        return;
+      }
 
-      setState((prev) => ({
-        ...prev,
-        success: `Added ${statements.length} statements to batch`,
-      }));
+      // Filter out statements already in the batch
+      setState((prev) => {
+        const existingStatementIds = new Set(
+          prev.batchRows.map((row) => row.statementId)
+        );
+        // Only include payable statements (netDue > 0) and exclude duplicates
+        const newStatements = statements.filter(
+          (s) => !existingStatementIds.has(s.id) && s.netDue > 0
+        );
+
+        if (newStatements.length === 0) {
+          const hasNegative = statements.some((s) => s.netDue <= 0);
+          const msg = hasNegative
+            ? "No payable statements for this period. Negative balances carry forward to the next period."
+            : "All payable statements from this period are already in the batch";
+          return {
+            ...prev,
+            success: msg,
+          };
+        }
+
+        const newRows = newStatements.map((statement) => ({
+          id: Math.random().toString(36).substr(2, 9),
+          statementId: statement.id,
+          personId: statement.personId,
+          personName: statement.personName,
+          personType: statement.personType,
+          netDue: statement.netDue,
+          payAmount: statement.netDue,
+          method: "",
+          referenceNumber: "",
+          notes: "",
+          status: "PENDING",
+        }));
+
+        return {
+          ...prev,
+          batchRows: [...prev.batchRows, ...newRows],
+          success: `Added ${newStatements.length} payable statements to batch`,
+        };
+      });
     } catch (error) {
       setState((prev) => ({
         ...prev,
         error: error.message,
       }));
     }
-  }, [loadStatementsForPeriod, addStatementRow]);
+  }, [loadStatementsForPeriod]);
 
   // Post batch (transition from DRAFT to POSTED)
   const postBatch = useCallback(async (batchId) => {
@@ -226,6 +268,12 @@ export const useDriverPayments = () => {
         if (!row.payAmount || row.payAmount <= 0) {
           throw new Error(
             `Valid payment amount is required for ${row.personName}. Amount must be greater than 0.`
+          );
+        }
+
+        if (row.netDue > 0 && row.payAmount > row.netDue) {
+          throw new Error(
+            `Payment amount for ${row.personName} ($${row.payAmount.toFixed(2)}) cannot exceed the payable amount ($${row.netDue.toFixed(2)}).`
           );
         }
       }
@@ -621,23 +669,25 @@ export const useDriverPayments = () => {
           // Try to load payment records for this batch
           const paymentsByStatement = await getPaymentsForBatch(batch.id);
 
-          paymentRows = statements.map((statement) => {
-            const payment = paymentsByStatement[statement.id];
+          paymentRows = statements
+            .filter((statement) => statement.netDue > 0) // Only payable statements
+            .map((statement) => {
+              const payment = paymentsByStatement[statement.id];
 
-            return {
-              id: Math.random().toString(36).substr(2, 9),
-              statementId: statement.id,
-              personId: statement.personId,
-              personName: statement.personName,
-              personType: statement.personType,
-              netDue: statement.netDue,
-              payAmount: payment?.amount || (statement.netDue < 0 ? Math.abs(statement.netDue) : 0),
-              method: payment?.paymentMethod || "",
-              referenceNumber: payment?.referenceNumber || "",
-              notes: payment?.notes || "",
-              status: payment ? "COMPLETED" : "PENDING",
-            };
-          });
+              return {
+                id: Math.random().toString(36).substr(2, 9),
+                statementId: statement.id,
+                personId: statement.personId,
+                personName: statement.personName,
+                personType: statement.personType,
+                netDue: statement.netDue,
+                payAmount: payment?.amount || statement.netDue,
+                method: payment?.paymentMethod || "",
+                referenceNumber: payment?.referenceNumber || "",
+                notes: payment?.notes || "",
+                status: payment ? "COMPLETED" : "PENDING",
+              };
+            });
         }
 
         setState((prev) => ({

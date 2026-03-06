@@ -379,7 +379,7 @@ export default function ShiftProfilesPage() {
   return (
     <>
       <GlobalNav currentUser={user} title="Smart Fleets - Shift Profiles" />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ p: 3 }}>
       {/* Header */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -722,7 +722,7 @@ export default function ShiftProfilesPage() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+    </Box>
     </>
   );
 }

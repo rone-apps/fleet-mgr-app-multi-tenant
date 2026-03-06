@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Box,
   Typography,
@@ -69,7 +69,10 @@ import {
   AiOutlined,
   SchemaOutlined,
   HelpOutline,
-  PaymentOutlined
+  PaymentOutlined,
+  CommuteOutlined,
+  Business,
+  WavingHand,
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
@@ -79,14 +82,23 @@ import AccountCustomerHelpCard from '../components/AccountCustomerHelpCard';
 import ReportsHelpCard from '../components/ReportsHelpCard';
 import DataIntegrationHelpCard from '../components/DataIntegrationHelpCard';
 
-export default function HomePage() {
+function HomePageContent() {
   const [user, setUser] = useState(null);
   const [tenantName, setTenantName] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedCategory = searchParams.get('category') || null;
+
+  const setSelectedCategory = useCallback((category) => {
+    if (category) {
+      router.push(`/?category=${category}`, { scroll: false });
+    } else {
+      router.push('/', { scroll: false });
+    }
+  }, [router]);
 
   useEffect(() => {
     const checkAuthentication = () => {
@@ -97,13 +109,6 @@ export default function HomePage() {
         if (currentUser && isAuthenticated() && storedTenantSchema) {
           setUser(currentUser);
           setTenantName(getTenantName());
-
-          // Load saved category if returning from a sub-page
-          const savedCategory = localStorage.getItem('dashboardCategory');
-          if (savedCategory) {
-            setSelectedCategory(savedCategory);
-            localStorage.removeItem('dashboardCategory'); // Clear after using
-          }
 
           setIsLoading(false);
           return;
@@ -162,37 +167,59 @@ export default function HomePage() {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f6f9fc' }}>
-      <AppBar position="static" sx={{ backgroundColor: '#3e5244' }}>
+      <AppBar position="static" elevation={0} sx={{ backgroundColor: '#fff', borderBottom: '1px solid #e5e7eb' }}>
         <Toolbar>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexGrow: 1 }}>
-            <LocalTaxi sx={{ fontSize: 28, color: '#ffc107', mr: 1 }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexGrow: 1 }}>
+            <Box
+              sx={{
+                width: 36,
+                height: 36,
+                borderRadius: '8px',
+                background: 'linear-gradient(135deg, #635bff 0%, #7c6cff 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <CommuteOutlined sx={{ fontSize: 22, color: '#fff' }} />
+            </Box>
             <Box>
-              <Typography variant="h6" sx={{ fontWeight: 'bold', lineHeight: 1, color: '#fff' }}>
+              <Typography variant="h6" sx={{ fontWeight: 700, lineHeight: 1.2, color: '#1a1a2e', fontSize: '1rem' }}>
                 Smart Fleets
               </Typography>
               {tenantName && (
-                <Typography variant="caption" sx={{ color: '#a5d6a7', fontWeight: 600, display: 'block' }}>
-                  🚕 {tenantName}
+                <Typography variant="caption" sx={{ color: '#8792a2', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.75rem' }}>
+                  <Business sx={{ fontSize: 13 }} />
+                  {tenantName}
                 </Typography>
               )}
             </Box>
           </Box>
 
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Person />
+              <Person sx={{ color: '#697386', fontSize: 20 }} />
               <Box>
-                <Typography variant="body2">
+                <Typography variant="body2" sx={{ color: '#1a1a2e', fontWeight: 600, fontSize: '0.85rem' }}>
                   {user.firstName} {user.lastName}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#ccc' }}>
+                <Typography variant="caption" sx={{ color: '#8792a2' }}>
                   {user.role}
                 </Typography>
               </Box>
             </Box>
 
-            <IconButton color="inherit" onClick={handleLogout} title="Logout">
-              <Logout />
+            <IconButton
+              onClick={handleLogout}
+              title="Logout"
+              sx={{
+                color: '#697386',
+                border: '1px solid #e5e7eb',
+                borderRadius: '8px',
+                '&:hover': { color: '#e74c3c', backgroundColor: 'rgba(231,76,60,0.04)' }
+              }}
+            >
+              <Logout fontSize="small" />
             </IconButton>
           </Box>
         </Toolbar>
@@ -204,46 +231,55 @@ export default function HomePage() {
           sx={{
             p: 4,
             mb: 4,
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            background: 'linear-gradient(135deg, #e0f7ec 0%, #c8f0df 25%, #b0ece8 50%, #c5ecf7 75%, #ddf0fc 100%)',
             borderRadius: 3,
-            color: '#fff',
+            border: '1px solid #b8e8d8',
             position: 'relative',
             overflow: 'hidden',
             '&::before': {
               content: '""',
               position: 'absolute',
-              top: 0,
-              right: 0,
+              top: '-50%',
+              right: '-10%',
+              width: '400px',
+              height: '400px',
+              borderRadius: '50%',
+              background: 'radial-gradient(circle, rgba(255,255,255,0.5) 0%, transparent 70%)',
+            },
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: '-40%',
+              left: '10%',
               width: '300px',
               height: '300px',
-              background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
               borderRadius: '50%',
-              transform: 'translate(30%, -30%)'
-            }
+              background: 'radial-gradient(circle, rgba(130,230,200,0.25) 0%, transparent 70%)',
+            },
           }}
         >
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
             <Box>
-              <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, letterSpacing: '-0.5px' }}>
-                Welcome back, {user.firstName}! 👋
+              <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5, letterSpacing: '-0.5px', color: '#1a3a2a' }}>
+                Welcome back, {user.firstName}!
               </Typography>
-              <Typography variant="body1" sx={{ opacity: 0.95, fontWeight: 500 }}>
-                {user.role} • {user.username}
+              <Typography variant="body1" sx={{ color: '#4a7a6a', fontWeight: 500 }}>
+                {user.role} &bull; {user.username}
               </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
               <Chip
-                icon={<AutoAwesome />}
+                icon={<AutoAwesome sx={{ color: '#2a9d6e !important' }} />}
                 label="AI Dashboard"
                 sx={{
-                  backgroundColor: alpha('#fff', 0.25),
-                  backdropFilter: 'blur(10px)',
-                  color: '#fff',
+                  backgroundColor: 'rgba(255,255,255,0.6)',
+                  backdropFilter: 'blur(8px)',
+                  color: '#1a6b4a',
                   fontWeight: 700,
                   fontSize: '0.9rem',
                   px: 2,
                   py: 2.5,
-                  border: '1px solid rgba(255,255,255,0.3)'
+                  border: '1px solid rgba(42,157,110,0.25)',
                 }}
               />
             </Box>
@@ -271,8 +307,8 @@ export default function HomePage() {
               <Typography sx={{ color: '#999' }}>/</Typography>
               <Typography sx={{ fontWeight: 600, color: '#3e5244', fontSize: '0.95rem' }}>
                 {selectedCategory === 'account' && 'Account & Customers'}
-                {selectedCategory === 'operations' && 'Operations'}
-                {selectedCategory === 'financials' && 'Financials'}
+                {selectedCategory === 'operations' && 'Fleet Management'}
+                {selectedCategory === 'financials' && 'Billings & Charge Management'}
                 {selectedCategory === 'reports' && 'Reports'}
                 {selectedCategory === 'integrations' && 'Data & Integrations'}
                 {selectedCategory === 'profiles' && 'Shift Profiles'}
@@ -297,6 +333,7 @@ export default function HomePage() {
                     description="Manage customers and invoicing"
                     icon={AccountBalance}
                     gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    accent="#7c5cfc"
                     onClick={() => setSelectedCategory('account')}
                   />
                 </Grid>
@@ -306,10 +343,11 @@ export default function HomePage() {
               {['ADMIN', 'MANAGER', 'DISPATCHER'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
-                    title="Operations"
+                    title="Fleet Management"
                     description="Manage drivers, cabs & shifts"
                     icon={DirectionsCar}
                     gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
+                    accent="#22a558"
                     onClick={() => setSelectedCategory('operations')}
                   />
                 </Grid>
@@ -323,6 +361,7 @@ export default function HomePage() {
                     description="Driver & owner bulk payments"
                     icon={PaymentOutlined}
                     gradient="linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                    accent="#10b981"
                     onClick={() => {
                       storeCategoryNav('payments');
                       router.push('/driver-payments');
@@ -335,10 +374,11 @@ export default function HomePage() {
               {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
-                    title="Financials"
-                    description="Setup expenses, revenues & reporting"
+                    title="Billings & Charge Management"
+                    description="Setup expenses, lease, revenues & other financials for owners & drivers"
                     icon={AttachMoney}
                     gradient="linear-gradient(135deg, #f5576c 0%, #f093fb 100%)"
+                    accent="#e5576c"
                     onClick={() => setSelectedCategory('financials')}
                   />
                 </Grid>
@@ -352,6 +392,7 @@ export default function HomePage() {
                     description="Manage system users & access control"
                     icon={People}
                     gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    accent="#635bff"
                     onClick={() => router.push('/users')}
                   />
                 </Grid>
@@ -365,6 +406,7 @@ export default function HomePage() {
                     description="Financial analytics & insights"
                     icon={Assessment}
                     gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                    accent="#3b82f6"
                     onClick={() => setSelectedCategory('reports')}
                   />
                 </Grid>
@@ -378,6 +420,7 @@ export default function HomePage() {
                     description="Imports & third-party integrations"
                     icon={CloudUpload}
                     gradient="linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)"
+                    accent="#d97706"
                     onClick={() => setSelectedCategory('integrations')}
                   />
                 </Grid>
@@ -468,7 +511,7 @@ export default function HomePage() {
 }
 
 // Category Card Component
-function CategoryCard({ title, description, icon: Icon, gradient, onClick }) {
+function CategoryCard({ title, description, icon: Icon, accent, gradient, onClick }) {
   return (
     <Card
       elevation={0}
@@ -478,41 +521,70 @@ function CategoryCard({ title, description, icon: Icon, gradient, onClick }) {
         borderRadius: 3,
         cursor: 'pointer',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        border: '2px solid transparent',
-        backgroundImage: `linear-gradient(white, white), ${gradient}`,
-        backgroundOrigin: 'border-box',
-        backgroundClip: 'padding-box, border-box',
+        border: `2px solid #e5e7eb`,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          background: gradient,
+          transform: 'scaleX(0)',
+          transition: 'transform 0.3s ease',
+        },
         '&:hover': {
-          transform: 'translateY(-8px)',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.15)',
+          transform: 'translateY(-6px)',
+          boxShadow: `0 20px 48px ${accent}28`,
+          borderColor: `${accent}60`,
+          '&::after': {
+            transform: 'scaleX(1)',
+          },
         }
       }}
       onClick={onClick}
     >
-      <CardContent sx={{ p: 3, textAlign: 'center' }}>
+      <CardContent sx={{ p: 5, textAlign: 'center' }}>
         <Box
           sx={{
-            width: 64,
-            height: 64,
-            borderRadius: 3,
+            width: 72,
+            height: 72,
+            borderRadius: '16px',
             background: gradient,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             mx: 'auto',
-            mb: 2,
-            boxShadow: '0 8px 16px rgba(0, 0, 0, 0.2)'
+            mb: 2.5,
+            boxShadow: `0 8px 20px ${accent}35`,
           }}
         >
-          <Icon sx={{ fontSize: 32, color: '#fff' }} />
+          <Icon sx={{ fontSize: 36, color: '#fff' }} />
         </Box>
-        <Typography variant="h6" sx={{ fontWeight: 700, mb: 1, color: '#1a1a1a' }}>
+        <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.75, color: '#1a1a2e', fontSize: '1.15rem' }}>
           {title}
         </Typography>
-        <Typography variant="body2" sx={{ color: '#666', mb: 2 }}>
+        <Typography variant="body2" sx={{ color: '#697386', mb: 2.5, fontSize: '0.9rem', lineHeight: 1.5 }}>
           {description}
         </Typography>
-        <ArrowForward sx={{ fontSize: 20, color: '#667eea' }} />
+        <Box
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 0.5,
+            color: accent,
+            fontWeight: 600,
+            fontSize: '0.88rem',
+            transition: 'gap 0.2s ease',
+            '.MuiCard-root:hover &': { gap: 1 },
+          }}
+        >
+          <span>Explore</span>
+          <ArrowForward sx={{ fontSize: 18 }} />
+        </Box>
       </CardContent>
     </Card>
   );
@@ -603,27 +675,7 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
       case 'financials':
         return [
           {
-            title: 'Income & Expenses',
-            description: 'Real-time financial tracking with AI insights',
-            icon: MonetizationOn,
-            path: '/expenses',
-            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
-            badge: 'Smart Analysis',
-            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
-            accent: '#f5576c'
-          },
-          {
-            title: 'Driver & Owner Payments',
-            description: 'Bulk payment batches and settlement management',
-            icon: PaymentOutlined,
-            path: '/driver-payments',
-            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
-            badge: 'Bulk Processing',
-            gradient: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-            accent: '#10b981'
-          },
-          {
-            title: 'Financial Configuration',
+            title: 'Rate Management (Revenues, Expenses & Other Items)',
             description: 'Setup categories, rates & automated calculations',
             icon: SchemaOutlined,
             path: '/financial-setup',
@@ -631,6 +683,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Setup',
             gradient: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
             accent: '#00f2fe'
+          },
+          {
+            title: 'Revenues & Expense Management',
+            description: 'Real-time financial tracking with AI insights',
+            icon: MonetizationOn,
+            path: '/expenses',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Smart Analysis',
+            gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+            accent: '#f5576c'
           },
           {
             title: 'Help & Guide',
@@ -735,8 +797,8 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
   const getCategoryTitle = () => {
     const titles = {
       account: 'Account & Customers',
-      operations: 'Operations',
-      financials: 'Financials',
+      operations: 'Fleet Management',
+      financials: 'Billings & Charge Management',
       reports: 'Reports',
       integrations: 'Data & Integrations',
       profiles: 'Shift Profiles'
@@ -819,24 +881,13 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
                 background: '#fff',
                 borderRadius: 3,
                 cursor: 'pointer',
-                transition: 'all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)',
-                border: '2px solid transparent',
-                backgroundImage: `linear-gradient(white, white), ${item.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}`,
-                backgroundOrigin: 'border-box',
-                backgroundClip: 'padding-box, border-box',
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  inset: 0,
-                  background: `radial-gradient(circle at top right, ${item.accent || '#667eea'}15, transparent 60%)`,
-                  pointerEvents: 'none'
-                },
+                transition: 'all 0.25s ease',
+                border: '1px solid #e5e7eb',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
                 '&:hover': {
-                  transform: 'translateY(-12px) scale(1.02)',
-                  boxShadow: `0 20px 50px ${(item.accent || '#667eea')}25`,
-                  borderColor: item.accent || '#667eea'
+                  transform: 'translateY(-4px)',
+                  boxShadow: `0 16px 40px ${(item.accent || '#667eea')}22`,
+                  borderColor: `${item.accent || '#667eea'}50`,
                 }
               }}
               onClick={() => {
@@ -848,54 +899,52 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
                 }
               }}
             >
-              <CardContent sx={{ p: 3, position: 'relative', zIndex: 1 }}>
+              <CardContent sx={{ p: 4 }}>
                 {/* Badge */}
                 {item.badge && (
                   <Box sx={{ mb: 1.5, display: 'flex', gap: 1 }}>
                     <Chip
-                      icon={<AutoAwesome sx={{ fontSize: 14 }} />}
                       label={item.badge}
                       size="small"
                       sx={{
-                        background: `linear-gradient(135deg, ${item.accent || '#667eea'}, ${item.accent || '#667eea'}dd)`,
-                        color: '#fff',
-                        fontWeight: 700,
+                        backgroundColor: `${item.accent || '#667eea'}14`,
+                        color: item.accent || '#667eea',
+                        fontWeight: 600,
                         fontSize: '0.7rem',
-                        height: 20
+                        height: 22,
                       }}
                     />
                   </Box>
                 )}
 
-                {/* Icon Box with gradient */}
+                {/* Icon Box */}
                 <Box
                   sx={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 2.5,
-                    background: item.gradient || 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    width: 64,
+                    height: 64,
+                    borderRadius: '14px',
+                    background: item.gradient || `linear-gradient(135deg, ${item.accent || '#667eea'}, ${item.accent || '#667eea'}cc)`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     mb: 2,
-                    boxShadow: `0 10px 30px ${(item.accent || '#667eea')}30`,
-                    transition: 'all 0.3s ease'
+                    boxShadow: `0 6px 16px ${(item.accent || '#667eea')}30`,
                   }}
                 >
                   <item.icon sx={{ fontSize: 32, color: '#fff' }} />
                 </Box>
 
                 {/* Title and Description */}
-                <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5, color: '#1a1a1a' }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, mb: 0.5, color: '#1a1a2e', fontSize: '1rem' }}>
                   {item.title}
                 </Typography>
-                <Typography variant="body2" sx={{ color: '#555', lineHeight: 1.5, mb: 2 }}>
+                <Typography variant="body2" sx={{ color: '#697386', lineHeight: 1.5, mb: 2, fontSize: '0.83rem' }}>
                   {item.description}
                 </Typography>
 
                 {/* Action indicator */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: item.accent || '#667eea', fontWeight: 600, fontSize: '0.9rem' }}>
-                  <ArrowForward sx={{ fontSize: 18 }} />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: item.accent || '#667eea', fontWeight: 600, fontSize: '0.85rem' }}>
+                  <ArrowForward sx={{ fontSize: 16 }} />
                   <span>Open</span>
                 </Box>
               </CardContent>
@@ -1536,5 +1585,13 @@ function MarketingLandingPage({ router }) {
         </Container>
       </Box>
     </Box>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={null}>
+      <HomePageContent />
+    </Suspense>
   );
 }

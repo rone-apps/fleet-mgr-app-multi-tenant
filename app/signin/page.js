@@ -6,22 +6,19 @@ import {
   Button,
   Box,
   Typography,
-  Container,
   Alert,
-  Paper,
-  InputAdornment,
   IconButton,
-  Divider,
-  Chip
+  InputAdornment,
+  CircularProgress,
+  Link,
 } from "@mui/material";
-import { 
-  Visibility, 
-  VisibilityOff, 
-  Person, 
-  Lock, 
-  Home,
-  Business,
-  LocalTaxi
+import {
+  Visibility,
+  VisibilityOff,
+  LocalTaxi,
+  LocalShipping,
+  DirectionsCar,
+  AirportShuttle,
 } from "@mui/icons-material";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useRouter } from "next/navigation";
@@ -29,23 +26,19 @@ import { API_BASE_URL } from '../lib/api';
 
 const theme = createTheme({
   palette: {
-    primary: { main: "#667eea" },
-    secondary: { main: "#764ba2" },
-    background: { default: "#f6f9fc" },
+    primary: { main: "#635bff" },
+    background: { default: "#fff" },
   },
   typography: {
-    fontFamily: "Roboto, Arial, sans-serif",
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Ubuntu, sans-serif',
     button: { textTransform: "none" },
   },
 });
 
 // Known companies - maps company ID to display name and database schema
-// The schema is the actual MySQL database name that will be used
 const KNOWN_COMPANIES = [
   { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'fareflow' },
   { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'fareflow_bonny' },
-  // Add your actual company mappings here
-  // { id: 'your-company', name: 'Your Company', schema: 'your_schema' },
 ];
 
 export default function SignInPage() {
@@ -62,7 +55,6 @@ export default function SignInPage() {
     setError("");
     setLoading(true);
 
-    // Basic validation
     if (!companyId) {
       setError("Please enter your company ID");
       setLoading(false);
@@ -82,13 +74,11 @@ export default function SignInPage() {
     }
 
     try {
-      // Find the matching company to get the schema name
       const matchedCompany = KNOWN_COMPANIES.find(
         c => c.id.toLowerCase() === companyId.toLowerCase() ||
              c.name.toLowerCase() === companyId.toLowerCase()
       );
-      
-      // Use schema name if company is known, otherwise use companyId as schema
+
       const schemaName = matchedCompany ? matchedCompany.schema : companyId.toLowerCase().replace(/[^a-z0-9_]/g, '');
       const displayName = matchedCompany ? matchedCompany.name : companyId;
       const tenantId = matchedCompany ? matchedCompany.id : companyId;
@@ -97,22 +87,21 @@ export default function SignInPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Tenant-ID": schemaName, // Send schema name in header for DB switching
+          "X-Tenant-ID": schemaName,
         },
-        body: JSON.stringify({ 
-          username, 
+        body: JSON.stringify({
+          username,
           password,
-          tenantId: schemaName // Schema name for DB
+          tenantId: schemaName
         }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        
-        // Store authentication data in localStorage
+
         localStorage.setItem("token", data.token);
-        localStorage.setItem("tenantId", tenantId); // Store original company ID
-        localStorage.setItem("tenantSchema", schemaName); // Store schema name
+        localStorage.setItem("tenantId", tenantId);
+        localStorage.setItem("tenantSchema", schemaName);
         localStorage.setItem("tenantName", data.tenantName || displayName);
         localStorage.setItem("user", JSON.stringify({
           userId: data.userId,
@@ -126,11 +115,9 @@ export default function SignInPage() {
           tenantSchema: schemaName
         }));
 
-        // Also set token and tenant in cookie for middleware (expires in 24 hours)
         document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
         document.cookie = `tenantId=${schemaName}; path=/; max-age=86400; SameSite=Strict`;
 
-        // Use replace to prevent back button from returning to signin
         window.location.replace("/");
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -144,271 +131,340 @@ export default function SignInPage() {
     }
   };
 
+  const inputSx = {
+    "& .MuiOutlinedInput-root": {
+      borderRadius: "6px",
+      backgroundColor: "#fff",
+      fontSize: "0.95rem",
+      height: "52px",
+      "&:hover .MuiOutlinedInput-notchedOutline": {
+        borderColor: "#b0b7c3",
+      },
+      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+        borderColor: "#635bff",
+        borderWidth: "2px",
+        boxShadow: "0 0 0 3px rgba(99,91,255,0.12)",
+      },
+    },
+    "& .MuiOutlinedInput-notchedOutline": {
+      borderColor: "#d8dde6",
+    },
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <Box
         sx={{
           minHeight: "100vh",
           display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          padding: 2,
+          position: "relative",
+          overflow: "hidden",
+          backgroundColor: "#fff",
         }}
       >
-        <Container component="main" maxWidth="xs">
-          <Paper
-            elevation={8}
+        {/* Stripe-style animated gradient band at top */}
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: "50%",
+            background: "linear-gradient(135deg, #a960ee 0%, #635bff 25%, #18bfff 50%, #5be4a0 75%, #f7c948 100%)",
+            backgroundSize: "400% 400%",
+            animation: "gradientShift 12s ease infinite",
+            "@keyframes gradientShift": {
+              "0%": { backgroundPosition: "0% 50%" },
+              "50%": { backgroundPosition: "100% 50%" },
+              "100%": { backgroundPosition: "0% 50%" },
+            },
+            "&::after": {
+              content: '""',
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: "120px",
+              background: "linear-gradient(to top, #fff 0%, transparent 100%)",
+            },
+          }}
+        />
+
+        {/* Content */}
+        <Box
+          sx={{
+            position: "relative",
+            zIndex: 2,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "100%",
+            px: 2,
+            py: 4,
+            overflowY: "auto",
+          }}
+        >
+          <Box
             sx={{
-              padding: 4,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              borderRadius: 3,
-              backdropFilter: 'blur(10px)',
-              backgroundColor: 'rgba(255, 255, 255, 0.95)',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
+              width: "100%",
+              maxWidth: 560,
             }}
           >
-            {/* Logo/Title */}
-            <Box
-              sx={{
-                width: 70,
-                height: 70,
-                borderRadius: "50%",
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mb: 2,
-                boxShadow: '0 8px 16px rgba(102, 126, 234, 0.4)'
-              }}
-            >
-              <LocalTaxi sx={{ fontSize: 36, color: "white" }} />
-            </Box>
-
-            <Typography
-              component="h1"
-              variant="h4"
-              sx={{ 
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                backgroundClip: 'text',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                fontWeight: "900", 
-                mb: 0.5,
-                letterSpacing: '-1px'
-              }}
-            >
-              Smart Fleets
-            </Typography>
-
-            <Typography
-              variant="caption"
-              sx={{ 
-                color: "#999", 
-                mb: 2, 
-                textAlign: "center",
-                fontWeight: 500,
-                letterSpacing: '1px'
-              }}
-            >
-              TAXI FLEET MANAGEMENT
-            </Typography>
-
-            <Typography
-              component="h2"
-              variant="h6"
-              sx={{ color: "#666", mb: 3, textAlign: "center", fontWeight: 500 }}
-            >
-              Sign in to your account
-            </Typography>
-
-            {/* Error Alert */}
-            {error && (
-              <Alert severity="error" sx={{ width: "100%", mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-
-            {/* Sign In Form */}
-            <Box component="form" onSubmit={handleSubmit} sx={{ width: "100%" }}>
-              {/* Company ID Field */}
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                label="Company ID"
-                placeholder="Enter your company ID"
-                value={companyId}
-                onChange={(e) => setCompanyId(e.target.value)}
-                disabled={loading}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Business sx={{ color: "#667eea" }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{ mb: 1 }}
-              />
-
-              <Divider sx={{ my: 2 }}>
-                <Chip label="Credentials" size="small" sx={{ fontSize: '0.7rem' }} />
-              </Divider>
-
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                id="username"
-                label="Username"
-                name="username"
-                autoComplete="username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                disabled={loading}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Person sx={{ color: "#667eea" }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                name="password"
-                label="Password"
-                type={showPassword ? "text" : "password"}
-                id="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={loading}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Lock sx={{ color: "#667eea" }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                        disabled={loading}
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                disabled={loading}
+            {/* Logo */}
+            <Box sx={{ textAlign: "center", mb: 5 }}>
+              <Typography
+                variant="h4"
                 sx={{
-                  mt: 3,
-                  mb: 2,
-                  padding: "12px",
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  fontWeight: "bold",
-                  fontSize: "16px",
-                  borderRadius: 2,
-                  boxShadow: '0 4px 14px rgba(102, 126, 234, 0.4)',
-                  "&:hover": { 
-                    background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
-                    boxShadow: '0 6px 20px rgba(102, 126, 234, 0.6)'
-                  },
-                  "&:disabled": { backgroundColor: "#ccc" },
+                  fontWeight: 700,
+                  color: "#fff",
+                  letterSpacing: "-0.5px",
+                  mb: 0.5,
+                  textShadow: "0 1px 3px rgba(0,0,0,0.15)",
                 }}
               >
-                {loading ? "Signing in..." : "Sign In"}
-              </Button>
-
-              {/* Back to Home Button */}
-              <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<Home />}
-                onClick={() => router.push('/')}
-                disabled={loading}
-                sx={{
-                  mb: 2,
-                  padding: "10px",
-                  borderColor: "#667eea",
-                  color: "#667eea",
-                  fontWeight: "600",
-                  borderRadius: 2,
-                  "&:hover": { 
-                    borderColor: "#5568d3",
-                    backgroundColor: "rgba(102, 126, 234, 0.05)"
-                  },
-                }}
+                Smart Fleets
+              </Typography>
+              <Typography
+                variant="body1"
+                sx={{ color: "rgba(255,255,255,0.85)", fontSize: "0.95rem", mb: 2, textShadow: "0 1px 2px rgba(0,0,0,0.1)" }}
               >
-                Back to Home
-              </Button>
-
-              {/* Account Info */}
-              <Box
-                sx={{
-                  mt: 3,
-                  p: 2.5,
-                  backgroundColor: "#fff3e0",
-                  borderRadius: 2,
-                  textAlign: "center",
-                  border: '2px solid #ffb74d',
-                  position: 'relative'
-                }}
-              >
-                <Chip
-                  label="DEMO ACCOUNT"
-                  size="small"
-                  sx={{
-                    position: 'absolute',
-                    top: -12,
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    backgroundColor: '#ff9800',
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: '0.7rem'
-                  }}
-                />
-                <Typography variant="caption" color="textSecondary" sx={{ display: "block", mb: 2, fontWeight: 700, fontSize: '0.9rem' }}>
-                  🚕 Yellow Cab NYC (Demo)
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 0.5, color: '#333' }}>
-                  Company: <strong>yellow-cab-demo</strong>
-                </Typography>
-                <Typography variant="body2" sx={{ fontFamily: "monospace", mb: 1.5, color: '#333' }}>
-                  User: <strong>admin2</strong> / <strong>admin123</strong>
-                </Typography>
-                <Typography variant="caption" sx={{ color: '#666', fontSize: '0.8rem', fontStyle: 'italic' }}>
-                  ℹ️ For testing and demonstrations only
-                </Typography>
+                Fleet Management
+              </Typography>
+              <Box sx={{ display: "flex", justifyContent: "center", gap: 2.5 }}>
+                <LocalTaxi sx={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }} />
+                <DirectionsCar sx={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }} />
+                <LocalShipping sx={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }} />
+                <AirportShuttle sx={{ fontSize: 28, color: "rgba(255,255,255,0.7)" }} />
               </Box>
             </Box>
-          </Paper>
 
-          {/* Footer */}
-          <Box sx={{ mt: 3, textAlign: "center" }}>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.8)' }}>
-              © 2025 Smart Fleets. All rights reserved.
-            </Typography>
-            <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.6)' }}>
-              Secure multi-tenant taxi fleet management
-            </Typography>
+            {/* Form Card */}
+            <Box
+              sx={{
+                backgroundColor: "#fff",
+                borderRadius: "12px",
+                boxShadow: "0 15px 35px rgba(0,0,0,0.08), 0 5px 15px rgba(0,0,0,0.04)",
+                p: { xs: 4, sm: 6 },
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                  color: "#0a2540",
+                  mb: 3.5,
+                  fontSize: "1.15rem",
+                }}
+              >
+                Sign in to your account
+              </Typography>
+
+              {error && (
+                <Alert
+                  severity="error"
+                  sx={{
+                    mb: 2.5,
+                    borderRadius: "8px",
+                    fontSize: "0.9rem",
+                    "& .MuiAlert-icon": { fontSize: "1.2rem" },
+                  }}
+                >
+                  {error}
+                </Alert>
+              )}
+
+              <Box component="form" onSubmit={handleSubmit}>
+                {/* Company ID */}
+                <Box sx={{ mb: 2.5 }}>
+                  <Typography
+                    component="label"
+                    variant="body2"
+                    sx={{
+                      display: "block",
+                      fontWeight: 600,
+                      color: "#3c4257",
+                      mb: 0.75,
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    Company ID
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="your-company-id"
+                    value={companyId}
+                    onChange={(e) => setCompanyId(e.target.value)}
+                    disabled={loading}
+                    sx={inputSx}
+                  />
+                </Box>
+
+                {/* Username */}
+                <Box sx={{ mb: 2.5 }}>
+                  <Typography
+                    component="label"
+                    variant="body2"
+                    sx={{
+                      display: "block",
+                      fontWeight: 600,
+                      color: "#3c4257",
+                      mb: 0.75,
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    Username
+                  </Typography>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    placeholder="Enter your username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    disabled={loading}
+                    autoComplete="username"
+                    sx={inputSx}
+                  />
+                </Box>
+
+                {/* Password */}
+                <Box sx={{ mb: 3.5 }}>
+                  <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.75 }}>
+                    <Typography
+                      component="label"
+                      variant="body2"
+                      sx={{
+                        fontWeight: 600,
+                        color: "#3c4257",
+                        fontSize: "0.9rem",
+                      }}
+                    >
+                      Password
+                    </Typography>
+                    <Link
+                      href="#"
+                      underline="none"
+                      sx={{
+                        fontSize: "0.85rem",
+                        color: "#635bff",
+                        fontWeight: 500,
+                        "&:hover": { color: "#4b45c6" },
+                      }}
+                    >
+                      Forgot password?
+                    </Link>
+                  </Box>
+                  <TextField
+                    fullWidth
+                    size="small"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    disabled={loading}
+                    autoComplete="current-password"
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={() => setShowPassword(!showPassword)}
+                            edge="end"
+                            size="small"
+                            disabled={loading}
+                            sx={{ color: "#697386" }}
+                          >
+                            {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                    sx={inputSx}
+                  />
+                </Box>
+
+                {/* Submit */}
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  disabled={loading}
+                  disableElevation
+                  sx={{
+                    py: 1.7,
+                    backgroundColor: "#635bff",
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    borderRadius: "8px",
+                    "&:hover": {
+                      backgroundColor: "#4b45c6",
+                    },
+                    "&:disabled": {
+                      backgroundColor: "#a5a1ff",
+                      color: "#fff",
+                    },
+                  }}
+                >
+                  {loading ? (
+                    <CircularProgress size={22} sx={{ color: "#fff" }} />
+                  ) : (
+                    "Continue"
+                  )}
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Demo info */}
+            <Box
+              sx={{
+                mt: 3,
+                backgroundColor: "#f7f8fa",
+                borderRadius: "10px",
+                border: "1px solid #e3e8ee",
+                p: 3,
+                pt: 2,
+                textAlign: "center",
+              }}
+            >
+              <Typography
+                variant="caption"
+                sx={{
+                  display: "inline-block",
+                  backgroundColor: "#ff9800",
+                  color: "#fff",
+                  fontWeight: 700,
+                  fontSize: "0.65rem",
+                  letterSpacing: "1px",
+                  textTransform: "uppercase",
+                  px: 1.5,
+                  py: 0.4,
+                  borderRadius: "4px",
+                  mb: 1.5,
+                }}
+              >
+                Demo Account
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#3c4257", fontSize: "0.95rem", mb: 1.5, fontWeight: 600 }}>
+                🚕 Yellow Cab NYC (Demo)
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#697386", fontSize: "0.85rem", fontFamily: "monospace", mb: 0.5 }}>
+                Company: <strong style={{ color: "#3c4257" }}>yellow-cab-demo</strong>
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#697386", fontSize: "0.85rem", fontFamily: "monospace", mb: 1 }}>
+                User: <strong style={{ color: "#3c4257" }}>admin2</strong> / <strong style={{ color: "#3c4257" }}>admin123</strong>
+              </Typography>
+              <Typography variant="caption" sx={{ color: "#8792a2", fontSize: "0.75rem", fontStyle: "italic" }}>
+                For testing and demonstrations only
+              </Typography>
+            </Box>
+
+            {/* Footer */}
+            <Box sx={{ mt: 3, mb: 2, textAlign: "center" }}>
+              <Typography variant="caption" sx={{ color: "#8792a2", fontSize: "0.75rem" }}>
+                &copy; 2025 Smart Fleets. All rights reserved.
+              </Typography>
+            </Box>
           </Box>
-        </Container>
+        </Box>
       </Box>
     </ThemeProvider>
   );

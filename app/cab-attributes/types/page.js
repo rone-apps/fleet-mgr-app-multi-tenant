@@ -335,7 +335,7 @@ export default function CabAttributeTypesPage() {
         title="Smart Fleets - Cab Attribute Types"
       />
 
-      <Container maxWidth="lg" sx={{ py: 3 }}>
+      <Box sx={{ p: 3 }}>
         {success && (
           <Alert severity="success" onClose={() => setSuccess("")} sx={{ mb: 2 }}>
             {success}
@@ -575,7 +575,7 @@ export default function CabAttributeTypesPage() {
             </TableBody>
           </Table>
         </TableContainer>
-      </Container>
+      </Box>
 
       {/* Create/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

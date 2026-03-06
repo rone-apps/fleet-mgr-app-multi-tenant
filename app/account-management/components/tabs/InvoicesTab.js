@@ -18,6 +18,8 @@ import {
   IconButton,
   Chip,
   Grid,
+  TextField,
+  Autocomplete,
 } from "@mui/material";
 import {
   Search as SearchIcon,
@@ -72,21 +74,19 @@ export default function InvoicesTab({
 
         <Grid container spacing={2}>
           <Grid item xs={12} sm={6} md={4}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Customer</InputLabel>
-              <Select
-                value={invoiceFilterCustomerId}
-                label="Customer"
-                onChange={(e) => setInvoiceFilterCustomerId(e.target.value)}
-              >
-                <MenuItem value="">All Customers</MenuItem>
-                {customers.map((customer) => (
-                  <MenuItem key={customer.id} value={customer.id}>
-                    {customer.companyName}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <Autocomplete
+              size="small"
+              options={customers}
+              getOptionLabel={(option) => option.companyName || ""}
+              value={customers.find((c) => c.id === parseInt(invoiceFilterCustomerId)) || null}
+              onChange={(_, newValue) => {
+                setInvoiceFilterCustomerId(newValue ? String(newValue.id) : "");
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="Customer" placeholder="Type to search..." />
+              )}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+            />
           </Grid>
 
           <Grid item xs={12} sm={6} md={4}>

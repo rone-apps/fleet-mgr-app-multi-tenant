@@ -26,6 +26,60 @@ button {
   cursor: pointer;
 }
 
+/* Global rounded buttons */
+.MuiButton-root {
+  border-radius: 50px !important;
+}
+
+.MuiButtonGroup-root .MuiButton-root {
+  border-radius: 50px !important;
+}
+
+.MuiButtonGroup-root .MuiButton-root:first-of-type {
+  border-radius: 50px 0 0 50px !important;
+}
+
+.MuiButtonGroup-root .MuiButton-root:last-of-type {
+  border-radius: 0 50px 50px 0 !important;
+}
+
+/* Global tab styling — warm teal accent with pill tabs */
+.MuiTabs-root {
+  background-color: #f0faf6 !important;
+  border-bottom: 1px solid #d1ece2 !important;
+  padding: 8px 12px !important;
+  gap: 6px !important;
+}
+
+.MuiTabs-indicator {
+  display: none !important;
+}
+
+.MuiTab-root {
+  text-transform: none !important;
+  font-weight: 700 !important;
+  color: #5a8a78 !important;
+  transition: all 0.2s ease !important;
+  border-radius: 50px !important;
+  min-height: 42px !important;
+  padding: 6px 20px !important;
+  border: 1.5px solid transparent !important;
+  margin: 0 4px !important;
+}
+
+.MuiTab-root:hover {
+  background-color: #e0f2eb !important;
+  color: #0d9488 !important;
+  border-color: #b8ddd0 !important;
+}
+
+.MuiTab-root.Mui-selected {
+  color: #0d9488 !important;
+  background-color: #fff !important;
+  border-color: #0d9488 !important;
+  box-shadow: 0 2px 8px rgba(13, 148, 136, 0.15) !important;
+}
+
 /* Loading animation */
 @keyframes spin {
   to {

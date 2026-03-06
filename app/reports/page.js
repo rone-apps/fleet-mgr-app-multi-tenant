@@ -12,6 +12,7 @@ import {
 } from "@mui/material";
 import {
   Assessment, TrendingUp, Download, Print, Close,
+  CheckCircleOutline, WarningAmber,
 } from "@mui/icons-material";
 import { API_BASE_URL, getCurrentUser } from "../lib/api";
 
@@ -38,6 +39,9 @@ export default function ReportsPage() {
   const [emailAddress, setEmailAddress] = useState("");
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [loadingSavedStatements, setLoadingSavedStatements] = useState(false);
+  const [finalizeConfirmOpen, setFinalizeConfirmOpen] = useState(false);
+  const [finalizeSuccessOpen, setFinalizeSuccessOpen] = useState(false);
+  const [finalizedStatementId, setFinalizedStatementId] = useState(null);
 
   // Revenue and Expense Tabs
   const [revenueTabIndex, setRevenueTabIndex] = useState(0);
@@ -321,11 +325,16 @@ export default function ReportsPage() {
     }
   };
 
-  const finalizeStatement = async () => {
+  const handleFinalizeClick = () => {
     if (!reportData) {
       setError("No report data to finalize");
       return;
     }
+    setFinalizeConfirmOpen(true);
+  };
+
+  const finalizeStatement = async () => {
+    setFinalizeConfirmOpen(false);
 
     try {
       const reportWithPaidAmount = {
@@ -349,9 +358,10 @@ export default function ReportsPage() {
       if (response.ok) {
         const statement = await response.json();
         setError("");
-        alert(`Statement finalized successfully! Statement ID: ${statement.id}`);
-        setReportData(null); // Clear report
-        await fetchSavedStatements(selectedDriverId); // Refresh saved statements
+        setFinalizedStatementId(statement.id);
+        setFinalizeSuccessOpen(true);
+        setReportData(null);
+        await fetchSavedStatements(selectedDriverId);
       } else {
         const errorText = await response.text();
         setError(errorText || "Failed to finalize statement");
@@ -603,35 +613,19 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
         )}
 
         {/* Tabs for Generate vs History */}
-        <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #1565c0", borderRadius: 2 }}>
-          <Box sx={{ bgcolor: "#1565c0", px: 2, py: 1.5 }}>
-            <Tabs
-              value={activeTab}
-              onChange={(e, newValue) => {
-                setActiveTab(newValue);
-                if (newValue === 1 && selectedDriverId) {
-                  fetchSavedStatements(selectedDriverId);
-                }
-              }}
-              TabIndicatorProps={{ sx: { display: "none" } }}
-              sx={{
-                minHeight: 42,
-                "& .MuiTab-root": {
-                  minHeight: 42, py: 1, px: 3, mr: 1.5, borderRadius: "24px",
-                  color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.9rem",
-                  textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
-                  border: "1.5px solid rgba(255,255,255,0.35)",
-                  transition: "all 0.2s ease",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
-                  "&.Mui-selected": { bgcolor: "#fff", color: "#1565c0", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
-                  "& .MuiTab-iconWrapper": { mr: 1 },
-                },
-              }}
-            >
-              <Tab icon={<Assessment />} iconPosition="start" label="Generate Draft" />
-              <Tab icon={<Download />} iconPosition="start" label="History" />
-            </Tabs>
-          </Box>
+        <Paper elevation={0} sx={{ mb: 3, overflow: "hidden", border: "1px solid #e5e7eb", borderRadius: 2 }}>
+          <Tabs
+            value={activeTab}
+            onChange={(e, newValue) => {
+              setActiveTab(newValue);
+              if (newValue === 1 && selectedDriverId) {
+                fetchSavedStatements(selectedDriverId);
+              }
+            }}
+          >
+            <Tab icon={<Assessment />} iconPosition="start" label="Generate Draft" />
+            <Tab icon={<Download />} iconPosition="start" label="History" />
+          </Tabs>
         </Paper>
 
         {/* Tab 0: Generate Draft */}
@@ -923,7 +917,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <Button
                           variant="contained"
                           color="success"
-                          onClick={finalizeStatement}
+                          onClick={handleFinalizeClick}
                           disabled={isFinalizeButtonDisabled()}
                           title={isFinalizeButtonDisabled() ?
                             (reportData.status === "FINALIZED" ? "Statement already finalized" :
@@ -2674,6 +2668,110 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
           <Button onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleSendEmail} variant="contained">
             Send
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Finalize Confirmation Dialog */}
+      <Dialog
+        open={finalizeConfirmOpen}
+        onClose={() => setFinalizeConfirmOpen(false)}
+        PaperProps={{
+          sx: { borderRadius: 3, maxWidth: 440, p: 1 }
+        }}
+      >
+        <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1.5, pb: 1 }}>
+          <Box sx={{
+            width: 44, height: 44, borderRadius: "12px",
+            background: "linear-gradient(135deg, #fff7ed, #ffedd5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <WarningAmber sx={{ color: "#d97706", fontSize: 24 }} />
+          </Box>
+          <Typography component="span" variant="h6" fontWeight={700} sx={{ color: "#1a1a2e" }}>
+            Finalize Statement
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: "#697386", lineHeight: 1.6 }}>
+            Are you sure you want to finalize and save this statement? This action cannot be undone.
+          </Typography>
+          {reportData && (
+            <Box sx={{
+              mt: 2, p: 2, borderRadius: 2,
+              backgroundColor: "#f8fafc", border: "1px solid #e5e7eb",
+            }}>
+              <Typography variant="body2" sx={{ color: "#697386" }}>
+                <strong>Driver:</strong> {reportData.driverName || "Selected driver"}
+              </Typography>
+              <Typography variant="body2" sx={{ color: "#697386", mt: 0.5 }}>
+                <strong>Paid Amount:</strong> ${parseFloat(paidAmount || 0).toFixed(2)}
+              </Typography>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+          <Button
+            onClick={() => setFinalizeConfirmOpen(false)}
+            sx={{ color: "#697386", borderColor: "#e5e7eb", "&:hover": { borderColor: "#d1d5db", backgroundColor: "#f9fafb" } }}
+            variant="outlined"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={finalizeStatement}
+            variant="contained"
+            color="success"
+            sx={{ fontWeight: 600 }}
+          >
+            Finalize & Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Finalize Success Dialog */}
+      <Dialog
+        open={finalizeSuccessOpen}
+        onClose={() => setFinalizeSuccessOpen(false)}
+        PaperProps={{
+          sx: { borderRadius: 3, maxWidth: 420, p: 1, textAlign: "center" }
+        }}
+      >
+        <DialogContent sx={{ pt: 4, pb: 1 }}>
+          <Box sx={{
+            width: 64, height: 64, borderRadius: "16px", mx: "auto", mb: 2,
+            background: "linear-gradient(135deg, #ecfdf5, #d1fae5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <CheckCircleOutline sx={{ color: "#22a558", fontSize: 36 }} />
+          </Box>
+          <Typography variant="h6" fontWeight={700} sx={{ color: "#1a1a2e", mb: 1 }}>
+            Statement Finalized
+          </Typography>
+          <Typography sx={{ color: "#697386" }}>
+            Your statement has been finalized and saved successfully.
+          </Typography>
+          {finalizedStatementId && (
+            <Chip
+              label={`Statement ID: ${finalizedStatementId}`}
+              sx={{
+                mt: 2, fontWeight: 600, fontSize: "0.875rem",
+                backgroundColor: "#f0fdf4", color: "#22a558",
+                border: "1px solid #bbf7d0",
+              }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions sx={{ justifyContent: "center", pb: 3 }}>
+          <Button
+            onClick={() => setFinalizeSuccessOpen(false)}
+            variant="contained"
+            sx={{
+              fontWeight: 600, px: 4,
+              backgroundColor: "#22a558", "&:hover": { backgroundColor: "#1b8a48" },
+            }}
+          >
+            Done
           </Button>
         </DialogActions>
       </Dialog>

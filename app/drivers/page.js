@@ -427,7 +427,7 @@ export default function DriversPage() {
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
       <GlobalNav currentUser={currentUser} title="Smart Fleets - Driver Management" />
 
-      <Container maxWidth="lg" sx={{ mt: 4 }}>
+      <Box sx={{ p: 3 }}>
         {loading ? (
           <CircularProgress />
         ) : (
@@ -638,7 +638,7 @@ export default function DriversPage() {
             </TableContainer>
           </>
         )}
-      </Container>
+      </Box>
 
       {/* Create/Edit Driver Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="md" fullWidth>

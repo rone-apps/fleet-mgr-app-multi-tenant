@@ -96,7 +96,7 @@ export default function StatementBuilderPage() {
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", backgroundColor: "#f5f5f5" }}>
       <GlobalNav />
-      <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
+      <Box sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" fontWeight="bold" sx={{ display: "flex", alignItems: "center", gap: 1, color: "#3e5244" }}>
@@ -312,7 +312,7 @@ export default function StatementBuilderPage() {
             )}
           </Box>
         </Paper>
-      </Container>
+      </Box>
     </Box>
   );
 }

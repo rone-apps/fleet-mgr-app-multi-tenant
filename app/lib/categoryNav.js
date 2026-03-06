@@ -39,7 +39,7 @@ export const getBreadcrumbs = (category, currentPage) => {
   if (category) {
     breadcrumbs.push({
       label: getCategoryTitle(category),
-      path: '/',
+      path: `/?category=${category}`,
       category: category,
       isActive: !currentPage
     });
@@ -69,7 +69,9 @@ export const pageMetadata = {
   '/driver-summary': { name: 'Driver Summary', category: 'reports' },
   '/taxicaller-integration': { name: 'Taxi Caller Integration', category: 'integrations' },
   '/data-uploads': { name: 'Data Uploads', category: 'integrations' },
-  '/shift-profiles': { name: 'Shift Profiles', category: 'profiles' }
+  '/shift-profiles': { name: 'Shift Profiles', category: 'profiles' },
+  '/driver-payments': { name: 'Driver & Owner Payments', category: 'payments' },
+  '/statement-builder': { name: 'Statement Builder', category: 'reports' }
 };
 
 // Get metadata for a page

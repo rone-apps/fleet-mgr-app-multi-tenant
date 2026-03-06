@@ -1,83 +1,84 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  Button,
-  Box,
-  Chip,
-  Stack,
-} from "@mui/material";
-import HelpOutlineIcon from "@mui/icons-material/HelpOutline";
+import { Box, Typography, Button, IconButton, Chip } from "@mui/material";
+import { LightbulbOutlined, Close, ArrowForward } from "@mui/icons-material";
 import DataIntegrationHelpDialog from "./DataIntegrationHelpDialog";
 
 export default function DataIntegrationHelpCard() {
   const [openDialog, setOpenDialog] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
 
   return (
     <>
-      <Card
+      <Box
         sx={{
-          background: "linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)",
-          color: "#1a1a1a",
+          display: "flex",
+          alignItems: "center",
+          gap: 2,
+          px: 3,
+          py: 2,
+          background: "linear-gradient(135deg, #fef9ee 0%, #fff8eb 100%)",
+          border: "1px solid #fbe8b8",
+          borderRadius: "10px",
           mb: 3,
         }}
       >
-        <CardHeader
-          avatar={<HelpOutlineIcon sx={{ fontSize: 32 }} />}
-          title="Need Help with Data & Integrations?"
-          subheader="Learn about Data Import, Integrations & File Formats"
-          subheaderTypographyProps={{ sx: { color: "rgba(0,0,0,0.6)" } }}
-          titleTypographyProps={{ sx: { color: "#1a1a1a", fontWeight: "bold" } }}
-        />
-        <CardContent>
-          <Box sx={{ mb: 2 }}>
-            <p style={{ marginTop: 0 }}>
-              Data & Integrations help you import bulk data and connect with external systems.
-              This guide explains how to upload files, format data correctly, and manage real-time
-              integrations with third-party systems.
-            </p>
-          </Box>
-
-          <Stack
-            direction="row"
-            spacing={1}
-            sx={{ mb: 2, flexWrap: "wrap", gap: 1 }}
+        <Box
+          sx={{
+            width: 36,
+            height: 36,
+            borderRadius: "8px",
+            backgroundColor: "#fef0cd",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <LightbulbOutlined sx={{ fontSize: 20, color: "#d97706" }} />
+        </Box>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="body2" sx={{ color: "#1a1a2e", fontWeight: 600, fontSize: "0.88rem", mb: 0.3 }}>
+            Data & Integrations Guide
+          </Typography>
+          <Typography variant="caption" sx={{ color: "#697386", fontSize: "0.8rem" }}>
+            Bulk imports, file formats & third-party sync
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+          <Chip
+            label="Tip"
+            size="small"
+            sx={{
+              backgroundColor: "#fef0cd",
+              color: "#d97706",
+              fontWeight: 600,
+              fontSize: "0.7rem",
+              height: 22,
+            }}
+          />
+          <Button
+            size="small"
+            endIcon={<ArrowForward sx={{ fontSize: 14 }} />}
+            onClick={() => setOpenDialog(true)}
+            sx={{
+              color: "#d97706",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              textTransform: "none",
+              "&:hover": { backgroundColor: "rgba(217,119,6,0.06)" },
+            }}
           >
-            <Chip label="📤 Data Import" variant="outlined" sx={{ color: "#1a1a1a" }} />
-            <Chip
-              label="📋 File Formats"
-              variant="outlined"
-              sx={{ color: "#1a1a1a" }}
-            />
-            <Chip label="🔄 Integrations" variant="outlined" sx={{ color: "#1a1a1a" }} />
-            <Chip
-              label="🚕 Taxi Caller Sync"
-              variant="outlined"
-              sx={{ color: "#1a1a1a" }}
-            />
-            <Chip
-              label="⚙️ Configuration"
-              variant="outlined"
-              sx={{ color: "#1a1a1a" }}
-            />
-            <Chip label="🐛 Troubleshooting" variant="outlined" sx={{ color: "#1a1a1a" }} />
-          </Stack>
-
-          <Box sx={{ display: "flex", gap: 1, justifyContent: "flex-start" }}>
-            <Button
-              variant="contained"
-              sx={{ bgcolor: "#1a1a1a", color: "#F9D13E" }}
-              onClick={() => setOpenDialog(true)}
-              startIcon={<HelpOutlineIcon />}
-            >
-              Open Complete Guide
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
+            View guide
+          </Button>
+          <IconButton size="small" onClick={() => setDismissed(true)} sx={{ color: "#d6c89e", p: 0.5 }}>
+            <Close sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      </Box>
 
       <DataIntegrationHelpDialog
         open={openDialog}

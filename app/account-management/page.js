@@ -232,34 +232,18 @@ export default function AccountManagementPage() {
         />
 
         {/* Main Content */}
-        <Paper sx={{ overflow: "hidden", border: "2px solid #1565c0", borderRadius: 2 }}>
-          <Box sx={{ bgcolor: "#1565c0", px: 2, py: 1.5 }}>
-            <Tabs
-              value={currentTab}
-              onChange={(e, newValue) => setCurrentTab(newValue)}
-              variant="scrollable"
-              scrollButtons="auto"
-              TabIndicatorProps={{ sx: { display: "none" } }}
-              sx={{
-                minHeight: 42,
-                "& .MuiTab-root": {
-                  minHeight: 42, py: 1, px: 3, mr: 1.5, borderRadius: "24px",
-                  color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.9rem",
-                  textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
-                  border: "1.5px solid rgba(255,255,255,0.35)",
-                  transition: "all 0.2s ease",
-                  "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
-                  "&.Mui-selected": { bgcolor: "#fff", color: "#1565c0", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
-                  "& .MuiTab-iconWrapper": { mr: 1 },
-                },
-              }}
-            >
-              <Tab label="Account Customers" icon={<BusinessIcon />} iconPosition="start" />
-              <Tab label="Trip Charges" icon={<ReceiptIcon />} iconPosition="start" />
-              <Tab label="All Charges" icon={<AllChargesIcon />} iconPosition="start" />
-              <Tab label="Invoices" icon={<InvoiceIcon />} iconPosition="start" />
-            </Tabs>
-          </Box>
+        <Paper elevation={0} sx={{ overflow: "hidden", border: "1px solid #e5e7eb", borderRadius: 2 }}>
+          <Tabs
+            value={currentTab}
+            onChange={(e, newValue) => setCurrentTab(newValue)}
+            variant="scrollable"
+            scrollButtons="auto"
+          >
+            <Tab label="Account Customers" icon={<BusinessIcon />} iconPosition="start" />
+            <Tab label="Trip Charges" icon={<ReceiptIcon />} iconPosition="start" />
+            <Tab label="All Charges" icon={<AllChargesIcon />} iconPosition="start" />
+            <Tab label="Invoices" icon={<InvoiceIcon />} iconPosition="start" />
+          </Tabs>
 
           {/* Tab 1: Account Customers */}
           {currentTab === 0 && (

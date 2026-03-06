@@ -1,7 +1,7 @@
 "use client";
 
 import { Box, Typography, Button, IconButton, useMediaQuery, useTheme, Dialog, DialogTitle, DialogContent, DialogActions } from "@mui/material";
-import { DirectionsCar, Home, Logout, Business } from "@mui/icons-material";
+import { CommuteOutlined, Home, Logout, Business } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getTenantName, logout as apiLogout } from "../lib/api";
@@ -40,22 +40,36 @@ export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
       {/* Main Navigation Bar */}
       <Box
         sx={{
-          backgroundColor: "#1e3a8a",
-          color: "white",
+          backgroundColor: "#fff",
+          color: "#1a1a2e",
+          borderBottom: "1px solid #e5e7eb",
           p: { xs: 1.5, sm: 2 },
+          px: { xs: 2, sm: 3 },
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
         }}
       >
         {/* Logo and Title */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 } }}>
-          <DirectionsCar sx={{ fontSize: { xs: 28, sm: 32 } }} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.5 } }}>
+          <Box
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: "8px",
+              background: "linear-gradient(135deg, #635bff 0%, #7c6cff 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <CommuteOutlined sx={{ fontSize: 22, color: "#fff" }} />
+          </Box>
           <Box>
             <Typography
-              variant={isMobile ? "h6" : "h5"}
-              fontWeight="bold"
-              sx={{ display: { xs: 'none', sm: 'block' }, lineHeight: 1.2 }}
+              variant={isMobile ? "h6" : "h6"}
+              fontWeight="700"
+              sx={{ display: { xs: 'none', sm: 'block' }, lineHeight: 1.2, color: "#1a1a2e", fontSize: "1rem" }}
             >
               {title}
             </Typography>
@@ -63,13 +77,14 @@ export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
               <Typography
                 variant="caption"
                 sx={{
-                  color: 'rgba(255, 255, 255, 0.7)',
+                  color: '#8792a2',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 0.5
+                  gap: 0.5,
+                  fontSize: '0.75rem',
                 }}
               >
-                <Business sx={{ fontSize: 14 }} />
+                <Business sx={{ fontSize: 13, color: '#8792a2' }} />
                 {tenantName}
               </Typography>
             )}
@@ -77,47 +92,52 @@ export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
         </Box>
 
         {/* Navigation Buttons */}
-        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 2 } }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: { xs: 1, sm: 1.5 } }}>
           {isMobile ? (
             <>
-              {/* Mobile: Icon buttons only */}
               <IconButton
-                color="inherit"
                 onClick={() => router.replace("/")}
                 sx={{
-                  border: '1px solid rgba(255, 255, 255, 0.5)',
-                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
+                  color: '#697386',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  '&:hover': { backgroundColor: '#f6f9fc', color: '#635bff' }
                 }}
                 title="Home"
               >
-                <Home />
+                <Home fontSize="small" />
               </IconButton>
               <IconButton
-                color="inherit"
                 onClick={handleLogout}
                 sx={{
-                  border: '1px solid rgba(255, 255, 255, 0.5)',
-                  '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.1)' }
+                  color: '#697386',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  '&:hover': { backgroundColor: '#f6f9fc', color: '#e74c3c' }
                 }}
                 title="Logout"
               >
-                <Logout />
+                <Logout fontSize="small" />
               </IconButton>
             </>
           ) : (
             <>
-              {/* Desktop: Text buttons with icons */}
               <Button
                 variant="outlined"
-                color="inherit"
-                startIcon={<Home />}
+                startIcon={<Home fontSize="small" />}
                 onClick={() => router.replace("/")}
                 title="Go to Dashboard"
                 sx={{
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                  color: '#697386',
+                  borderColor: '#e5e7eb',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  borderRadius: '8px',
+                  textTransform: 'none',
                   '&:hover': {
-                    borderColor: 'white',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                    borderColor: '#635bff',
+                    color: '#635bff',
+                    backgroundColor: 'rgba(99,91,255,0.04)'
                   }
                 }}
               >
@@ -125,14 +145,19 @@ export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
               </Button>
               <Button
                 variant="outlined"
-                color="inherit"
-                startIcon={<Logout />}
+                startIcon={<Logout fontSize="small" />}
                 onClick={handleLogout}
                 sx={{
-                  borderColor: 'rgba(255, 255, 255, 0.5)',
+                  color: '#697386',
+                  borderColor: '#e5e7eb',
+                  fontWeight: 600,
+                  fontSize: '0.8rem',
+                  borderRadius: '8px',
+                  textTransform: 'none',
                   '&:hover': {
-                    borderColor: 'white',
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)'
+                    borderColor: '#e74c3c',
+                    color: '#e74c3c',
+                    backgroundColor: 'rgba(231,76,60,0.04)'
                   }
                 }}
               >
@@ -170,7 +195,7 @@ export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
             pb: 1
           }}
         >
-          🚪 Confirm Logout
+          Confirm Logout
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: '1rem', lineHeight: 1.6 }}>

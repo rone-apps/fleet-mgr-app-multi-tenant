@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Box,
   Table,
@@ -25,20 +25,28 @@ export default function PaymentDetailsRow({ batch, isExpanded, onToggle }) {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const handleExpand = async () => {
-    if (!isExpanded && payments.length === 0) {
-      setLoading(true);
-      try {
-        const response = await apiRequest(`/payments/batches/${batch.id}/statement-payments`);
-        if (response.ok) {
-          const data = await response.json();
-          setPayments(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch payment details:", error);
+  const fetchPayments = async () => {
+    setLoading(true);
+    try {
+      const response = await apiRequest(`/payments/batches/${batch.id}/statement-payments`);
+      if (response.ok) {
+        const data = await response.json();
+        setPayments(data);
       }
-      setLoading(false);
+    } catch (error) {
+      console.error("Failed to fetch payment details:", error);
     }
+    setLoading(false);
+  };
+
+  // Fetch payments when expanded (either on mount or on toggle)
+  useEffect(() => {
+    if (isExpanded && payments.length === 0) {
+      fetchPayments();
+    }
+  }, [isExpanded]);
+
+  const handleExpand = () => {
     onToggle();
   };
 

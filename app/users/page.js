@@ -533,7 +533,7 @@ export default function UsersPage() {
       <GlobalNav currentUser={currentUser} title="Smart Fleets - User Management" />
 
       {/* Main Content */}
-      <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      <Box sx={{ p: 3 }}>
         {/* Header with Create Button */}
         <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: "bold", color: "#3e5244" }}>
@@ -755,7 +755,7 @@ export default function UsersPage() {
             </TableBody>
           </Table>
         </TableContainer>
-      </Container>
+      </Box>
 
       {/* Create/Edit User Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

@@ -340,7 +340,7 @@ export default function CabAttributesPage() {
     <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc" }}>
       <GlobalNav currentUser={currentUser} title="Smart Fleets - Cab Attributes" />
 
-      <Container maxWidth="lg" sx={{ py: 3 }}>
+      <Box sx={{ p: 3 }}>
         {success && (
           <Alert severity="success" onClose={() => setSuccess("")} sx={{ mb: 2 }}>
             {success}
@@ -590,7 +590,7 @@ export default function CabAttributesPage() {
             </Typography>
           </Paper>
         )}
-      </Container>
+      </Box>
 
       {/* Assign/Edit Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

@@ -58,10 +58,10 @@ export default function DataUploadsPage() {
       <GlobalNav currentUser={currentUser} title="Smart Fleets - Data Management" />
 
       <Box sx={{ p: 3 }}>
-        <Typography variant="h4" sx={{ mb: 1, fontWeight: 700, color: "#3e5244" }}>
+        <Typography variant="h4" sx={{ mb: 1, fontWeight: 700, color: "#1a1a2e" }}>
           Data Management
         </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
+        <Typography variant="body1" sx={{ color: "#697386", mb: 3 }}>
           Upload and manage credit card transactions, mileage records, and airport trip data.
         </Typography>
 
@@ -72,31 +72,28 @@ export default function DataUploadsPage() {
         )}
 
         {/* Main Tabs: Upload Data / View Data */}
-        <Paper sx={{ mb: 3 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            mb: 3,
+            borderRadius: 2,
+            border: "1px solid #e5e7eb",
+            overflow: "hidden",
+          }}
+        >
           <Tabs
             value={mainTab}
             onChange={handleMainTabChange}
-            indicatorColor="primary"
-            textColor="primary"
-            sx={{
-              borderBottom: 1,
-              borderColor: "divider",
-              "& .MuiTab-root": {
-                minHeight: 64,
-                fontSize: "1rem",
-                fontWeight: 600,
-              },
-            }}
           >
             <Tab
-              icon={<UploadIcon />}
+              icon={<UploadIcon sx={{ fontSize: 20 }} />}
               iconPosition="start"
               label="Upload Data"
               id="main-tab-0"
               aria-controls="main-tabpanel-0"
             />
             <Tab
-              icon={<ViewIcon />}
+              icon={<ViewIcon sx={{ fontSize: 20 }} />}
               iconPosition="start"
               label="View Data"
               id="main-tab-1"

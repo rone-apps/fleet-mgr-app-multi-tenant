@@ -3,6 +3,7 @@
 import { Box, Breadcrumbs, Typography, Button, useTheme, useMediaQuery } from "@mui/material";
 import { Home, ChevronRight } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
+import { pageMetadata, getCategoryTitle } from "../lib/categoryNav";
 
 // Mapping of routes to display names
 const routeLabels = {
@@ -40,14 +41,23 @@ export default function BreadcrumbNav() {
 
   // Generate breadcrumb items from pathname
   const getBreadcrumbItems = () => {
-    // Always start with Dashboard
     const items = [
       { label: "Dashboard", path: "/", icon: true }
     ];
 
-    // If on home page, just show Dashboard
     if (pathname === "/") {
       return items;
+    }
+
+    // Look up the category for the current page
+    const meta = pageMetadata[pathname];
+    if (meta && meta.category) {
+      items.push({
+        label: getCategoryTitle(meta.category),
+        path: `/?category=${meta.category}`,
+        icon: false,
+        active: false
+      });
     }
 
     // Add current page
@@ -87,15 +97,14 @@ export default function BreadcrumbNav() {
           flexWrap: isMobile ? "wrap" : "nowrap",
         }}
       >
-        {breadcrumbItems.map((item, index) => (
-          <Box key={item.path}>
+        {breadcrumbItems.map((item) => (
+          <Box key={item.label}>
             {item.active ? (
-              // Last item (current page) - not clickable
               <Typography
                 variant={isMobile ? "body2" : "body1"}
                 sx={{
                   fontWeight: 600,
-                  color: "#1e3a8a",
+                  color: "#1a1a2e",
                   display: "flex",
                   alignItems: "center",
                   gap: 0.5,
@@ -104,20 +113,19 @@ export default function BreadcrumbNav() {
                 {item.label}
               </Typography>
             ) : (
-              // Clickable breadcrumb item
               <Button
                 size={isMobile ? "small" : "medium"}
                 startIcon={item.icon ? <Home sx={{ fontSize: 18 }} /> : undefined}
                 onClick={() => router.push(item.path)}
                 sx={{
                   textTransform: "none",
-                  color: "#1e3a8a",
+                  color: "#635bff",
                   fontWeight: 500,
                   fontSize: isMobile ? "0.875rem" : "1rem",
                   padding: 0,
                   minWidth: 0,
                   "&:hover": {
-                    backgroundColor: "rgba(30, 58, 138, 0.08)",
+                    backgroundColor: "rgba(99, 91, 255, 0.06)",
                     textDecoration: "underline",
                   },
                 }}
