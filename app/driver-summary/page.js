@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import GlobalNav from "../components/GlobalNav";
 import {
-  Box, Container, Typography, Paper, TextField, Button,
+  Box, Typography, Paper, TextField, Button,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TableSortLabel, CircularProgress, Alert, Grid, Pagination,
   Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab, Card, CardContent,
@@ -144,6 +144,7 @@ export default function DriverSummaryPage() {
       revenue: (prev?.revenue || 0) + (response.data.pageTotalRevenue || 0),
       expense: (prev?.expense || 0) + (response.data.pageTotalExpense || 0),
       netOwed: (prev?.netOwed || 0) + (response.data.pageNetOwed || 0),
+      previousBalance: (prev?.previousBalance || 0) + (response.data.pagePreviousBalance || 0),
       paid: (prev?.paid || 0) + (response.data.pageTotalPaid || 0),
       outstanding: (prev?.outstanding || 0) + (response.data.pageTotalOutstanding || 0),
       leaseRevenue: (prev?.leaseRevenue || 0) + (response.data.pageLeaseRevenue || 0),
@@ -169,6 +170,7 @@ export default function DriverSummaryPage() {
         revenue: response.data.grandTotalRevenue,
         expense: response.data.grandTotalExpense,
         netOwed: response.data.grandNetOwed,
+        previousBalance: response.data.grandPreviousBalance,
         paid: response.data.grandTotalPaid,
         leaseRevenue: response.data.grandTotalLeaseRevenue,
         creditCardRevenue: response.data.grandTotalCreditCardRevenue,
@@ -541,6 +543,7 @@ export default function DriverSummaryPage() {
         revenue: reportData.grandTotalRevenue || 0,
         expense: reportData.grandTotalExpense || 0,
         netOwed: reportData.grandNetOwed || 0,
+        previousBalance: reportData.grandPreviousBalance || 0,
         paid: reportData.grandTotalPaid || 0,
         driverCount: reportData.totalElements || 0,
         leaseRevenue: reportData.grandTotalLeaseRevenue || 0,
@@ -560,6 +563,7 @@ export default function DriverSummaryPage() {
         revenue: runningTotals.revenue || 0,
         expense: runningTotals.expense || 0,
         netOwed: runningTotals.netOwed || 0,
+        previousBalance: runningTotals.previousBalance || 0,
         paid: runningTotals.paid || 0,
         driverCount: runningTotals.driverCount || 0,
         leaseRevenue: runningTotals.leaseRevenue || 0,
@@ -575,7 +579,7 @@ export default function DriverSummaryPage() {
 
     // No data yet
     return {
-      revenue: 0, expense: 0, netOwed: 0, paid: 0, driverCount: 0,
+      revenue: 0, expense: 0, netOwed: 0, previousBalance: 0, paid: 0, driverCount: 0,
       leaseRevenue: 0, creditCardRevenue: 0, chargesRevenue: 0, otherRevenue: 0,
       fixedExpense: 0, leaseExpense: 0, variableExpense: 0, otherExpense: 0,
     };
@@ -696,7 +700,7 @@ export default function DriverSummaryPage() {
       revenueColumns.forEach(col => headers.push(col.displayName));
       headers.push("Total Rev");
       expenseColumns.forEach(col => headers.push(col.displayName));
-      headers.push("Total Exp", "Net Owed", "Paid", "Outstanding");
+      headers.push("Total Exp", "Prev Owed", "Net Owed", "Paid", "Outstanding");
 
       // Build rows
       const rows = allRecords.map((driver) => {
@@ -712,7 +716,7 @@ export default function DriverSummaryPage() {
         expenseColumns.forEach(col => {
           row.push(getExpAmount(driver, col.key));
         });
-        row.push(driver.totalExpense || 0, driver.netOwed || 0, driver.paid || 0, driver.outstanding || 0);
+        row.push(driver.totalExpense || 0, driver.previousBalance || 0, driver.netOwed || 0, driver.paid || 0, driver.outstanding || 0);
 
         return row;
       });
@@ -776,7 +780,7 @@ export default function DriverSummaryPage() {
       revenueColumns.forEach(col => headers.push(col.displayName));
       headers.push("Total Rev");
       expenseColumns.forEach(col => headers.push(col.displayName));
-      headers.push("Total Exp", "Net Owed", "Paid", "Outstanding");
+      headers.push("Total Exp", "Prev Owed", "Net Owed", "Paid", "Outstanding");
 
       const rows = allRecords.map((driver) => {
         const row = [driver.driverNumber, driver.driverName];
@@ -791,6 +795,7 @@ export default function DriverSummaryPage() {
         });
         row.push(
           formatCurrency(driver.totalExpense || 0),
+          formatCurrency(driver.previousBalance || 0),
           formatCurrency(driver.netOwed || 0),
           formatCurrency(driver.paid || 0),
           formatCurrency(driver.outstanding || 0)
@@ -843,7 +848,7 @@ export default function DriverSummaryPage() {
       <Box sx={{ minHeight: "100vh", bgcolor: "#f5f5f5" }}>
         <GlobalNav currentUser={currentUser} />
         
-        <Container maxWidth="xl" sx={{ mt: 4, mb: 4 }}>
+        <Box sx={{ mt: 4, mb: 4, px: 3 }}>
           {/* Header */}
           <Box sx={{ mb: 4 }}>
             <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
@@ -1387,6 +1392,9 @@ export default function DriverSummaryPage() {
 
                         {/* Summary Section */}
                         <TableCell align="right" sx={{ minWidth: 80, bgcolor: "#fff3e0" }}>
+                          <Typography variant="caption" fontWeight="bold">Prev Owed</Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ minWidth: 80, bgcolor: "#fff3e0" }}>
                           <TableSortLabel
                             active={orderBy === "netOwed"}
                             direction={orderBy === "netOwed" ? order : "asc"}
@@ -1481,14 +1489,29 @@ export default function DriverSummaryPage() {
                                 variant="body2"
                                 fontWeight="bold"
                                 color={
-                                  driver.netOwed > 0
-                                    ? "success.main" // ✅ Green: Company owes driver money
-                                    : driver.netOwed < 0
-                                    ? "error.main" // ❌ Red: Driver owes company money
-                                    : "text.primary" // Neutral: Zero balance
+                                  (driver.previousBalance || 0) > 0
+                                    ? "success.main"
+                                    : (driver.previousBalance || 0) < 0
+                                    ? "error.main"
+                                    : "text.secondary"
                                 }
                               >
-                                {formatCurrency(driver.netOwed)} {/* Show as-is: positive = company owes, negative = driver owes */}
+                                {formatCurrency(driver.previousBalance || 0)}
+                              </Typography>
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography
+                                variant="body2"
+                                fontWeight="bold"
+                                color={
+                                  driver.netOwed > 0
+                                    ? "success.main"
+                                    : driver.netOwed < 0
+                                    ? "error.main"
+                                    : "text.primary"
+                                }
+                              >
+                                {formatCurrency(driver.netOwed)}
                               </Typography>
                             </TableCell>
                             <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
@@ -1551,7 +1574,7 @@ export default function DriverSummaryPage() {
                             {formatCurrency(filteredDataComputed.reduce((sum, d) => sum + (d.totalRevenue || 0), 0))}
                           </Typography>
                         </TableCell>
-                        <TableCell colSpan={expenseColumns.length + 5} />
+                        <TableCell colSpan={expenseColumns.length + 6} />
                       </TableRow>
 
                       {/* Expense Subtotals Row */}
@@ -1582,7 +1605,7 @@ export default function DriverSummaryPage() {
                             {formatCurrency(filteredDataComputed.reduce((sum, d) => sum + (d.totalExpense || 0), 0))}
                           </Typography>
                         </TableCell>
-                        <TableCell colSpan={4} />
+                        <TableCell colSpan={5} />
                       </TableRow>
 
                       {/* Grand Totals Row - Dynamic based on Driver Type Filter */}
@@ -1637,6 +1660,11 @@ export default function DriverSummaryPage() {
                               </Typography>
                             </TableCell>
                             {/* Summary Totals */}
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
+                              <Typography variant="body2" fontWeight="bold" sx={{ fontSize: "1.1em" }}>
+                                {formatCurrency(filteredTotals.filtered.reduce((sum, d) => sum + (d.previousBalance || 0), 0))}
+                              </Typography>
+                            </TableCell>
                             <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
                               <Typography
                                 variant="body2"
@@ -2768,7 +2796,7 @@ export default function DriverSummaryPage() {
                 <Button onClick={() => setDetailModalOpen(false)} variant="outlined">Close</Button>
               </DialogActions>
             </Dialog>
-        </Container>
+        </Box>
       </Box>
     </LocalizationProvider>
   );

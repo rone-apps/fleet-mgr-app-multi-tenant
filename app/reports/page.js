@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import GlobalNav from "../components/GlobalNav";
 import {
-  Box, Container, Typography, Button, Paper, Grid, TextField,
+  Box, Typography, Button, Paper, Grid, TextField,
   Tabs, Tab, Card, CardContent, CircularProgress, Alert, Dialog, DialogTitle,
   DialogContent, DialogActions, Autocomplete, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -591,7 +591,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
   return (
     <Box>
       <GlobalNav currentUser={currentUser} title="Reports" />
-      <Container maxWidth="xl" sx={{ mt: 2, mb: 2, px: { xs: 1, sm: 2, md: 3 } }}>
+      <Box sx={{ mt: 2, mb: 2, px: { xs: 1, sm: 2, md: 3 } }}>
         <Box sx={{ mb: { xs: 2, md: 4 } }}>
           <Typography variant={{ xs: 'h5', md: 'h4' }} fontWeight="bold" gutterBottom>
             Financial Reports
@@ -1949,7 +1949,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
             )}
           </>
         )}
-      </Container>
+      </Box>
 
       {/* Detail Modal Dialog */}
       <Dialog
