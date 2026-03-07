@@ -9,11 +9,12 @@ import {
   TableSortLabel, CircularProgress, Alert, Grid, Pagination,
   Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab, Card, CardContent,
   FormControl, InputLabel, Select, MenuItem, FormControlLabel, Switch, Stack,
+  Checkbox, LinearProgress, Snackbar,
 } from "@mui/material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { Assessment, Download, Close, FileDownload } from "@mui/icons-material";
+import { Assessment, Download, Close, FileDownload, CheckCircle } from "@mui/icons-material";
 import axios from "axios";
 import { API_BASE_URL } from "../lib/api";
 import * as XLSX from "xlsx";
@@ -82,6 +83,12 @@ export default function DriverSummaryPage() {
   const [detailLoadingMessage, setDetailLoadingMessage] = useState("");
   const [revenueTabIndex, setRevenueTabIndex] = useState(0);
   const [expenseTabIndex, setExpenseTabIndex] = useState(0);
+
+  // Bulk finalization state
+  const [selectedForFinalize, setSelectedForFinalize] = useState(new Set());
+  const [finalizingInProgress, setFinalizingInProgress] = useState(false);
+  const [finalizeProgress, setFinalizeProgress] = useState({ done: 0, total: 0 });
+  const [finalizeResults, setFinalizeResults] = useState(null); // { success: [], failed: [] }
 
   const getCurrentUser = async () => {
     try {
@@ -297,6 +304,8 @@ export default function DriverSummaryPage() {
     setJobId(null);
     setJobStatus(null);
     setLoading(true);
+    setSelectedForFinalize(new Set());
+    setFinalizeResults(null);
     setLoadingMessage("Starting report generation...");
     setError("");
 
@@ -687,6 +696,117 @@ export default function DriverSummaryPage() {
     }
   };
 
+  // Toggle row selection for finalization
+  const toggleRowSelection = (driverNumber) => {
+    setSelectedForFinalize(prev => {
+      const next = new Set(prev);
+      if (next.has(driverNumber)) {
+        next.delete(driverNumber);
+      } else {
+        next.add(driverNumber);
+      }
+      return next;
+    });
+  };
+
+  // Select/deselect all eligible rows on current page
+  const toggleSelectAll = () => {
+    const eligible = filteredDataComputed.filter(d =>
+      d.statementStatus !== "FINALIZED" && d.statementStatus !== "PAID"
+    );
+    const allSelected = eligible.every(d => selectedForFinalize.has(d.driverNumber));
+
+    setSelectedForFinalize(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        eligible.forEach(d => next.delete(d.driverNumber));
+      } else {
+        eligible.forEach(d => next.add(d.driverNumber));
+      }
+      return next;
+    });
+  };
+
+  // Bulk finalize selected statements
+  const bulkFinalizeStatements = async () => {
+    if (selectedForFinalize.size === 0) return;
+
+    const driversToFinalize = allRecords.filter(d =>
+      selectedForFinalize.has(d.driverNumber) &&
+      d.statementStatus !== "FINALIZED" && d.statementStatus !== "PAID"
+    );
+
+    if (driversToFinalize.length === 0) {
+      setError("No eligible statements to finalize.");
+      return;
+    }
+
+    setFinalizingInProgress(true);
+    setFinalizeProgress({ done: 0, total: driversToFinalize.length });
+    const results = { success: [], failed: [] };
+
+    const token = localStorage.getItem("token");
+    const tenantId = localStorage.getItem("tenantSchema");
+
+    for (const driver of driversToFinalize) {
+      try {
+        // Step 1: Fetch full report for this driver
+        const reportResp = await axios.get(
+          `${API_BASE_URL}/financial-statements/owner-report/by-number/${driver.driverNumber}`,
+          {
+            params: {
+              from: formatDateForAPI(startDate),
+              to: formatDateForAPI(endDate),
+            },
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "X-Tenant-ID": tenantId,
+            },
+            timeout: 120000,
+          }
+        );
+
+        const reportData = reportResp.data;
+
+        // Step 2: Finalize the statement
+        const finalizeResp = await axios.post(
+          `${API_BASE_URL}/financial-statements/owner-report/${driver.driverId}/finalize`,
+          { ...reportData, paidAmount: 0 },
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+              "X-Tenant-ID": tenantId,
+            },
+            timeout: 30000,
+          }
+        );
+
+        results.success.push(driver.driverName);
+
+        // Update the record's statementStatus locally
+        setAllRecords(prev => prev.map(r =>
+          r.driverNumber === driver.driverNumber
+            ? { ...r, statementStatus: "FINALIZED" }
+            : r
+        ));
+
+      } catch (err) {
+        console.error(`Failed to finalize ${driver.driverName}:`, err);
+        results.failed.push({
+          name: driver.driverName,
+          error: err.response?.data || err.message,
+        });
+      }
+
+      setFinalizeProgress(prev => ({ ...prev, done: prev.done + 1 }));
+    }
+
+    setFinalizingInProgress(false);
+    setFinalizeResults(results);
+    setSelectedForFinalize(new Set());
+  };
+
   // ✅ Export ALL cached records to Excel (not just current page)
   const exportToExcel = () => {
     if (!isAllRecordsLoaded || allRecords.length === 0) {
@@ -700,7 +820,7 @@ export default function DriverSummaryPage() {
       revenueColumns.forEach(col => headers.push(col.displayName));
       headers.push("Total Rev");
       expenseColumns.forEach(col => headers.push(col.displayName));
-      headers.push("Total Exp", "Prev Due", "Net Payable / Due", "Paid", "Outstanding");
+      headers.push("Total Exp", "Prev Due", "Paid", "Net Payable / Due");
 
       // Build rows
       const rows = allRecords.map((driver) => {
@@ -716,7 +836,7 @@ export default function DriverSummaryPage() {
         expenseColumns.forEach(col => {
           row.push(getExpAmount(driver, col.key));
         });
-        row.push(driver.totalExpense || 0, driver.previousBalance || 0, driver.netOwed || 0, driver.paid || 0, driver.outstanding || 0);
+        row.push(driver.totalExpense || 0, driver.previousBalance || 0, driver.paid || 0, driver.netOwed || 0);
 
         return row;
       });
@@ -732,7 +852,7 @@ export default function DriverSummaryPage() {
         const expTotal = allRecords.reduce((sum, d) => sum + (getExpAmount(d, col.key) || 0), 0);
         totalsRow.push(expTotal);
       });
-      totalsRow.push(displayTotals.expense, displayTotals.netOwed, displayTotals.paid, displayTotals.netOwed - displayTotals.paid);
+      totalsRow.push(displayTotals.expense, displayTotals.previousBalance, displayTotals.paid, displayTotals.netOwed);
       rows.push(totalsRow);
 
       // Create workbook
@@ -780,7 +900,7 @@ export default function DriverSummaryPage() {
       revenueColumns.forEach(col => headers.push(col.displayName));
       headers.push("Total Rev");
       expenseColumns.forEach(col => headers.push(col.displayName));
-      headers.push("Total Exp", "Prev Due", "Net Payable / Due", "Paid", "Outstanding");
+      headers.push("Total Exp", "Prev Due", "Paid", "Net Payable / Due");
 
       const rows = allRecords.map((driver) => {
         const row = [driver.driverNumber, driver.driverName];
@@ -796,9 +916,8 @@ export default function DriverSummaryPage() {
         row.push(
           formatCurrency(driver.totalExpense || 0),
           formatCurrency(driver.previousBalance || 0),
-          formatCurrency(driver.netOwed || 0),
           formatCurrency(driver.paid || 0),
-          formatCurrency(driver.outstanding || 0)
+          formatCurrency(driver.netOwed || 0)
         );
 
         return row;
@@ -817,9 +936,9 @@ export default function DriverSummaryPage() {
       });
       totalsRow.push(
         formatCurrency(displayTotals.expense),
-        formatCurrency(displayTotals.netOwed),
+        formatCurrency(displayTotals.previousBalance),
         formatCurrency(displayTotals.paid),
-        formatCurrency(displayTotals.netOwed - displayTotals.paid)
+        formatCurrency(displayTotals.netOwed)
       );
       rows.push(totalsRow);
 
@@ -965,69 +1084,30 @@ export default function DriverSummaryPage() {
               </Stack>
             </Paper>
 
-            {/* Search Filters */}
-            {(reportData || allRecords.length > 0) && (
-              <Paper sx={{ p: 3, mb: 3 }}>
-                <Typography variant="h6" gutterBottom>
-                  Search Filters
-                </Typography>
-                <Grid container spacing={2} sx={{ mb: 2 }}>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      label="Search Driver Number"
-                      value={searchDriverNumber}
-                      onChange={(e) => setSearchDriverNumber(e.target.value)}
-                      fullWidth
-                      size="small"
-                      helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
-                    />
-                  </Grid>
-                  <Grid item xs={12} sm={4}>
-                    <TextField
-                      label="Search Driver Name"
-                      value={searchDriverName}
-                      onChange={(e) => setSearchDriverName(e.target.value)}
-                      fullWidth
-                      size="small"
-                      helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
-                    />
-                  </Grid>
-                </Grid>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6}>
-                    <Button
-                      variant="contained"
-                      color="success"
-                      startIcon={<Download />}
-                      onClick={exportToExcel}
-                      fullWidth
-                      disabled={!isAllRecordsLoaded}
-                      title={isAllRecordsLoaded ? `Export all ${allRecords.length} records to Excel` : "Generate report and load all records first"}
-                    >
-                      Export Excel
-                    </Button>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Button
-                      variant="contained"
-                      color="error"
-                      startIcon={<Download />}
-                      onClick={exportToPDF}
-                      fullWidth
-                      disabled={!isAllRecordsLoaded}
-                      title={isAllRecordsLoaded ? `Export all ${allRecords.length} records to PDF` : "Generate report and load all records first"}
-                    >
-                      Export PDF
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Paper>
-            )}
-
             {/* Error Display */}
             {error && (
               <Alert severity="error" sx={{ mb: 3 }}>
                 {error}
+              </Alert>
+            )}
+
+            {/* Finalization Results */}
+            {finalizeResults && (
+              <Alert
+                severity={finalizeResults.failed.length === 0 ? "success" : "warning"}
+                sx={{ mb: 3 }}
+                onClose={() => setFinalizeResults(null)}
+              >
+                {finalizeResults.success.length > 0 && (
+                  <Typography variant="body2">
+                    Successfully finalized {finalizeResults.success.length} statement(s).
+                  </Typography>
+                )}
+                {finalizeResults.failed.length > 0 && (
+                  <Typography variant="body2" color="error">
+                    Failed to finalize {finalizeResults.failed.length}: {finalizeResults.failed.map(f => f.name).join(", ")}
+                  </Typography>
+                )}
               </Alert>
             )}
 
@@ -1330,6 +1410,84 @@ export default function DriverSummaryPage() {
                   </Grid>
                 </Paper>
 
+                {/* Search Filters & Actions */}
+                <Paper sx={{ p: 3, mb: 3 }}>
+                  <Typography variant="h6" gutterBottom>
+                    Search Filters
+                  </Typography>
+                  <Grid container spacing={2} sx={{ mb: 2 }}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Search Driver Number"
+                        value={searchDriverNumber}
+                        onChange={(e) => setSearchDriverNumber(e.target.value)}
+                        fullWidth
+                        size="small"
+                        helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        label="Search Driver Name"
+                        value={searchDriverName}
+                        onChange={(e) => setSearchDriverName(e.target.value)}
+                        fullWidth
+                        size="small"
+                        helperText={isAllRecordsLoaded ? "Searching all cached records" : "Searching current page only"}
+                      />
+                    </Grid>
+                  </Grid>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={4}>
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<Download />}
+                        onClick={exportToExcel}
+                        fullWidth
+                        disabled={!isAllRecordsLoaded}
+                        title={isAllRecordsLoaded ? `Export all ${allRecords.length} records to Excel` : "Generate report and load all records first"}
+                      >
+                        Export Excel
+                      </Button>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Button
+                        variant="contained"
+                        color="error"
+                        startIcon={<Download />}
+                        onClick={exportToPDF}
+                        fullWidth
+                        disabled={!isAllRecordsLoaded}
+                        title={isAllRecordsLoaded ? `Export all ${allRecords.length} records to PDF` : "Generate report and load all records first"}
+                      >
+                        Export PDF
+                      </Button>
+                    </Grid>
+                    <Grid item xs={12} sm={4}>
+                      <Button
+                        variant="contained"
+                        color="warning"
+                        startIcon={<CheckCircle />}
+                        onClick={bulkFinalizeStatements}
+                        fullWidth
+                        disabled={selectedForFinalize.size === 0 || finalizingInProgress}
+                      >
+                        {finalizingInProgress
+                          ? `Finalizing ${finalizeProgress.done}/${finalizeProgress.total}...`
+                          : `Finalize & Save Statement (${selectedForFinalize.size})`}
+                      </Button>
+                    </Grid>
+                  </Grid>
+                  {finalizingInProgress && (
+                    <LinearProgress
+                      variant="determinate"
+                      value={(finalizeProgress.done / finalizeProgress.total) * 100}
+                      sx={{ mt: 1 }}
+                    />
+                  )}
+                </Paper>
+
                 {/* Driver Summary Table - Dynamic Columns */}
                 <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
                   <Table size="small" sx={{ minWidth: 1600 }}>
@@ -1394,6 +1552,9 @@ export default function DriverSummaryPage() {
                         <TableCell align="right" sx={{ minWidth: 80, bgcolor: "#fff3e0" }}>
                           <Typography variant="caption" fontWeight="bold">Prev Due</Typography>
                         </TableCell>
+                        <TableCell align="right" sx={{ minWidth: 70, bgcolor: "#fff3e0" }}>
+                          <Typography variant="caption" fontWeight="bold">Paid</Typography>
+                        </TableCell>
                         <TableCell align="right" sx={{ minWidth: 100, bgcolor: "#fff3e0" }}>
                           <TableSortLabel
                             active={orderBy === "netOwed"}
@@ -1403,17 +1564,20 @@ export default function DriverSummaryPage() {
                             <Typography variant="caption" fontWeight="bold">Net Payable / Due</Typography>
                           </TableSortLabel>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 70, bgcolor: "#fff3e0" }}>
-                          <Typography variant="caption" fontWeight="bold">Paid</Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 85, bgcolor: "#fff3e0" }}>
-                          <TableSortLabel
-                            active={orderBy === "outstanding"}
-                            direction={orderBy === "outstanding" ? order : "asc"}
-                            onClick={() => handleSortChange("outstanding")}
-                          >
-                            <Typography variant="caption" fontWeight="bold">Outstanding</Typography>
-                          </TableSortLabel>
+                        <TableCell align="center" sx={{ minWidth: 60, bgcolor: "#e3f2fd" }} padding="checkbox">
+                          <Checkbox
+                            size="small"
+                            checked={
+                              filteredDataComputed.filter(d => d.statementStatus !== "FINALIZED" && d.statementStatus !== "PAID").length > 0 &&
+                              filteredDataComputed.filter(d => d.statementStatus !== "FINALIZED" && d.statementStatus !== "PAID").every(d => selectedForFinalize.has(d.driverNumber))
+                            }
+                            indeterminate={
+                              filteredDataComputed.some(d => selectedForFinalize.has(d.driverNumber) && d.statementStatus !== "FINALIZED" && d.statementStatus !== "PAID") &&
+                              !filteredDataComputed.filter(d => d.statementStatus !== "FINALIZED" && d.statementStatus !== "PAID").every(d => selectedForFinalize.has(d.driverNumber))
+                            }
+                            onChange={toggleSelectAll}
+                            disabled={finalizingInProgress}
+                          />
                         </TableCell>
                       </TableRow>
                     </TableHead>
@@ -1497,6 +1661,9 @@ export default function DriverSummaryPage() {
                               </Typography>
                             </TableCell>
                             <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              {formatCurrency(driver.paid)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
                               <Typography
                                 variant="body2"
                                 fontWeight="bold"
@@ -1511,23 +1678,19 @@ export default function DriverSummaryPage() {
                                 {formatCurrency(driver.netOwed)}
                               </Typography>
                             </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                              {formatCurrency(driver.paid)}
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                              <Typography
-                                variant="body2"
-                                fontWeight="bold"
-                                color={
-                                  driver.outstanding > 0
-                                    ? "success.main" // ✅ Green: Company owes driver money
-                                    : driver.outstanding < 0
-                                    ? "error.main" // ❌ Red: Driver owes company money
-                                    : "text.primary" // Neutral: Zero balance
-                                }
-                              >
-                                {formatCurrency(driver.outstanding)} {/* Show as-is: positive = company owes, negative = driver owes */}
-                              </Typography>
+                            <TableCell align="center" sx={{ bgcolor: "#e8f4fd" }} padding="checkbox"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {driver.statementStatus === "FINALIZED" || driver.statementStatus === "PAID" ? (
+                                <Checkbox size="small" checked disabled />
+                              ) : (
+                                <Checkbox
+                                  size="small"
+                                  checked={selectedForFinalize.has(driver.driverNumber)}
+                                  onChange={() => toggleRowSelection(driver.driverNumber)}
+                                  disabled={finalizingInProgress}
+                                />
+                              )}
                             </TableCell>
                           </TableRow>
                         );
@@ -1556,7 +1719,7 @@ export default function DriverSummaryPage() {
                             {formatCurrency(filteredDataComputed.reduce((sum, d) => sum + (d.totalRevenue || 0), 0))}
                           </Typography>
                         </TableCell>
-                        <TableCell colSpan={expenseColumns.length + 6} />
+                        <TableCell colSpan={expenseColumns.length + 5} />
                       </TableRow>
 
                       {/* Expense Subtotals Row */}
@@ -1587,7 +1750,7 @@ export default function DriverSummaryPage() {
                             {formatCurrency(filteredDataComputed.reduce((sum, d) => sum + (d.totalExpense || 0), 0))}
                           </Typography>
                         </TableCell>
-                        <TableCell colSpan={5} />
+                        <TableCell colSpan={4} />
                       </TableRow>
 
                       {/* Grand Totals Row - Dynamic based on Driver Type Filter */}
@@ -1647,6 +1810,11 @@ export default function DriverSummaryPage() {
                                 {formatCurrency(filteredTotals.filtered.reduce((sum, d) => sum + (d.previousBalance || 0), 0))}
                               </Typography>
                             </TableCell>
+                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                              <Typography variant="caption" fontWeight="bold">
+                                {formatCurrency(filteredTotals.paid)}
+                              </Typography>
+                            </TableCell>
                             <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
                               <Typography
                                 variant="body2"
@@ -1663,27 +1831,7 @@ export default function DriverSummaryPage() {
                                 {formatCurrency(filteredTotals.netOwed)}
                               </Typography>
                             </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                              <Typography variant="caption" fontWeight="bold">
-                                {formatCurrency(filteredTotals.paid)}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                              <Typography
-                                variant="body2"
-                                fontWeight="bold"
-                                color={
-                                  outstanding > 0
-                                    ? "success.main"
-                                    : outstanding < 0
-                                    ? "error.main"
-                                    : "text.primary"
-                                }
-                                sx={{ fontSize: "1.1em" }}
-                              >
-                                {formatCurrency(outstanding)}
-                              </Typography>
-                            </TableCell>
+                            <TableCell sx={{ bgcolor: "#e3f2fd" }} />
                           </TableRow>
                         );
                       })()}
@@ -1711,7 +1859,7 @@ export default function DriverSummaryPage() {
                             {/* Empty cells under expense columns */}
                           </TableCell>
                         ))}
-                        <TableCell colSpan={4} />
+                        <TableCell colSpan={5} />
                       </TableRow>
 
                       {/* Expense Subtotal Row */}
@@ -1739,7 +1887,7 @@ export default function DriverSummaryPage() {
                             {formatCurrency(displayTotals.expense)}
                           </Typography>
                         </TableCell>
-                        <TableCell colSpan={3} />
+                        <TableCell colSpan={4} />
                       </TableRow>
 
                       {/* Net Summary Row */}
@@ -1765,6 +1913,16 @@ export default function DriverSummaryPage() {
                         <TableCell align="right" sx={{ bgcolor: "#ffebee" }}>
                           {/* Empty cell under Total Expense */}
                         </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                          <Typography variant="body2" fontWeight="bold" sx={{ fontSize: "1.1em" }}>
+                            {formatCurrency(displayTotals.previousBalance)}
+                          </Typography>
+                        </TableCell>
+                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
+                          <Typography variant="caption" fontWeight="bold">
+                            {formatCurrency(displayTotals.paid)}
+                          </Typography>
+                        </TableCell>
                         <TableCell align="right" sx={{ bgcolor: "#fff9e6", fontWeight: "bold" }}>
                           <Typography
                             variant="body2"
@@ -1781,28 +1939,7 @@ export default function DriverSummaryPage() {
                             {formatCurrency(displayTotals.netOwed)}
                           </Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                          <Typography variant="caption" fontWeight="bold">
-                            {formatCurrency(displayTotals.paid)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                          <Typography
-                            variant="body2"
-                            fontWeight="bold"
-                            color={
-                              (displayTotals.netOwed - displayTotals.paid) > 0
-                                ? "success.main"
-                                : (displayTotals.netOwed - displayTotals.paid) < 0
-                                ? "error.main"
-                                : "text.primary"
-                            }
-                            sx={{ fontSize: "1.1em" }}
-                          >
-                            {formatCurrency(displayTotals.netOwed - displayTotals.paid)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="right" sx={{ bgcolor: "#fff9e6" }} />
+                        <TableCell sx={{ bgcolor: "#e3f2fd" }} />
                       </TableRow>
                     </TableBody>
                   </Table>
@@ -2758,6 +2895,12 @@ export default function DriverSummaryPage() {
                             </Grid>
                           )}
                           <Grid item xs={6} sm={3}>
+                            <Typography variant="caption" color="text.secondary">Paid</Typography>
+                            <Typography variant="body2" fontWeight="bold">
+                              {formatCurrency(driverDetailReport.paidAmount)}
+                            </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
                             {(() => {
                               const netBeforePaid = (driverDetailReport.totalRevenues || 0) - (driverDetailReport.totalExpenses || 0) + (driverDetailReport.previousBalance || 0);
                               return (
@@ -2769,30 +2912,6 @@ export default function DriverSummaryPage() {
                                     sx={{ color: netBeforePaid >= 0 ? "#388e3c" : "#d32f2f" }}
                                   >
                                     {formatCurrency(netBeforePaid)}
-                                  </Typography>
-                                </>
-                              );
-                            })()}
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" color="text.secondary">Paid</Typography>
-                            <Typography variant="body2" fontWeight="bold">
-                              {formatCurrency(driverDetailReport.paidAmount)}
-                            </Typography>
-                          </Grid>
-                          <Grid item xs={6} sm={3}>
-                            {(() => {
-                              const netBeforePaid = (driverDetailReport.totalRevenues || 0) - (driverDetailReport.totalExpenses || 0) + (driverDetailReport.previousBalance || 0);
-                              const outstanding = netBeforePaid - (driverDetailReport.paidAmount || 0);
-                              return (
-                                <>
-                                  <Typography variant="caption" color="text.secondary">Outstanding</Typography>
-                                  <Typography
-                                    variant="body2"
-                                    fontWeight="bold"
-                                    sx={{ color: outstanding >= 0 ? "#388e3c" : "#d32f2f" }}
-                                  >
-                                    {formatCurrency(outstanding)}
                                   </Typography>
                                 </>
                               );
