@@ -695,12 +695,12 @@ export default function DriverSummaryPage() {
     }
 
     try {
-      // Build headers: Driver #, Name, [dynamic revenue columns], Total Rev, [dynamic expense columns], Total Exp, Net Owed, Paid, Outstanding
+      // Build headers: Driver #, Name, [dynamic revenue columns], Total Rev, [dynamic expense columns], Total Exp, Prev Due, Net Payable/Due, Paid, Outstanding
       const headers = ["Driver #", "Name"];
       revenueColumns.forEach(col => headers.push(col.displayName));
       headers.push("Total Rev");
       expenseColumns.forEach(col => headers.push(col.displayName));
-      headers.push("Total Exp", "Prev Owed", "Net Owed", "Paid", "Outstanding");
+      headers.push("Total Exp", "Prev Due", "Net Payable / Due", "Paid", "Outstanding");
 
       // Build rows
       const rows = allRecords.map((driver) => {
@@ -780,7 +780,7 @@ export default function DriverSummaryPage() {
       revenueColumns.forEach(col => headers.push(col.displayName));
       headers.push("Total Rev");
       expenseColumns.forEach(col => headers.push(col.displayName));
-      headers.push("Total Exp", "Prev Owed", "Net Owed", "Paid", "Outstanding");
+      headers.push("Total Exp", "Prev Due", "Net Payable / Due", "Paid", "Outstanding");
 
       const rows = allRecords.map((driver) => {
         const row = [driver.driverNumber, driver.driverName];
@@ -1095,7 +1095,7 @@ export default function DriverSummaryPage() {
                   <Grid item xs={12} sm={6} md={3}>
                     <Paper sx={{ p: 2, textAlign: "center" }}>
                       <Typography variant="subtitle2" color="text.secondary">
-                        {isAllRecordsLoaded ? "Grand Net Owed" : "Net Owed (running)"}
+                        {isAllRecordsLoaded ? "Grand Net Payable / Due" : "Net Payable / Due (running)"}
                       </Typography>
                       <Typography
                         variant="h5"
@@ -1103,13 +1103,13 @@ export default function DriverSummaryPage() {
                         sx={{ opacity: isAllRecordsLoaded ? 1 : 0.7 }}
                         color={
                           displayTotals.netOwed > 0
-                            ? "error.main"
-                            : displayTotals.netOwed < 0
                             ? "success.main"
+                            : displayTotals.netOwed < 0
+                            ? "error.main"
                             : "text.primary"
                         }
                       >
-                        {!isAllRecordsLoaded && "~"}{formatCurrency(-displayTotals.netOwed)}
+                        {!isAllRecordsLoaded && "~"}{formatCurrency(displayTotals.netOwed)}
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {isAllRecordsLoaded ? "Final totals" : "Partial — loading..."}
@@ -1392,15 +1392,15 @@ export default function DriverSummaryPage() {
 
                         {/* Summary Section */}
                         <TableCell align="right" sx={{ minWidth: 80, bgcolor: "#fff3e0" }}>
-                          <Typography variant="caption" fontWeight="bold">Prev Owed</Typography>
+                          <Typography variant="caption" fontWeight="bold">Prev Due</Typography>
                         </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 80, bgcolor: "#fff3e0" }}>
+                        <TableCell align="right" sx={{ minWidth: 100, bgcolor: "#fff3e0" }}>
                           <TableSortLabel
                             active={orderBy === "netOwed"}
                             direction={orderBy === "netOwed" ? order : "asc"}
                             onClick={() => handleSortChange("netOwed")}
                           >
-                            <Typography variant="caption" fontWeight="bold">Net Owed</Typography>
+                            <Typography variant="caption" fontWeight="bold">Net Payable / Due</Typography>
                           </TableSortLabel>
                         </TableCell>
                         <TableCell align="right" sx={{ minWidth: 70, bgcolor: "#fff3e0" }}>
@@ -1414,9 +1414,6 @@ export default function DriverSummaryPage() {
                           >
                             <Typography variant="caption" fontWeight="bold">Outstanding</Typography>
                           </TableSortLabel>
-                        </TableCell>
-                        <TableCell align="right" sx={{ minWidth: 85, bgcolor: "#fff3e0" }}>
-                          <Typography variant="caption" fontWeight="bold">Due/Owed</Typography>
                         </TableCell>
                       </TableRow>
                     </TableHead>
@@ -1530,21 +1527,6 @@ export default function DriverSummaryPage() {
                                 }
                               >
                                 {formatCurrency(driver.outstanding)} {/* Show as-is: positive = company owes, negative = driver owes */}
-                              </Typography>
-                            </TableCell>
-                            <TableCell align="right" sx={{ bgcolor: "#fff9e6" }}>
-                              <Typography
-                                variant="body2"
-                                fontWeight="bold"
-                                color={
-                                  driver.netOwed - driver.paid > 0
-                                    ? "success.main" // ✅ Green: Company owes driver money
-                                    : driver.netOwed - driver.paid < 0
-                                    ? "error.main" // ❌ Red: Driver owes company money
-                                    : "text.primary" // Neutral: Zero balance
-                                }
-                              >
-                                {formatCurrency(driver.netOwed - driver.paid)} {/* Due: netOwed - paid, show as-is */}
                               </Typography>
                             </TableCell>
                           </TableRow>
@@ -2767,21 +2749,54 @@ export default function DriverSummaryPage() {
                               {formatCurrency(driverDetailReport.totalExpenses)}
                             </Typography>
                           </Grid>
+                          {(driverDetailReport.previousBalance || 0) !== 0 && (
+                            <Grid item xs={6} sm={3}>
+                              <Typography variant="caption" color="text.secondary">Prev Due</Typography>
+                              <Typography variant="body2" fontWeight="bold" sx={{ color: "#d32f2f" }}>
+                                {formatCurrency(driverDetailReport.previousBalance)}
+                              </Typography>
+                            </Grid>
+                          )}
                           <Grid item xs={6} sm={3}>
-                            <Typography variant="caption" color="text.secondary">Net Due</Typography>
-                            <Typography
-                              variant="body2"
-                              fontWeight="bold"
-                              sx={{ color: driverDetailReport.netDue > 0 ? "#d32f2f" : "#388e3c" }}
-                            >
-                              {formatCurrency(-driverDetailReport.netDue)}
-                            </Typography>
+                            {(() => {
+                              const netBeforePaid = (driverDetailReport.totalRevenues || 0) - (driverDetailReport.totalExpenses || 0) + (driverDetailReport.previousBalance || 0);
+                              return (
+                                <>
+                                  <Typography variant="caption" color="text.secondary">Net Payable / Due</Typography>
+                                  <Typography
+                                    variant="body2"
+                                    fontWeight="bold"
+                                    sx={{ color: netBeforePaid >= 0 ? "#388e3c" : "#d32f2f" }}
+                                  >
+                                    {formatCurrency(netBeforePaid)}
+                                  </Typography>
+                                </>
+                              );
+                            })()}
                           </Grid>
                           <Grid item xs={6} sm={3}>
                             <Typography variant="caption" color="text.secondary">Paid</Typography>
                             <Typography variant="body2" fontWeight="bold">
                               {formatCurrency(driverDetailReport.paidAmount)}
                             </Typography>
+                          </Grid>
+                          <Grid item xs={6} sm={3}>
+                            {(() => {
+                              const netBeforePaid = (driverDetailReport.totalRevenues || 0) - (driverDetailReport.totalExpenses || 0) + (driverDetailReport.previousBalance || 0);
+                              const outstanding = netBeforePaid - (driverDetailReport.paidAmount || 0);
+                              return (
+                                <>
+                                  <Typography variant="caption" color="text.secondary">Outstanding</Typography>
+                                  <Typography
+                                    variant="body2"
+                                    fontWeight="bold"
+                                    sx={{ color: outstanding >= 0 ? "#388e3c" : "#d32f2f" }}
+                                  >
+                                    {formatCurrency(outstanding)}
+                                  </Typography>
+                                </>
+                              );
+                            })()}
                           </Grid>
                         </Grid>
                       </Box>

@@ -458,7 +458,7 @@ Per-Unit Expenses: $${parseFloat(reportData.totalPerUnitExpenses || 0).toFixed(2
 Mileage Expenses: $${reportData?.mileageExpenses?.reduce((sum, exp) => sum + parseFloat(exp.totalLeaseAmount || 0), 0).toFixed(2) || '0.00'}
 Insurance Mileage Expenses: $${parseFloat(reportData.totalInsuranceMileageExpenses || 0).toFixed(2)}
 Total Expenses: $${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
-Previous Balance: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
+Previous Due: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
 Paid Amount: $${parseFloat(paidAmount || 0).toFixed(2)}
 ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? '$' + parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2) : '-$' + parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2)}
     `.trim();
@@ -823,7 +823,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       </Card>
                     </Grid>
 
-                    {/* Previous Owed Banner */}
+                    {/* Previous Due Banner */}
                     <Grid item xs={6} sm={6} md={2.4}>
                       <Card
                         onClick={() => setActiveBanner(activeBanner === "prevOwed" ? null : "prevOwed")}
@@ -837,7 +837,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       >
                         <CardContent>
                           <Typography color="textSecondary" variant="body2" gutterBottom>
-                            Prev Owed
+                            Prev Due
                           </Typography>
                           <Typography variant="h6" sx={{ color: "#e65100", fontWeight: "bold" }}>
                             ${parseFloat(reportData.previousBalance || 0).toFixed(2)}
@@ -869,12 +869,12 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       </Card>
                     </Grid>
 
-                    {/* Net Due Banner (Bold/Highlighted) */}
+                    {/* Net Payable / Due Banner */}
                     <Grid item xs={6} sm={6} md={2.4}>
                       <Card
                         onClick={() => setActiveBanner(activeBanner === "netDue" ? null : "netDue")}
                         sx={{
-                          backgroundColor: reportData.netDue > 0 ? "#e8f5e9" : "#ffebee", // ✅ Green if company owes, ❌ Red if driver owes
+                          backgroundColor: reportData.netDue > 0 ? "#e8f5e9" : "#ffebee", // Green = Payable, Red = Due
                           border: `3px solid ${reportData.netDue > 0 ? "#388e3c" : "#d32f2f"}`,
                           cursor: "pointer",
                           transition: "all 0.3s",
@@ -888,7 +888,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           <Typography
                             variant="h6"
                             sx={{
-                              color: reportData.netDue > 0 ? "#388e3c" : "#d32f2f", // ✅ Green if company owes, ❌ Red if driver owes
+                              color: reportData.netDue > 0 ? "#388e3c" : "#d32f2f", // Green = Payable, Red = Due
                               fontWeight: "bold",
                             }}
                           >
@@ -2081,7 +2081,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 {/* Balance Summary */}
                 {(reportData.previousBalance && reportData.previousBalance !== 0) && (
                   <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
-                    <Typography variant="body2" fontWeight="bold">Previous Balance</Typography>
+                    <Typography variant="body2" fontWeight="bold">Previous Due</Typography>
                     <Typography variant="body2" fontWeight="bold">${parseFloat(reportData.previousBalance || 0).toFixed(2)}</Typography>
                   </Box>
                 )}
@@ -2604,10 +2604,10 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     {/* Spacing */}
                     <TableRow sx={{ height: "10px" }} />
 
-                    {/* Previous Balance */}
+                    {/* Previous Due */}
                     {(reportData.previousBalance && reportData.previousBalance !== 0) ? (
                       <TableRow>
-                        <TableCell><strong>Previous Balance</strong></TableCell>
+                        <TableCell><strong>Previous Due</strong></TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600 }}>
                           ${parseFloat(reportData.previousBalance || 0).toFixed(2)}
                         </TableCell>
