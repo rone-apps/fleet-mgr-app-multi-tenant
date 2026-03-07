@@ -19,6 +19,7 @@ export default function CreateBatchDialog({
   isLoading,
 }) {
   const [formData, setFormData] = useState({
+    batchName: "",
     periodFrom: "",
     periodTo: "",
     batchDate: new Date().toISOString().split("T")[0],
@@ -43,12 +44,14 @@ export default function CreateBatchDialog({
 
     try {
       await onSubmit({
+        batchName: formData.batchName,
         periodFrom: formData.periodFrom,
         periodTo: formData.periodTo,
         batchDate: formData.batchDate,
         notes: formData.notes,
       });
       setFormData({
+        batchName: "",
         periodFrom: "",
         periodTo: "",
         batchDate: new Date().toISOString().split("T")[0],
@@ -61,6 +64,7 @@ export default function CreateBatchDialog({
 
   const handleClose = () => {
     setFormData({
+      batchName: "",
       periodFrom: "",
       periodTo: "",
       batchDate: new Date().toISOString().split("T")[0],
@@ -76,6 +80,16 @@ export default function CreateBatchDialog({
       </DialogTitle>
       <DialogContent sx={{ pt: 3 }}>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <TextField
+            label="Batch Name (Optional)"
+            name="batchName"
+            value={formData.batchName}
+            onChange={handleInputChange}
+            fullWidth
+            disabled={isLoading}
+            placeholder="Leave blank for auto-generated name"
+            helperText="If empty, a default name will be assigned"
+          />
           <TextField
             label="Period From"
             name="periodFrom"

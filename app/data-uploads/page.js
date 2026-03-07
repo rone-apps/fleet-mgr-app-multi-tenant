@@ -12,11 +12,13 @@ import {
 import {
   CloudUpload as UploadIcon,
   TableChart as ViewIcon,
+  SwapHoriz as MapperIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
 import UploadDataSection from "./components/UploadDataSection";
 import ViewDataSection from "./components/ViewDataSection";
+import DataMapperSection from "./components/DataMapperSection";
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -99,6 +101,13 @@ export default function DataUploadsPage() {
               id="main-tab-1"
               aria-controls="main-tabpanel-1"
             />
+            <Tab
+              icon={<MapperIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+              label="Data Mapper & Importer"
+              id="main-tab-2"
+              aria-controls="main-tabpanel-2"
+            />
           </Tabs>
         </Paper>
 
@@ -108,6 +117,9 @@ export default function DataUploadsPage() {
         </TabPanel>
         <TabPanel value={mainTab} index={1}>
           <ViewDataSection currentUser={currentUser} />
+        </TabPanel>
+        <TabPanel value={mainTab} index={2}>
+          <DataMapperSection />
         </TabPanel>
       </Box>
     </Box>

@@ -121,9 +121,10 @@ export default function PaymentBatchList({
 
   return (
     <TableContainer component={Paper} elevation={0}>
-      <Table sx={{ minWidth: 800 }}>
+      <Table sx={{ minWidth: 900 }}>
         <TableHead sx={{ backgroundColor: "#f5f5f5" }}>
           <TableRow>
+            <TableCell sx={{ fontWeight: 600 }}>Batch Name</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>Batch #</TableCell>
             <TableCell sx={{ fontWeight: 600 }}>Period</TableCell>
             <TableCell sx={{ fontWeight: 600 }} align="center">
@@ -156,6 +157,11 @@ export default function PaymentBatchList({
               >
                 <TableCell>
                   <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    {batch.batchName || batch.batchNumber || `BATCH-${batch.id}`}
+                  </Typography>
+                </TableCell>
+                <TableCell>
+                  <Typography variant="body2" color="text.secondary">
                     {batch.batchNumber || `BATCH-${batch.id}`}
                   </Typography>
                 </TableCell>

@@ -74,6 +74,7 @@ export const useDriverPayments = () => {
         batchDate: batchData.batchDate,
         periodFrom: batchData.periodFrom,
         periodTo: batchData.periodTo,
+        ...(batchData.batchName && { batchName: batchData.batchName }),
         ...(batchData.notes && { notes: batchData.notes }),
       });
 

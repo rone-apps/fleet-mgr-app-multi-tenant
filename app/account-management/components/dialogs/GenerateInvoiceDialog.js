@@ -8,10 +8,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Select,
+  Autocomplete,
   Alert,
   Grid,
 } from "@mui/material";
@@ -31,20 +28,16 @@ export default function GenerateInvoiceDialog({
       <DialogTitle>Generate Invoice</DialogTitle>
       <DialogContent>
         <Box sx={{ pt: 2, display: "flex", flexDirection: "column", gap: 2 }}>
-          <FormControl fullWidth required>
-            <InputLabel>Customer</InputLabel>
-            <Select
-              value={generateInvoiceFormData.customerId || ""}
-              label="Customer"
-              onChange={(e) => setGenerateInvoiceFormData({ ...generateInvoiceFormData, customerId: e.target.value })}
-            >
-              {customers.filter(c => c.active).map((customer) => (
-                <MenuItem key={customer.id} value={customer.id}>
-                  {customer.companyName}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Autocomplete
+            options={customers.filter(c => c.active)}
+            getOptionLabel={(option) => option.companyName || ""}
+            value={customers.find(c => c.id === generateInvoiceFormData.customerId) || null}
+            onChange={(e, newValue) => setGenerateInvoiceFormData({ ...generateInvoiceFormData, customerId: newValue ? newValue.id : "" })}
+            isOptionEqualToValue={(option, value) => option.id === value.id}
+            renderInput={(params) => (
+              <TextField {...params} label="Customer" required fullWidth />
+            )}
+          />
 
           <Grid container spacing={2}>
             <Grid item xs={6}>
