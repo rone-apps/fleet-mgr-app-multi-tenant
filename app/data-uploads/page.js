@@ -13,12 +13,14 @@ import {
   CloudUpload as UploadIcon,
   TableChart as ViewIcon,
   SwapHoriz as MapperIcon,
+  Storage as DbMigrateIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
 import UploadDataSection from "./components/UploadDataSection";
 import ViewDataSection from "./components/ViewDataSection";
 import DataMapperSection from "./components/DataMapperSection";
+import DbMigrationSection from "./components/DbMigrationSection";
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -108,6 +110,13 @@ export default function DataUploadsPage() {
               id="main-tab-2"
               aria-controls="main-tabpanel-2"
             />
+            <Tab
+              icon={<DbMigrateIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+              label="DB Migration"
+              id="main-tab-3"
+              aria-controls="main-tabpanel-3"
+            />
           </Tabs>
         </Paper>
 
@@ -120,6 +129,9 @@ export default function DataUploadsPage() {
         </TabPanel>
         <TabPanel value={mainTab} index={2}>
           <DataMapperSection />
+        </TabPanel>
+        <TabPanel value={mainTab} index={3}>
+          <DbMigrationSection />
         </TabPanel>
       </Box>
     </Box>
