@@ -508,6 +508,9 @@ export default function DriverSummaryPage() {
   const aggregatedSummary = useMemo(() => {
     const revenueTotals = {};
     const expenseTotals = {};
+    let totalRevenue = 0;
+    let totalExpense = 0;
+    let totalNet = 0;
 
     allRecords.forEach(driver => {
       // Aggregate revenues
@@ -525,11 +528,18 @@ export default function DriverSummaryPage() {
         }
         expenseTotals[item.key].total += (item.amount || 0);
       });
+
+      totalRevenue += (driver.totalRevenue || 0);
+      totalExpense += (driver.totalExpense || 0);
+      totalNet += (driver.netPayable || driver.netOwed || 0);
     });
 
     return {
       revenues: Object.entries(revenueTotals).map(([key, val]) => ({ key, ...val })),
       expenses: Object.entries(expenseTotals).map(([key, val]) => ({ key, ...val })),
+      totalRevenue,
+      totalExpense,
+      totalNet,
     };
   }, [allRecords]);
 
@@ -544,53 +554,58 @@ export default function DriverSummaryPage() {
     return col ? col.getAmount(driver) : 0;
   };
 
-  // ✅ Get display totals - use running totals while loading, grand totals when complete
+  // ✅ Get display totals - calculate from loaded driver records
   const getDisplayTotals = () => {
-    // ✅ All pages loaded: use backend grand totals (authoritative)
-    if (isAllRecordsLoaded && reportData) {
+    if (allRecords.length === 0) {
       return {
-        revenue: reportData.grandTotalRevenue || 0,
-        expense: reportData.grandTotalExpense || 0,
-        netOwed: reportData.grandNetOwed || 0,
-        previousBalance: reportData.grandPreviousBalance || 0,
-        paid: reportData.grandTotalPaid || 0,
-        driverCount: reportData.totalElements || 0,
-        leaseRevenue: reportData.grandTotalLeaseRevenue || 0,
-        creditCardRevenue: reportData.grandTotalCreditCardRevenue || 0,
-        chargesRevenue: reportData.grandTotalChargesRevenue || 0,
-        otherRevenue: reportData.grandTotalOtherRevenue || 0,
-        fixedExpense: reportData.grandTotalFixedExpense || 0,
-        leaseExpense: reportData.grandTotalLeaseExpense || 0,
-        variableExpense: reportData.grandTotalVariableExpense || 0,
-        otherExpense: reportData.grandTotalOtherExpense || 0,
+        revenue: 0, expense: 0, netOwed: 0, previousBalance: 0, paid: 0, driverCount: 0,
+        leaseRevenue: 0, creditCardRevenue: 0, chargesRevenue: 0, otherRevenue: 0,
+        fixedExpense: 0, leaseExpense: 0, variableExpense: 0, otherExpense: 0,
       };
     }
 
-    // ✅ Still loading: use accumulated running totals from pages fetched so far
-    if (runningTotals) {
-      return {
-        revenue: runningTotals.revenue || 0,
-        expense: runningTotals.expense || 0,
-        netOwed: runningTotals.netOwed || 0,
-        previousBalance: runningTotals.previousBalance || 0,
-        paid: runningTotals.paid || 0,
-        driverCount: runningTotals.driverCount || 0,
-        leaseRevenue: runningTotals.leaseRevenue || 0,
-        creditCardRevenue: runningTotals.creditCardRevenue || 0,
-        chargesRevenue: runningTotals.chargesRevenue || 0,
-        otherRevenue: runningTotals.otherRevenue || 0,
-        fixedExpense: runningTotals.fixedExpense || 0,
-        leaseExpense: runningTotals.leaseExpense || 0,
-        variableExpense: runningTotals.variableExpense || 0,
-        otherExpense: runningTotals.otherExpense || 0,
-      };
-    }
+    // Sum totals from breakdown arrays
+    const totalRevenue = aggregatedSummary.revenues.reduce((sum, item) => sum + item.total, 0);
+    const totalExpense = aggregatedSummary.expenses.reduce((sum, item) => sum + item.total, 0);
 
-    // No data yet
+    // Find specific breakdown items by key
+    const findTotal = (items, key) => {
+      const item = items.find(i => i.key === key);
+      return item ? item.total : 0;
+    };
+
+    // Revenue keys from backend: CC, CHARGES, LEASE_INC, OTHER:*
+    const leaseRevenue = findTotal(aggregatedSummary.revenues, "LEASE_INC");
+    const creditCardRevenue = findTotal(aggregatedSummary.revenues, "CC");
+    const chargesRevenue = findTotal(aggregatedSummary.revenues, "CHARGES");
+    const otherRevenue = totalRevenue - leaseRevenue - creditCardRevenue - chargesRevenue;
+
+    // Expense keys from backend: LEASE_EXP, AIRPORT, INSURANCE, RECURRING:*, ONETIME:*
+    const leaseExpense = findTotal(aggregatedSummary.expenses, "LEASE_EXP");
+    const insuranceExpense = findTotal(aggregatedSummary.expenses, "INSURANCE");
+    const airportExpense = findTotal(aggregatedSummary.expenses, "AIRPORT");
+    // Fixed = all recurring expenses
+    const fixedExpense = aggregatedSummary.expenses
+      .filter(i => i.key.startsWith("RECURRING:"))
+      .reduce((sum, item) => sum + item.total, 0);
+    const variableExpense = insuranceExpense + airportExpense;
+    const otherExpense = totalExpense - leaseExpense - fixedExpense - variableExpense;
+
     return {
-      revenue: 0, expense: 0, netOwed: 0, previousBalance: 0, paid: 0, driverCount: 0,
-      leaseRevenue: 0, creditCardRevenue: 0, chargesRevenue: 0, otherRevenue: 0,
-      fixedExpense: 0, leaseExpense: 0, variableExpense: 0, otherExpense: 0,
+      revenue: totalRevenue,
+      expense: totalExpense,
+      netOwed: totalRevenue - totalExpense,
+      previousBalance: runningTotals?.previousBalance || 0,
+      paid: runningTotals?.paid || 0,
+      driverCount: allRecords.filter(d => (d.totalRevenue || 0) > 0 || (d.totalExpense || 0) > 0).length,
+      leaseRevenue,
+      creditCardRevenue,
+      chargesRevenue,
+      otherRevenue,
+      fixedExpense,
+      leaseExpense,
+      variableExpense,
+      otherExpense,
     };
   };
 
