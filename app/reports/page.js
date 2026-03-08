@@ -1031,6 +1031,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                               <TableHead>
                                 <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
                                   <TableCell><strong>Transaction Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
                                   <TableCell><strong>Card Type</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
                                   <TableCell align="right"><strong>Amount</strong></TableCell>
@@ -1040,6 +1041,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                 {getFilteredCreditCards().map((rev, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                    <TableCell>{rev.cabNumber || "-"}</TableCell>
                                     <TableCell>{rev.categoryName || "-"}</TableCell>
                                     <TableCell>{rev.description || "-"}</TableCell>
                                     <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
@@ -1048,7 +1050,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   </TableRow>
                                 ))}
                                 <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={3} align="right"><strong>Credit Card Revenue Total:</strong></TableCell>
+                                  <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Total:</strong></TableCell>
                                   <TableCell align="right"><strong>${calculateSubtotal(getFilteredCreditCards()).toFixed(2)}</strong></TableCell>
                                 </TableRow>
                               </TableBody>
@@ -1126,6 +1128,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                               <TableHead>
                                 <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
                                   <TableCell><strong>Date</strong></TableCell>
+                                  <TableCell><strong>Cab #</strong></TableCell>
                                   <TableCell><strong>Account Name</strong></TableCell>
                                   <TableCell><strong>From</strong></TableCell>
                                   <TableCell><strong>To</strong></TableCell>
@@ -1142,6 +1145,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   return (
                                     <TableRow key={idx} hover>
                                       <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                      <TableCell>{rev.cabNumber || "-"}</TableCell>
                                       <TableCell><strong>{rev.accountName || "-"}</strong></TableCell>
                                       <TableCell>{rev.pickupAddress || "-"}</TableCell>
                                       <TableCell>{rev.dropoffAddress || "-"}</TableCell>
@@ -1158,7 +1162,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   );
                                 })}
                                 <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={4} align="right"><strong>Account Charges Total:</strong></TableCell>
+                                  <TableCell colSpan={5} align="right"><strong>Account Charges Total:</strong></TableCell>
                                   <TableCell align="right" colSpan={2}></TableCell>
                                   <TableCell align="right"><strong>${getFilteredCharges().reduce((sum, rev) => {
                                     const tip = rev.tipAmount ? parseFloat(rev.tipAmount) : 0;
@@ -2199,8 +2203,10 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                       <TableHead>
                         <TableRow>
                           <TableCell>Date</TableCell>
-                          <TableCell>Category</TableCell>
-                          <TableCell>Description</TableCell>
+                          <TableCell>Cab #</TableCell>
+                          <TableCell>Account</TableCell>
+                          <TableCell>From</TableCell>
+                          <TableCell>To</TableCell>
                           <TableCell align="right">Amount</TableCell>
                         </TableRow>
                       </TableHead>
@@ -2208,13 +2214,15 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         {[...getAccountChargeRevenues()].sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || "")).map((rev, idx) => (
                           <TableRow key={idx}>
                             <TableCell>{rev.revenueDate || "-"}</TableCell>
-                            <TableCell>{rev.categoryName || "-"}</TableCell>
-                            <TableCell>{rev.description || "-"}</TableCell>
+                            <TableCell>{rev.cabNumber || "-"}</TableCell>
+                            <TableCell>{rev.accountName || rev.description || "-"}</TableCell>
+                            <TableCell>{rev.pickupAddress || "-"}</TableCell>
+                            <TableCell>{rev.dropoffAddress || "-"}</TableCell>
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={3} align="right"><strong>Account Charges Subtotal:</strong></TableCell>
+                          <TableCell colSpan={5} align="right"><strong>Account Charges Subtotal:</strong></TableCell>
                           <TableCell align="right"><strong>${calculateSubtotal(getAccountChargeRevenues()).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>
@@ -2235,6 +2243,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <TableRow>
                           <TableCell>Date</TableCell>
                           <TableCell>Category</TableCell>
+                          <TableCell>Cab #</TableCell>
                           <TableCell>Description</TableCell>
                           <TableCell align="right">Amount</TableCell>
                         </TableRow>
@@ -2244,12 +2253,13 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           <TableRow key={idx}>
                             <TableCell>{rev.revenueDate || "-"}</TableCell>
                             <TableCell>{rev.categoryName || "-"}</TableCell>
+                            <TableCell>{rev.cabNumber || "-"}</TableCell>
                             <TableCell>{rev.description || "-"}</TableCell>
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={3} align="right"><strong>Credit Card Revenue Subtotal:</strong></TableCell>
+                          <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Subtotal:</strong></TableCell>
                           <TableCell align="right"><strong>${calculateSubtotal(getCreditCardRevenues()).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>

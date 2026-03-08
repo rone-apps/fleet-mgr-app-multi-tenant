@@ -100,7 +100,8 @@ export default function CabsPage() {
 
   // Form data
   const [formData, setFormData] = useState({
-    registrationNumber: "",
+    cabNumber: "",
+    registrationNumber: "N/A",
     make: "",
     model: "",
     year: "",
@@ -286,6 +287,7 @@ export default function CabsPage() {
       setEditMode(true);
       setSelectedCab(cab);
       setFormData({
+        cabNumber: cab.cabNumber || "",
         registrationNumber: cab.registrationNumber || "",
         make: cab.make || "",
         model: cab.model || "",
@@ -304,7 +306,8 @@ export default function CabsPage() {
       setEditMode(false);
       setSelectedCab(null);
       setFormData({
-        registrationNumber: "",
+        cabNumber: "",
+        registrationNumber: "N/A",
         make: "",
         model: "",
         year: "",
@@ -328,7 +331,8 @@ export default function CabsPage() {
     setOpenDialog(false);
     setSelectedCab(null);
     setFormData({
-      registrationNumber: "",
+      cabNumber: "",
+      registrationNumber: "N/A",
       make: "",
       model: "",
       year: "",
@@ -344,11 +348,21 @@ export default function CabsPage() {
   };
 
   const handleSubmit = async () => {
+    // Validate cab number is numeric (if provided and not in edit mode)
+    if (!editMode && formData.cabNumber && !/^\d+$/.test(formData.cabNumber)) {
+      setError("Cab number must be a number");
+      return;
+    }
+    if (!editMode && !formData.cabNumber) {
+      setError("Cab number is required");
+      return;
+    }
+
     try {
       const url = editMode
         ? `${API_BASE_URL}/cabs/${selectedCab.id}`
         : `${API_BASE_URL}/cabs`;
-      
+
       const method = editMode ? "PUT" : "POST";
 
       const response = await fetch(url, {
@@ -1218,21 +1232,27 @@ export default function CabsPage() {
           )}
           
           <Grid container spacing={2}>
-            {editMode && (
-              <Grid item xs={12}>
-                <TextField
-                  label="Cab Number"
-                  value={selectedCab?.cabNumber || ""}
-                  fullWidth
-                  disabled
-                  size="small"
-                />
-              </Grid>
-            )}
-            
-            <Grid item xs={12}>
+            <Grid item xs={6}>
               <TextField
                 required
+                label="Cab Number"
+                placeholder="e.g. 59"
+                value={editMode ? (selectedCab?.cabNumber || "") : formData.cabNumber}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, "");
+                  setFormData({ ...formData, cabNumber: val });
+                }}
+                fullWidth
+                size="small"
+                disabled={editMode}
+                error={!editMode && formData.cabNumber !== "" && !/^\d+$/.test(formData.cabNumber)}
+                helperText={!editMode && formData.cabNumber !== "" && !/^\d+$/.test(formData.cabNumber) ? "Must be a number" : ""}
+                inputProps={{ inputMode: "numeric" }}
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
                 label="Registration Number"
                 value={formData.registrationNumber}
                 onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
