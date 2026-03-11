@@ -71,7 +71,8 @@ export const pageMetadata = {
   '/data-uploads': { name: 'Data Uploads', category: 'integrations' },
   '/shift-profiles': { name: 'Shift Profiles', category: 'profiles' },
   '/driver-payments': { name: 'Driver & Owner Payments', category: 'payments' },
-  '/statement-builder': { name: 'Statement Builder', category: 'reports' }
+  '/statement-builder': { name: 'Statement Builder', category: 'reports' },
+  '/shift-data': { name: 'Driver Shift Data', category: 'reports' }
 };
 
 // Get metadata for a page

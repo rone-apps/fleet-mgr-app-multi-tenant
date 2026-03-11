@@ -24,6 +24,7 @@ const routeLabels = {
   "/data-uploads": "Data Uploads",
   "/users": "Users",
   "/statement-builder": "Statement Builder",
+  "/shift-data": "Driver Shift Data",
   "/cab-attributes/types": "Cab Types",
   "/cabs/attributes": "Cab Attributes",
 };

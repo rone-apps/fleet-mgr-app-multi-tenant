@@ -730,16 +730,6 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             accent: '#f5576c'
           },
           {
-            title: 'Statement Builder',
-            description: 'Generate detailed financial statements & settle accounts',
-            icon: ReceiptOutlined,
-            path: '/statement-builder',
-            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
-            badge: 'Interactive',
-            gradient: 'linear-gradient(135deg, #f5576c 0%, #ffa502 100%)',
-            accent: '#f5576c'
-          },
-          {
             title: 'Lease Reconciliation',
             description: 'Shift-by-shift lease expense vs. revenue reconciliation',
             icon: Assessment,
