@@ -748,6 +748,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Reconciliation',
             gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             accent: '#764ba2'
+          },
+          {
+            title: 'Driver Shift Data',
+            description: 'View and audit driver shift sessions, logon/logoff times & consolidation details',
+            icon: AccessTime,
+            path: '/shift-data',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Audit',
+            gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+            accent: '#38f9d7'
           }
         ];
 
