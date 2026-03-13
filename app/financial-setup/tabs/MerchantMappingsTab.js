@@ -34,6 +34,7 @@ export default function MerchantMappingsTab({
   const [merchantMappingFormData, setMerchantMappingFormData] = useState({
     cabNumber: "",
     merchantNumber: "",
+    shift: "BOTH",
     startDate: new Date().toISOString().split("T")[0],
     endDate: "",
     notes: "",
@@ -87,6 +88,12 @@ export default function MerchantMappingsTab({
       });
       if (response.ok) {
         const data = await response.json();
+        data.sort((a, b) => {
+          const numA = parseInt(a.cabNumber, 10);
+          const numB = parseInt(b.cabNumber, 10);
+          if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+          return a.cabNumber.localeCompare(b.cabNumber);
+        });
         setMerchant2CabMappings(data);
         updateStats({
           merchantMappings: data.filter((m) => m.active).length,
@@ -103,6 +110,7 @@ export default function MerchantMappingsTab({
       setMerchantMappingFormData({
         cabNumber: mapping.cabNumber,
         merchantNumber: mapping.merchantNumber,
+        shift: mapping.shift || "BOTH",
         startDate: mapping.startDate,
         endDate: mapping.endDate || "",
         notes: mapping.notes || "",
@@ -112,6 +120,7 @@ export default function MerchantMappingsTab({
       setMerchantMappingFormData({
         cabNumber: "",
         merchantNumber: "",
+        shift: "BOTH",
         startDate: new Date().toISOString().split("T")[0],
         endDate: "",
         notes: "",
@@ -263,6 +272,7 @@ export default function MerchantMappingsTab({
               <TableCell>Type</TableCell>
               <TableCell>Owner</TableCell>
               <TableCell>Merchant Number</TableCell>
+              <TableCell>Shift</TableCell>
               <TableCell>Start Date</TableCell>
               <TableCell>End Date</TableCell>
               <TableCell>Status</TableCell>
@@ -273,7 +283,7 @@ export default function MerchantMappingsTab({
           <TableBody>
             {merchant2CabMappings.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                <TableCell colSpan={11} align="center" sx={{ py: 4 }}>
                   <Typography color="text.secondary">
                     No merchant mappings found
                   </Typography>
@@ -315,6 +325,20 @@ export default function MerchantMappingsTab({
                     >
                       {mapping.merchantNumber}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={mapping.shift || "BOTH"}
+                      size="small"
+                      color={
+                        mapping.shift === "DAY"
+                          ? "warning"
+                          : mapping.shift === "NIGHT"
+                          ? "secondary"
+                          : "default"
+                      }
+                      variant="outlined"
+                    />
                   </TableCell>
                   <TableCell>{mapping.startDate}</TableCell>
                   <TableCell>{mapping.endDate || "Current"}</TableCell>
@@ -439,6 +463,23 @@ export default function MerchantMappingsTab({
               required
               placeholder="e.g., 123456789"
             />
+            <FormControl fullWidth>
+              <InputLabel>Shift</InputLabel>
+              <Select
+                value={merchantMappingFormData.shift}
+                onChange={(e) =>
+                  setMerchantMappingFormData({
+                    ...merchantMappingFormData,
+                    shift: e.target.value,
+                  })
+                }
+                label="Shift"
+              >
+                <MenuItem value="BOTH">Both (shared machine)</MenuItem>
+                <MenuItem value="DAY">Day</MenuItem>
+                <MenuItem value="NIGHT">Night</MenuItem>
+              </Select>
+            </FormControl>
             <TextField
               label="Start Date"
               type="date"

@@ -129,6 +129,8 @@ export default function ViewDataSection({ currentUser }) {
   );
 }
 
+const UNASSIGNED_DRIVER = { driverNumber: "N/A", firstName: "Unassigned", lastName: "(N/A)" };
+
 // ==================== Credit Card Data View ====================
 function CreditCardDataView({ currentUser }) {
   const [data, setData] = useState([]);
@@ -138,7 +140,7 @@ function CreditCardDataView({ currentUser }) {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(25);
   const [totalCount, setTotalCount] = useState(0);
-  
+
   // Filters
   const [startDate, setStartDate] = useState(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState(new Date());
@@ -204,6 +206,11 @@ function CreditCardDataView({ currentUser }) {
     }
   };
 
+  // Re-fetch when page or rowsPerPage changes
+  useEffect(() => {
+    if (data.length > 0 || totalCount > 0) fetchData();
+  }, [page, rowsPerPage]);
+
   const handleSearch = () => {
     setPage(0);
     fetchData();
@@ -267,9 +274,9 @@ function CreditCardDataView({ currentUser }) {
           </Grid>
           <Grid item xs={12} sm={6} md={2}>
             <Autocomplete
-              options={drivers}
+              options={[UNASSIGNED_DRIVER, ...drivers]}
               getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
-              value={drivers.find((d) => d.driverNumber === driverNumber) || null}
+              value={[UNASSIGNED_DRIVER, ...drivers].find((d) => d.driverNumber === driverNumber) || null}
               onChange={(e, v) => setDriverNumber(v?.driverNumber || "")}
               renderInput={(params) => <TextField {...params} label="Driver" size="small" />}
             />
@@ -300,7 +307,7 @@ function CreditCardDataView({ currentUser }) {
 
       {/* Data Table */}
       <Paper>
-        <TableContainer sx={{ maxHeight: 500 }}>
+        <TableContainer>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
@@ -386,9 +393,9 @@ function CreditCardDataView({ currentUser }) {
           component="div"
           count={totalCount}
           page={page}
-          onPageChange={(e, p) => { setPage(p); fetchData(); }}
+          onPageChange={(e, p) => setPage(p)}
           rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value)); setPage(0); }}
+          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
           rowsPerPageOptions={[10, 25, 50, 100]}
         />
       </Paper>
@@ -471,6 +478,10 @@ function MileageDataView({ currentUser }) {
     }
   };
 
+  useEffect(() => {
+    if (data.length > 0 || totalCount > 0) fetchData();
+  }, [page, rowsPerPage]);
+
   const handleSearch = () => {
     setPage(0);
     fetchData();
@@ -534,9 +545,9 @@ function MileageDataView({ currentUser }) {
           </Grid>
           <Grid item xs={12} sm={6} md={2}>
             <Autocomplete
-              options={drivers}
+              options={[UNASSIGNED_DRIVER, ...drivers]}
               getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
-              value={drivers.find((d) => d.driverNumber === driverNumber) || null}
+              value={[UNASSIGNED_DRIVER, ...drivers].find((d) => d.driverNumber === driverNumber) || null}
               onChange={(e, v) => setDriverNumber(v?.driverNumber || "")}
               renderInput={(params) => <TextField {...params} label="Driver" size="small" />}
             />
@@ -567,7 +578,7 @@ function MileageDataView({ currentUser }) {
 
       {/* Data Table */}
       <Paper>
-        <TableContainer sx={{ maxHeight: 500 }}>
+        <TableContainer>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
@@ -655,9 +666,9 @@ function MileageDataView({ currentUser }) {
           component="div"
           count={totalCount}
           page={page}
-          onPageChange={(e, p) => { setPage(p); fetchData(); }}
+          onPageChange={(e, p) => setPage(p)}
           rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value)); setPage(0); }}
+          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
           rowsPerPageOptions={[10, 25, 50, 100]}
         />
       </Paper>
@@ -743,6 +754,10 @@ function AirportTripsDataView({ currentUser }) {
     }
   };
 
+  useEffect(() => {
+    if (data.length > 0 || totalCount > 0) fetchData();
+  }, [page, rowsPerPage]);
+
   const handleSearch = () => {
     setPage(0);
     fetchData();
@@ -809,9 +824,9 @@ function AirportTripsDataView({ currentUser }) {
           </Grid>
           <Grid item xs={12} sm={6} md={2}>
             <Autocomplete
-              options={drivers}
+              options={[UNASSIGNED_DRIVER, ...drivers]}
               getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
-              value={drivers.find((d) => d.driverNumber === driverNumber) || null}
+              value={[UNASSIGNED_DRIVER, ...drivers].find((d) => d.driverNumber === driverNumber) || null}
               onChange={(e, v) => setDriverNumber(v?.driverNumber || "")}
               renderInput={(params) => <TextField {...params} label="Driver" size="small" />}
             />
@@ -856,7 +871,7 @@ function AirportTripsDataView({ currentUser }) {
 
       {/* Data Table */}
       <Paper>
-        <TableContainer sx={{ maxHeight: 500 }}>
+        <TableContainer>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
@@ -983,9 +998,9 @@ function AirportTripsDataView({ currentUser }) {
           component="div"
           count={totalCount}
           page={page}
-          onPageChange={(e, p) => { setPage(p); fetchData(); }}
+          onPageChange={(e, p) => setPage(p)}
           rowsPerPage={rowsPerPage}
-          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value)); setPage(0); }}
+          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
           rowsPerPageOptions={[10, 25, 50, 100]}
         />
       </Paper>
