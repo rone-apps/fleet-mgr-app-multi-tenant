@@ -670,7 +670,7 @@ export default function FinancialHelpDialog({ open, onClose }) {
         </Alert>
 
         {sections.map((section, index) => (
-          <Accordion key={index} defaultOpen={index === 0}>
+          <Accordion key={index} defaultExpanded={index === 0}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
               <Box sx={{ display: "flex", alignItems: "center", gap: 2, width: "100%" }}>
                 {section.icon}

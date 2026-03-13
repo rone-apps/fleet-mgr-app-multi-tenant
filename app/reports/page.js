@@ -1460,7 +1460,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {reportData.recurringExpenses.map((exp, idx) => (
+                                {reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0).map((exp, idx) => (
                                   <TableRow key={idx} hover>
                                     <TableCell>{exp.categoryName || "-"}</TableCell>
                                     <TableCell>{exp.entityDescription || "-"}</TableCell>
@@ -2039,9 +2039,24 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   EXPENSES
                 </Typography>
                 {reportData.recurringExpenses && reportData.recurringExpenses.length > 0 && (
-                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
-                    <Typography variant="body2" color="textSecondary">Recurring Expenses</Typography>
-                    <Typography variant="body2">${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</Typography>
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Recurring Expenses</Typography>
+                      <Typography variant="body2" fontWeight="bold">${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</Typography>
+                    </Box>
+                    {(() => {
+                      const grouped = {};
+                      reportData.recurringExpenses.forEach((exp) => {
+                        const cat = exp.categoryName || exp.categoryCode || "Other";
+                        grouped[cat] = (grouped[cat] || 0) + parseFloat(exp.amount || 0);
+                      });
+                      return Object.keys(grouped).sort().filter((cat) => grouped[cat] !== 0).map((cat) => (
+                        <Box key={cat} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
+                          <Typography variant="caption" color="text.secondary">{cat}</Typography>
+                          <Typography variant="caption" color="text.secondary">${grouped[cat].toFixed(2)}</Typography>
+                        </Box>
+                      ));
+                    })()}
                   </Box>
                 )}
                 {getLeaseExpenses().length > 0 && (
@@ -2319,7 +2334,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {reportData.recurringExpenses.map((exp, idx) => (
+                        {reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0).map((exp, idx) => (
                           <TableRow key={idx}>
                             <TableCell>{exp.categoryName || "-"}</TableCell>
                             <TableCell>{exp.entityDescription || "-"}</TableCell>

@@ -23,6 +23,7 @@ import {
   IconButton,
   Chip,
   Alert,
+  AlertTitle,
   Card,
   CardContent,
 } from "@mui/material";
@@ -32,6 +33,7 @@ import {
   Delete as DeleteIcon,
   CheckCircle as ActiveIcon,
   Cancel as InactiveIcon,
+  Block as BlockIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { API_BASE_URL } from "../../lib/api";
@@ -146,25 +148,12 @@ export default function ItemRatesTab({ canEdit, canDelete, setError, setSuccess,
     }
   };
 
-  const handleDelete = async (rateId) => {
-    if (!window.confirm("Are you sure you want to deactivate this rate?")) return;
+  const [openDeleteWarning, setOpenDeleteWarning] = useState(false);
+  const [deleteWarningRate, setDeleteWarningRate] = useState(null);
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/item-rates/${rateId}`, {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-        },
-      });
-
-      if (!response.ok) throw new Error("Failed to delete rate");
-
-      setSuccess("Rate deactivated successfully");
-      loadRates();
-    } catch (err) {
-      setError(err.message);
-    }
+  const handleDelete = (rate) => {
+    setDeleteWarningRate(rate);
+    setOpenDeleteWarning(true);
   };
 
   return (
@@ -252,8 +241,9 @@ export default function ItemRatesTab({ canEdit, canDelete, setError, setSuccess,
                         </IconButton>
                         <IconButton
                           size="small"
-                          onClick={() => handleDelete(rate.id)}
-                          title="Deactivate"
+                          onClick={() => handleDelete(rate)}
+                          title="Delete"
+                          color="error"
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -336,6 +326,65 @@ export default function ItemRatesTab({ canEdit, canDelete, setError, setSuccess,
           <Button onClick={handleCloseDialog}>Cancel</Button>
           <Button onClick={handleSave} variant="contained">
             {editing ? "Update" : "Create"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Warning Dialog */}
+      <Dialog
+        open={openDeleteWarning}
+        onClose={() => setOpenDeleteWarning(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle
+          sx={{
+            bgcolor: "error.light",
+            color: "error.contrastText",
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+          }}
+        >
+          <BlockIcon />
+          Cannot Delete Item Rate
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ mt: 2 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
+              <AlertTitle>Deletion Blocked</AlertTitle>
+              The item rate &quot;{deleteWarningRate?.name}&quot; cannot be deleted.
+            </Alert>
+
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                Reason:
+              </Typography>
+              <Typography variant="body2">
+                Item rates are used in financial calculations and reports. Deleting
+                this rate would cause incorrect historical reports and missing
+                expense calculations.
+              </Typography>
+            </Box>
+
+            <Box sx={{ p: 2, bgcolor: "info.lighter", borderRadius: 1 }}>
+              <Typography variant="subtitle2" color="info.main" gutterBottom>
+                What you can do:
+              </Typography>
+              <Typography variant="body2">
+                Use the Edit button to create a new version with an updated rate
+                and effective date. The old version will be automatically closed
+                and preserved for historical reporting.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => setOpenDeleteWarning(false)}
+            variant="contained"
+          >
+            I Understand
           </Button>
         </DialogActions>
       </Dialog>

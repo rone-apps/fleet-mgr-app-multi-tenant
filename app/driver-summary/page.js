@@ -2464,38 +2464,64 @@ export default function DriverSummaryPage() {
                         {driverDetailReport.recurringExpenses && driverDetailReport.recurringExpenses.length > 0 ? (
                           <Box sx={{ mb: 3 }}>
                             <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Recurring Expenses</Typography>
-                            <TableContainer>
-                              <Table size="small">
-                                <TableHead>
-                                  <TableRow sx={{ bgcolor: "#ffebee" }}>
-                                    <TableCell><strong>Category</strong></TableCell>
-                                    <TableCell><strong>Description</strong></TableCell>
-                                    <TableCell align="right"><strong>Amount</strong></TableCell>
-                                  </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                  {driverDetailReport.recurringExpenses.map((exp, idx) => (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{exp.categoryName || "-"}</TableCell>
-                                      <TableCell>{exp.description || exp.entityDescription || "-"}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                        {formatCurrency(exp.amount)}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                    <TableCell colSpan={2} align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main">RECURRING SUBTOTAL</Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
-                                        {formatCurrency(driverDetailReport.totalRecurringExpenses || driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
-                                </TableBody>
-                              </Table>
-                            </TableContainer>
+                            {(() => {
+                              // Group recurring expenses by categoryName
+                              const grouped = {};
+                              driverDetailReport.recurringExpenses.forEach((exp) => {
+                                const cat = exp.categoryName || "Other";
+                                if (!grouped[cat]) grouped[cat] = [];
+                                grouped[cat].push(exp);
+                              });
+                              const categories = Object.keys(grouped).sort();
+                              return (
+                                <TableContainer>
+                                  <Table size="small">
+                                    <TableHead>
+                                      <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                        <TableCell><strong>Category</strong></TableCell>
+                                        <TableCell><strong>Description</strong></TableCell>
+                                        <TableCell align="right"><strong>Amount</strong></TableCell>
+                                      </TableRow>
+                                    </TableHead>
+                                    <TableBody>
+                                      {categories.map((cat) => {
+                                        const items = grouped[cat];
+                                        const catSubtotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                        return [
+                                          <TableRow key={`cat-header-${cat}`} sx={{ bgcolor: "#fff3e0" }}>
+                                            <TableCell colSpan={2}>
+                                              <Typography variant="body2" fontWeight="bold">{cat} ({items.length} item{items.length !== 1 ? "s" : ""})</Typography>
+                                            </TableCell>
+                                            <TableCell align="right">
+                                              <Typography variant="body2" fontWeight="bold" color="error.main">{formatCurrency(catSubtotal)}</Typography>
+                                            </TableCell>
+                                          </TableRow>,
+                                          ...items.map((exp, idx) => (
+                                            <TableRow key={`${cat}-${idx}`} hover>
+                                              <TableCell sx={{ pl: 4, color: "text.secondary" }}>{cat}</TableCell>
+                                              <TableCell>{exp.description || exp.entityDescription || "-"}</TableCell>
+                                              <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                                {formatCurrency(exp.amount)}
+                                              </TableCell>
+                                            </TableRow>
+                                          )),
+                                        ];
+                                      })}
+                                      <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                        <TableCell colSpan={2} align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">RECURRING SUBTOTAL</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                            {formatCurrency(driverDetailReport.totalRecurringExpenses || driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                          </Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    </TableBody>
+                                  </Table>
+                                </TableContainer>
+                              );
+                            })()}
                           </Box>
                         ) : null}
 
@@ -2544,10 +2570,20 @@ export default function DriverSummaryPage() {
                           );
                         })()}
 
-                        {/* One-Time Expenses (excluding lease and airport) */}
+                        {/* One-Time Expenses (excluding lease and airport) - Grouped by Category */}
                         {(() => {
                           const otherItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode !== "LEASE_EXP" && e.categoryCode !== "AIRPORT_TRIP");
                           if (otherItems.length === 0) return null;
+
+                          // Group by categoryName
+                          const grouped = {};
+                          otherItems.forEach((exp) => {
+                            const cat = exp.categoryName || "Other";
+                            if (!grouped[cat]) grouped[cat] = [];
+                            grouped[cat].push(exp);
+                          });
+                          const categories = Object.keys(grouped).sort();
+
                           return (
                             <Box sx={{ mb: 3 }}>
                               <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>One-Time Expenses</Typography>
@@ -2562,14 +2598,28 @@ export default function DriverSummaryPage() {
                                     </TableRow>
                                   </TableHead>
                                   <TableBody>
-                                    {otherItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
-                                      <TableRow key={idx} hover>
-                                        <TableCell>{exp.date || "-"}</TableCell>
-                                        <TableCell>{exp.categoryName || "-"}</TableCell>
-                                        <TableCell>{exp.description || "-"}</TableCell>
-                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
-                                      </TableRow>
-                                    ))}
+                                    {categories.map((cat) => {
+                                      const items = grouped[cat].sort((a, b) => new Date(b.date || "") - new Date(a.date || ""));
+                                      const catSubtotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                      return [
+                                        <TableRow key={`cat-header-${cat}`} sx={{ bgcolor: "#fff3e0" }}>
+                                          <TableCell colSpan={3}>
+                                            <Typography variant="body2" fontWeight="bold">{cat} ({items.length} item{items.length !== 1 ? "s" : ""})</Typography>
+                                          </TableCell>
+                                          <TableCell align="right">
+                                            <Typography variant="body2" fontWeight="bold" color="error.main">{formatCurrency(catSubtotal)}</Typography>
+                                          </TableCell>
+                                        </TableRow>,
+                                        ...items.map((exp, idx) => (
+                                          <TableRow key={`${cat}-${idx}`} hover>
+                                            <TableCell>{exp.date || "-"}</TableCell>
+                                            <TableCell sx={{ pl: 4, color: "text.secondary" }}>{cat}</TableCell>
+                                            <TableCell>{exp.description || "-"}</TableCell>
+                                            <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                          </TableRow>
+                                        )),
+                                      ];
+                                    })}
                                     <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
                                       <TableCell colSpan={3} align="right">
                                         <Typography variant="body2" fontWeight="bold" color="error.main">ONE-TIME SUBTOTAL</Typography>
@@ -2639,42 +2689,68 @@ export default function DriverSummaryPage() {
                       </Box>
                     )}
 
-                    {/* Tab 1: Recurring Expenses */}
+                    {/* Tab 1: Recurring Expenses - Grouped by Category */}
                     {expenseTabIndex === 1 && (
                       <Box sx={{ mb: 3 }}>
                         {driverDetailReport.recurringExpenses && driverDetailReport.recurringExpenses.length > 0 ? (
-                          <TableContainer>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow sx={{ bgcolor: "#ffebee" }}>
-                                  <TableCell><strong>Category</strong></TableCell>
-                                  <TableCell><strong>Description</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {driverDetailReport.recurringExpenses.map((exp, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{exp.categoryName || "-"}</TableCell>
-                                    <TableCell>{exp.description || exp.entityDescription || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                      {formatCurrency(exp.amount)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                                <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                  <TableCell colSpan={2} align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL RECURRING EXPENSES</Typography>
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
-                                      {formatCurrency(driverDetailReport.totalRecurringExpenses || driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
+                          (() => {
+                            // Group by categoryName
+                            const grouped = {};
+                            driverDetailReport.recurringExpenses.forEach((exp) => {
+                              const cat = exp.categoryName || "Other";
+                              if (!grouped[cat]) grouped[cat] = [];
+                              grouped[cat].push(exp);
+                            });
+                            const categories = Object.keys(grouped).sort();
+                            return (
+                              <TableContainer>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow sx={{ bgcolor: "#ffebee" }}>
+                                      <TableCell><strong>Category</strong></TableCell>
+                                      <TableCell><strong>Description</strong></TableCell>
+                                      <TableCell align="right"><strong>Amount</strong></TableCell>
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {categories.map((cat) => {
+                                      const items = grouped[cat];
+                                      const catSubtotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                      return [
+                                        <TableRow key={`cat-header-${cat}`} sx={{ bgcolor: "#fff3e0" }}>
+                                          <TableCell colSpan={2}>
+                                            <Typography variant="body2" fontWeight="bold">{cat} ({items.length} item{items.length !== 1 ? "s" : ""})</Typography>
+                                          </TableCell>
+                                          <TableCell align="right">
+                                            <Typography variant="body2" fontWeight="bold" color="error.main">{formatCurrency(catSubtotal)}</Typography>
+                                          </TableCell>
+                                        </TableRow>,
+                                        ...items.map((exp, idx) => (
+                                          <TableRow key={`${cat}-${idx}`} hover>
+                                            <TableCell sx={{ pl: 4, color: "text.secondary" }}>{cat}</TableCell>
+                                            <TableCell>{exp.description || exp.entityDescription || "-"}</TableCell>
+                                            <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                              {formatCurrency(exp.amount)}
+                                            </TableCell>
+                                          </TableRow>
+                                        )),
+                                      ];
+                                    })}
+                                    <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                      <TableCell colSpan={2} align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL RECURRING EXPENSES</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                          {formatCurrency(driverDetailReport.totalRecurringExpenses || driverDetailReport.recurringExpenses.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            );
+                          })()
                         ) : (
                           <Typography color="textSecondary">No recurring expenses found</Typography>
                         )}
@@ -2758,12 +2834,22 @@ export default function DriverSummaryPage() {
                       </Box>
                     )}
 
-                    {/* Tab 3: One-Time Expenses (excluding lease and airport) */}
+                    {/* Tab 3: One-Time Expenses (excluding lease and airport) - Grouped by Category */}
                     {expenseTabIndex === 3 && (
                       <Box sx={{ mb: 3 }}>
                         {(() => {
                           const otherItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode !== "LEASE_EXP" && e.categoryCode !== "AIRPORT_TRIP");
                           if (otherItems.length === 0) return <Typography color="textSecondary">No one-time expenses found</Typography>;
+
+                          // Group by categoryName
+                          const grouped = {};
+                          otherItems.forEach((exp) => {
+                            const cat = exp.categoryName || "Other";
+                            if (!grouped[cat]) grouped[cat] = [];
+                            grouped[cat].push(exp);
+                          });
+                          const categories = Object.keys(grouped).sort();
+
                           return (
                             <TableContainer>
                               <Table size="small">
@@ -2776,14 +2862,28 @@ export default function DriverSummaryPage() {
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
-                                  {otherItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
-                                    <TableRow key={idx} hover>
-                                      <TableCell>{exp.date || "-"}</TableCell>
-                                      <TableCell>{exp.categoryName || "-"}</TableCell>
-                                      <TableCell>{exp.description || "-"}</TableCell>
-                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
-                                    </TableRow>
-                                  ))}
+                                  {categories.map((cat) => {
+                                    const items = grouped[cat].sort((a, b) => new Date(b.date || "") - new Date(a.date || ""));
+                                    const catSubtotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                    return [
+                                      <TableRow key={`cat-header-${cat}`} sx={{ bgcolor: "#fff3e0" }}>
+                                        <TableCell colSpan={3}>
+                                          <Typography variant="body2" fontWeight="bold">{cat} ({items.length} item{items.length !== 1 ? "s" : ""})</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">{formatCurrency(catSubtotal)}</Typography>
+                                        </TableCell>
+                                      </TableRow>,
+                                      ...items.map((exp, idx) => (
+                                        <TableRow key={`${cat}-${idx}`} hover>
+                                          <TableCell>{exp.date || "-"}</TableCell>
+                                          <TableCell sx={{ pl: 4, color: "text.secondary" }}>{cat}</TableCell>
+                                          <TableCell>{exp.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                        </TableRow>
+                                      )),
+                                    ];
+                                  })}
                                   <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
                                     <TableCell colSpan={3} align="right">
                                       <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL ONE-TIME EXPENSES</Typography>

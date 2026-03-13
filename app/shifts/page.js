@@ -276,6 +276,9 @@ export default function ShiftsPage() {
       } else {
         setShifts([]);
       }
+      // Clear stale attribute data from previously selected cab/shift
+      setCustomAttributes([]);
+      setAttributeHistory([]);
     } catch (err) {
       console.error("Error loading shifts:", err);
       setShifts([]);
@@ -300,6 +303,9 @@ export default function ShiftsPage() {
       } else {
         setShifts([]);
       }
+      // Clear stale attribute data from previously selected cab/shift
+      setCustomAttributes([]);
+      setAttributeHistory([]);
     } catch (err) {
       console.error("Error loading shifts:", err);
       setShifts([]);

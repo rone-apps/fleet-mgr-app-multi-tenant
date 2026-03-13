@@ -641,8 +641,7 @@ export default function CabsPage() {
   const getStatusColor = (status) => {
     const colors = {
       ACTIVE: "success",
-      MAINTENANCE: "warning",
-      RETIRED: "error",
+      INACTIVE: "default",
     };
     return colors[status] || "default";
   };
@@ -868,10 +867,10 @@ export default function CabsPage() {
             <Card>
               <CardContent>
                 <Typography color="textSecondary" gutterBottom>
-                  In Maintenance
+                  Inactive
                 </Typography>
-                <Typography variant="h4" color="warning.main">
-                  {cabs.filter((c) => c.status === "MAINTENANCE").length}
+                <Typography variant="h4" color="text.secondary">
+                  {cabs.filter((c) => c.status === "INACTIVE").length}
                 </Typography>
               </CardContent>
             </Card>
@@ -911,8 +910,7 @@ export default function CabsPage() {
               >
                 <MenuItem value="ALL">All Status</MenuItem>
                 <MenuItem value="ACTIVE">Active</MenuItem>
-                <MenuItem value="MAINTENANCE">Maintenance</MenuItem>
-                <MenuItem value="RETIRED">Retired</MenuItem>
+                <MenuItem value="INACTIVE">Inactive</MenuItem>
               </Select>
             </FormControl>
 
@@ -1080,11 +1078,15 @@ export default function CabsPage() {
                       </Box>
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        label={cab.cabType === "HANDICAP_VAN" ? "Handicap Van" : "Sedan"}
-                        color={getTypeColor(cab.cabType)}
-                        size="small"
-                      />
+                      {cab.cabType ? (
+                        <Chip
+                          label={cab.cabType === "HANDICAP_VAN" ? "Handicap Van" : "Sedan"}
+                          color={getTypeColor(cab.cabType)}
+                          size="small"
+                        />
+                      ) : (
+                        <Typography variant="body2" color="textSecondary">-</Typography>
+                      )}
                     </TableCell>
                     <TableCell>
                       {cab.shareType ? (
@@ -1099,10 +1101,10 @@ export default function CabsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {cab.cabShiftType ? (
+                      {cab.shiftCount > 0 ? (
                         <Chip
-                          label={cab.cabShiftType === "SINGLE" ? "Single" : "Double"}
-                          color={cab.cabShiftType === "DOUBLE" ? "secondary" : "default"}
+                          label={`${cab.shiftCount} shift${cab.shiftCount > 1 ? "s" : ""}`}
+                          color={cab.shiftCount >= 2 ? "secondary" : "default"}
                           size="small"
                           variant="outlined"
                         />
@@ -1146,8 +1148,8 @@ export default function CabsPage() {
                     </TableCell>
                     <TableCell>
                       <Chip
-                        label={cab.status}
-                        color={getStatusColor(cab.status)}
+                        label={cab.status || "ACTIVE"}
+                        color={getStatusColor(cab.status || "ACTIVE")}
                         size="small"
                       />
                     </TableCell>
@@ -1163,20 +1165,18 @@ export default function CabsPage() {
                               <EditIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
-                          
-                          {cab.status === "ACTIVE" && (
-                            <Tooltip title="Set Maintenance">
+
+                          {cab.status === "ACTIVE" ? (
+                            <Tooltip title="Deactivate">
                               <IconButton
                                 size="small"
-                                onClick={() => handleStatusChange(cab.id, "maintenance")}
+                                onClick={() => handleStatusChange(cab.id, "deactivate")}
                                 color="warning"
                               >
-                                <BuildIcon fontSize="small" />
+                                <BlockIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
-                          )}
-                          
-                          {cab.status === "MAINTENANCE" && (
+                          ) : (
                             <Tooltip title="Activate">
                               <IconButton
                                 size="small"
@@ -1184,18 +1184,6 @@ export default function CabsPage() {
                                 color="success"
                               >
                                 <CheckCircleIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                          
-                          {currentUser.role === "ADMIN" && cab.status !== "RETIRED" && (
-                            <Tooltip title="Retire">
-                              <IconButton
-                                size="small"
-                                onClick={() => handleStatusChange(cab.id, "retire")}
-                                color="error"
-                              >
-                                <BlockIcon fontSize="small" />
                               </IconButton>
                             </Tooltip>
                           )}
