@@ -58,7 +58,7 @@ export function useAccountManagement() {
   
   // Core state
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentTab, setCurrentTab] = useState(0);
+  const [currentTab, setCurrentTab] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -597,7 +597,7 @@ export function useAccountManagement() {
         }
 
         // Reload all charges if viewing tab 2 (All Charges)
-        if (currentTab === 2) {
+        if (currentTab === "allCharges") {
           setTimeout(() => {
             loadAllCharges();
           }, 300);
@@ -1139,13 +1139,13 @@ export function useAccountManagement() {
   }, [router, loadData]);
 
   useEffect(() => {
-    if (currentTab === 2) {
+    if (currentTab === "allCharges") {
       loadAllCharges();
     }
   }, [currentTab, loadAllCharges]);
 
   useEffect(() => {
-    if (currentTab === 3) {
+    if (currentTab === "invoices") {
       loadInvoices();
     }
   }, [currentTab, loadInvoices]);

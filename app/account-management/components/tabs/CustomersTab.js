@@ -275,7 +275,7 @@ export default function CustomersTab({
                 hover
                 sx={{ cursor: "pointer" }}
                 onClick={() => {
-                  setCurrentTab(1);
+                  setCurrentTab("tripCharges");
                   handleSelectCustomer(customer);
                 }}
               >

@@ -12,7 +12,7 @@ import {
   Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon,
   TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Search as SearchIcon,
   Repeat as RecurringIcon, EventNote as OneTimeIcon, CheckCircle as ActiveIcon,
-  Cancel as InactiveIcon, Block as BlockIcon, AccountBalance as RevenueIcon,
+  Cancel as InactiveIcon, Block as BlockIcon, Close as CloseIcon, AccountBalance as RevenueIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
@@ -22,7 +22,7 @@ import { autoApplyExpenses, bulkCreateExpenses } from "../lib/expenseCategoryRul
 
 export default function ExpensesRevenuesPage() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentTab, setCurrentTab] = useState(0);
+  const [currentTab, setCurrentTab] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -129,9 +129,9 @@ export default function ExpensesRevenuesPage() {
   };
 
   useEffect(() => {
-    if (currentTab === 1 && filterStartDate && filterEndDate) {
+    if (currentTab === "oneTime" && filterStartDate && filterEndDate) {
       loadOneTimeExpenses();
-    } else if (currentTab === 2 && filterStartDate && filterEndDate) {
+    } else if (currentTab === "revenues" && filterStartDate && filterEndDate) {
       loadOtherRevenues();
     }
   }, [currentTab, filterStartDate, filterEndDate]);
@@ -699,197 +699,288 @@ export default function ExpensesRevenuesPage() {
           </Grid>
         </Grid>
 
-        <Paper>
-          <Tabs value={currentTab} onChange={(e, v) => setCurrentTab(v)}>
-            <Tab label="Recurring Expenses" icon={<RecurringIcon />} iconPosition="start" />
-            <Tab label="One-Time Expenses" icon={<OneTimeIcon />} iconPosition="start" />
-            <Tab label="Other Revenues" icon={<RevenueIcon />} iconPosition="start" />
-            <Tab label="Attribute Costs" icon={<TrendingDownIcon />} iconPosition="start" />
-          </Tabs>
-
-          {currentTab === 0 && (
-            <Box sx={{ p: 3 }}>
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Category</InputLabel>
-                    <Select value={filterCategory} label="Category" onChange={(e) => setFilterCategory(e.target.value)}>
-                      <MenuItem value="">All</MenuItem>
-                      {expenseCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel>Entity Type</InputLabel>
-                    <Select value={filterEntityType} label="Entity Type" onChange={(e) => setFilterEntityType(e.target.value)}>
-                      <MenuItem value="">All</MenuItem>
-                      <MenuItem value="CAB">Cab</MenuItem>
-                      <MenuItem value="SHIFT">Shift</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <TextField placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} fullWidth size="small" 
-                    InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <FormControlLabel control={<Switch checked={showActiveOnly} onChange={(e) => { setShowActiveOnly(e.target.checked); loadRecurringExpenses(); }} />} label="Active Only" />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenRecurringDialog()} fullWidth>Add Recurring Expense</Button>}
-                </Grid>
+        {/* Category Cards */}
+        {(() => {
+          const expenseCards = [
+            { key: "recurring", label: "Recurring Expenses", description: "Manage monthly and periodic recurring charges", icon: RecurringIcon, color: "#1565c0", count: filteredRecurring.length },
+            { key: "oneTime", label: "One-Time Expenses", description: "Record individual expense transactions", icon: OneTimeIcon, color: "#c62828", count: filteredOneTime.length },
+            { key: "revenues", label: "Other Revenues", description: "Track additional revenue and credit entries", icon: RevenueIcon, color: "#2e7d32", count: filteredRevenues.length },
+            { key: "attributeCosts", label: "Attribute Costs", description: "Configure costs based on shift attributes", icon: TrendingDownIcon, color: "#e65100", count: null },
+          ];
+          return (
+            <>
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                {expenseCards.map((cat) => {
+                  const Icon = cat.icon;
+                  const isExpanded = currentTab === cat.key;
+                  return (
+                    <Grid item xs={12} sm={6} md={3} key={cat.key}>
+                      <Card
+                        elevation={isExpanded ? 4 : 1}
+                        sx={{
+                          border: isExpanded ? `2px solid ${cat.color}` : "1px solid #e5e7eb",
+                          borderRadius: 2,
+                          transition: "all 0.2s ease",
+                          cursor: "pointer",
+                          "&:hover": { boxShadow: 3, borderColor: cat.color },
+                        }}
+                        onClick={() => setCurrentTab(currentTab === cat.key ? null : cat.key)}
+                      >
+                        <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                            <Box
+                              sx={{
+                                width: 44, height: 44, borderRadius: 1.5,
+                                backgroundColor: `${cat.color}15`,
+                                display: "flex", alignItems: "center", justifyContent: "center",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Icon sx={{ color: cat.color, fontSize: 24 }} />
+                            </Box>
+                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+                                  {cat.label}
+                                </Typography>
+                                {cat.count !== null && (
+                                  <Chip label={cat.count} size="small" sx={{ height: 20, fontSize: "0.7rem", backgroundColor: `${cat.color}15`, color: cat.color, fontWeight: 700 }} />
+                                )}
+                              </Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                                {cat.description}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  );
+                })}
               </Grid>
 
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Entity</TableCell>
-                      <TableCell>Billing</TableCell>
-                      <TableCell align="right">Amount</TableCell>
-                      <TableCell>From</TableCell>
-                      <TableCell>To</TableCell>
-                      <TableCell>Status</TableCell>
-                      {canEdit && <TableCell align="right">Actions</TableCell>}
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredRecurring.map(expense => (
-                      <TableRow key={expense.id}>
-                        <TableCell><Chip label={expense.expenseCategory?.categoryName} size="small" color="primary" /></TableCell>
-                        <TableCell>{getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}</TableCell>
-                        <TableCell><Chip label={expense.billingMethod} size="small" variant="outlined" /></TableCell>
-                        <TableCell align="right"><Typography variant="body2" fontWeight="bold">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
-                        <TableCell>{expense.effectiveFrom}</TableCell>
-                        <TableCell>{expense.effectiveTo || "Ongoing"}</TableCell>
-                        <TableCell><Chip icon={expense.isActive ? <ActiveIcon /> : <InactiveIcon />} label={expense.isActive ? "Active" : "Inactive"} color={expense.isActive ? "success" : "default"} size="small" /></TableCell>
-                        {canEdit && (
-                          <TableCell align="right">
-                            <IconButton size="small" onClick={() => handleOpenRecurringDialog(expense)}><EditIcon fontSize="small" /></IconButton>
-                            <IconButton size="small" onClick={() => handleToggleRecurringActive(expense.id, expense.isActive)} color={expense.isActive ? "default" : "success"}>
-                              {expense.isActive ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
-                            </IconButton>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
+              {/* Expanded Content */}
+              {currentTab && (() => {
+                const activeCat = expenseCards.find(c => c.key === currentTab);
+                if (!activeCat) return null;
+                const Icon = activeCat.icon;
+                return (
+                  <Paper
+                    elevation={2}
+                    sx={{
+                      border: `2px solid ${activeCat.color}`,
+                      borderRadius: 2,
+                      overflow: "hidden",
+                      mb: 3,
+                    }}
+                  >
+                    <Box
+                      sx={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        px: 3, py: 1.5,
+                        backgroundColor: `${activeCat.color}10`,
+                        borderBottom: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Icon sx={{ color: activeCat.color, fontSize: 22 }} />
+                        <Typography variant="h6" fontWeight={600} sx={{ color: activeCat.color }}>
+                          {activeCat.label}
+                        </Typography>
+                      </Box>
+                      <IconButton size="small" onClick={() => setCurrentTab(null)}>
+                        <CloseIcon />
+                      </IconButton>
+                    </Box>
 
-          {currentTab === 1 && (
-            <Box sx={{ p: 3 }}>
-              <Typography sx={{ fontWeight: 700, color: 'error.main', mb: 2 }}>
-                Once created, you cannot edit this entry as this will mess up the reports. Please create a counter entry (reversal) if you need to correct it.
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} md={2}>
-                  <TextField label="Start Date" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
-                </Grid>
-                <Grid item xs={12} md={6}></Grid>
-                <Grid item xs={12} md={2}>
-                  {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenOneTimeDialog()} fullWidth>Add Expense</Button>}
-                </Grid>
-              </Grid>
+                    {currentTab === "recurring" && (
+                      <Box sx={{ p: 3 }}>
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid item xs={12} md={2}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Category</InputLabel>
+                              <Select value={filterCategory} label="Category" onChange={(e) => setFilterCategory(e.target.value)}>
+                                <MenuItem value="">All</MenuItem>
+                                {expenseCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Entity Type</InputLabel>
+                              <Select value={filterEntityType} label="Entity Type" onChange={(e) => setFilterEntityType(e.target.value)}>
+                                <MenuItem value="">All</MenuItem>
+                                <MenuItem value="CAB">Cab</MenuItem>
+                                <MenuItem value="SHIFT">Shift</MenuItem>
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <TextField placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} fullWidth size="small"
+                              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <FormControlLabel control={<Switch checked={showActiveOnly} onChange={(e) => { setShowActiveOnly(e.target.checked); loadRecurringExpenses(); }} />} label="Active Only" />
+                          </Grid>
+                          <Grid item xs={12} md={4}>
+                            {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenRecurringDialog()} fullWidth>Add Recurring Expense</Button>}
+                          </Grid>
+                        </Grid>
 
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Name</TableCell>
-                      <TableCell>Charge To</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Vendor</TableCell>
-                      <TableCell align="right">Amount</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredOneTime.map(expense => (
-                      <TableRow key={expense.id}>
-                        <TableCell>{expense.expenseDate}</TableCell>
-                        <TableCell><Chip label={expense.expenseCategory?.categoryName || "Standalone"} size="small" color="secondary" /></TableCell>
-                        <TableCell>{expense.name || "-"}</TableCell>
-                        <TableCell>
-                          <Chip
-                            label={getChargeToDisplay(expense)}
-                            size="small"
-                            variant="outlined"
-                            color={expense.applicationType ? "primary" : "default"}
-                          />
-                        </TableCell>
-                        <TableCell>{expense.description || "-"}</TableCell>
-                        <TableCell>{expense.vendor || "-"}</TableCell>
-                        <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="error">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Category</TableCell>
+                                <TableCell>Entity</TableCell>
+                                <TableCell>Billing</TableCell>
+                                <TableCell align="right">Amount</TableCell>
+                                <TableCell>From</TableCell>
+                                <TableCell>To</TableCell>
+                                <TableCell>Status</TableCell>
+                                {canEdit && <TableCell align="right">Actions</TableCell>}
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {filteredRecurring.map(expense => (
+                                <TableRow key={expense.id}>
+                                  <TableCell><Chip label={expense.expenseCategory?.categoryName} size="small" color="primary" /></TableCell>
+                                  <TableCell>{getEntityDisplay(expense.entityType, expense.entityId, expense.shiftType)}</TableCell>
+                                  <TableCell><Chip label={expense.billingMethod} size="small" variant="outlined" /></TableCell>
+                                  <TableCell align="right"><Typography variant="body2" fontWeight="bold">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
+                                  <TableCell>{expense.effectiveFrom}</TableCell>
+                                  <TableCell>{expense.effectiveTo || "Ongoing"}</TableCell>
+                                  <TableCell><Chip icon={expense.isActive ? <ActiveIcon /> : <InactiveIcon />} label={expense.isActive ? "Active" : "Inactive"} color={expense.isActive ? "success" : "default"} size="small" /></TableCell>
+                                  {canEdit && (
+                                    <TableCell align="right">
+                                      <IconButton size="small" onClick={() => handleOpenRecurringDialog(expense)}><EditIcon fontSize="small" /></IconButton>
+                                      <IconButton size="small" onClick={() => handleToggleRecurringActive(expense.id, expense.isActive)} color={expense.isActive ? "default" : "success"}>
+                                        {expense.isActive ? <InactiveIcon fontSize="small" /> : <ActiveIcon fontSize="small" />}
+                                      </IconButton>
+                                    </TableCell>
+                                  )}
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                    )}
 
-          {currentTab === 2 && (
-            <Box sx={{ p: 3 }}>
-              <Typography sx={{ fontWeight: 700, color: 'error.main', mb: 2 }}>
-                Once created, you cannot edit this entry as this will mess up the reports. Please create a counter entry (reversal) if you need to correct it.
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} md={2}>
-                  <TextField label="Start Date" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
-                </Grid>
-                <Grid item xs={12} md={2}>
-                  <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
-                </Grid>
-                <Grid item xs={12} md={6}></Grid>
-                <Grid item xs={12} md={2}>
-                  {canEdit && <Button variant="contained" color="success" startIcon={<AddIcon />} onClick={() => handleOpenRevenueDialog()} fullWidth>Add Revenue</Button>}
-                </Grid>
-              </Grid>
+                    {currentTab === "oneTime" && (
+                      <Box sx={{ p: 3 }}>
+                        <Typography sx={{ fontWeight: 700, color: 'error.main', mb: 2 }}>
+                          Once created, you cannot edit this entry as this will mess up the reports. Please create a counter entry (reversal) if you need to correct it.
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid item xs={12} md={2}>
+                            <TextField label="Start Date" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                          </Grid>
+                          <Grid item xs={12} md={6}></Grid>
+                          <Grid item xs={12} md={2}>
+                            {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenOneTimeDialog()} fullWidth>Add Expense</Button>}
+                          </Grid>
+                        </Grid>
 
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Date</TableCell>
-                      <TableCell>Category</TableCell>
-                      <TableCell>Type</TableCell>
-                      <TableCell>Applied To</TableCell>
-                      <TableCell>Description</TableCell>
-                      <TableCell>Payment Status</TableCell>
-                      <TableCell align="right">Amount</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredRevenues.map(revenue => (
-                      <TableRow key={revenue.id}>
-                        <TableCell>{revenue.revenueDate}</TableCell>
-                        <TableCell><Chip label={revenue.categoryName || "Uncategorized"} size="small" color="success" /></TableCell>
-                        <TableCell><Chip label={revenue.revenueType} size="small" variant="outlined" color="success" /></TableCell>
-                        <TableCell><Chip label={revenue.applicationTypeDisplay || "General"} size="small" variant="outlined" /></TableCell>
-                        <TableCell>{revenue.description || "-"}</TableCell>
-                        <TableCell><Chip label={revenue.paymentStatus} size="small" color={revenue.paymentStatus === "PAID" ? "success" : "warning"} /></TableCell>
-                        <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="success.main">${parseFloat(revenue.amount).toFixed(2)}</Typography></TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            </Box>
-          )}
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Category</TableCell>
+                                <TableCell>Name</TableCell>
+                                <TableCell>Charge To</TableCell>
+                                <TableCell>Description</TableCell>
+                                <TableCell>Vendor</TableCell>
+                                <TableCell align="right">Amount</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {filteredOneTime.map(expense => (
+                                <TableRow key={expense.id}>
+                                  <TableCell>{expense.expenseDate}</TableCell>
+                                  <TableCell><Chip label={expense.expenseCategory?.categoryName || "Standalone"} size="small" color="secondary" /></TableCell>
+                                  <TableCell>{expense.name || "-"}</TableCell>
+                                  <TableCell>
+                                    <Chip
+                                      label={getChargeToDisplay(expense)}
+                                      size="small"
+                                      variant="outlined"
+                                      color={expense.applicationType ? "primary" : "default"}
+                                    />
+                                  </TableCell>
+                                  <TableCell>{expense.description || "-"}</TableCell>
+                                  <TableCell>{expense.vendor || "-"}</TableCell>
+                                  <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="error">${parseFloat(expense.amount).toFixed(2)}</Typography></TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                    )}
 
-          {currentTab === 3 && (
-            <AttributeCostsTab canEdit={canEdit} />
-          )}
-        </Paper>
+                    {currentTab === "revenues" && (
+                      <Box sx={{ p: 3 }}>
+                        <Typography sx={{ fontWeight: 700, color: 'error.main', mb: 2 }}>
+                          Once created, you cannot edit this entry as this will mess up the reports. Please create a counter entry (reversal) if you need to correct it.
+                        </Typography>
+                        <Grid container spacing={2} sx={{ mb: 2 }}>
+                          <Grid item xs={12} md={2}>
+                            <TextField label="Start Date" type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
+                          </Grid>
+                          <Grid item xs={12} md={6}></Grid>
+                          <Grid item xs={12} md={2}>
+                            {canEdit && <Button variant="contained" color="success" startIcon={<AddIcon />} onClick={() => handleOpenRevenueDialog()} fullWidth>Add Revenue</Button>}
+                          </Grid>
+                        </Grid>
+
+                        <TableContainer>
+                          <Table size="small">
+                            <TableHead>
+                              <TableRow>
+                                <TableCell>Date</TableCell>
+                                <TableCell>Category</TableCell>
+                                <TableCell>Type</TableCell>
+                                <TableCell>Applied To</TableCell>
+                                <TableCell>Description</TableCell>
+                                <TableCell>Payment Status</TableCell>
+                                <TableCell align="right">Amount</TableCell>
+                              </TableRow>
+                            </TableHead>
+                            <TableBody>
+                              {filteredRevenues.map(revenue => (
+                                <TableRow key={revenue.id}>
+                                  <TableCell>{revenue.revenueDate}</TableCell>
+                                  <TableCell><Chip label={revenue.categoryName || "Uncategorized"} size="small" color="success" /></TableCell>
+                                  <TableCell><Chip label={revenue.revenueType} size="small" variant="outlined" color="success" /></TableCell>
+                                  <TableCell><Chip label={revenue.applicationTypeDisplay || "General"} size="small" variant="outlined" /></TableCell>
+                                  <TableCell>{revenue.description || "-"}</TableCell>
+                                  <TableCell><Chip label={revenue.paymentStatus} size="small" color={revenue.paymentStatus === "PAID" ? "success" : "warning"} /></TableCell>
+                                  <TableCell align="right"><Typography variant="body2" fontWeight="bold" color="success.main">${parseFloat(revenue.amount).toFixed(2)}</Typography></TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </TableContainer>
+                      </Box>
+                    )}
+
+                    {currentTab === "attributeCosts" && (
+                      <AttributeCostsTab canEdit={canEdit} />
+                    )}
+                  </Paper>
+                );
+              })()}
+            </>
+          );
+        })()}
 
 
         {/* Recurring Expense Dialog */}

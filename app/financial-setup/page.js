@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Box, Typography, Paper, Tabs, Tab, Alert, Grid } from "@mui/material";
+import { Box, Typography, Paper, Alert, Grid, Card, CardContent, CardActionArea, Collapse, IconButton } from "@mui/material";
+import { Close as CloseIcon, ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -39,9 +40,22 @@ import {
   Percent as CommissionIcon,
 } from "@mui/icons-material";
 
+const categories = [
+  { key: "expenseCategories", label: "Expense Categories", description: "Define and manage expense types for tracking costs", icon: CategoryIcon, color: "#e53935" },
+  { key: "revenueCategories", label: "Revenue Categories", description: "Define and manage revenue streams and income types", icon: RevenueIcon, color: "#43a047" },
+  { key: "leasePlans", label: "Lease Plans & Rates", description: "Configure lease plans and their associated rates", icon: ReceiptIcon, color: "#1e88e5" },
+  { key: "leaseOverrides", label: "Lease Rate Overrides", description: "Set rate overrides for specific drivers or cabs", icon: MoneyIcon, color: "#fb8c00" },
+  { key: "merchantMappings", label: "Merchant Mappings", description: "Map payment processor merchants to categories", icon: MerchantIcon, color: "#8e24aa" },
+  { key: "attributeCosts", label: "Attribute Costs", description: "Configure costs based on shift attributes", icon: AttributeIcon, color: "#00897b" },
+  { key: "itemRates", label: "Item Rates", description: "Manage insurance, mileage, and other item rates", icon: SpeedIcon, color: "#5c6bc0" },
+  { key: "itemOverrides", label: "Item Rate Overrides", description: "Set item rate overrides for specific entities", icon: TuneIcon, color: "#78909c" },
+  { key: "taxes", label: "Taxes", description: "Configure tax types, rates, and category assignments", icon: TaxIcon, color: "#6a1b9a" },
+  { key: "commissions", label: "Commissions", description: "Configure commission types, rates, and assignments", icon: CommissionIcon, color: "#00695c" },
+];
+
 export default function FinancialSetupPage() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentTab, setCurrentTab] = useState(0);
+  const [expandedCard, setExpandedCard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -75,6 +89,27 @@ export default function FinancialSetupPage() {
     setStats((prev) => ({ ...prev, ...newStats }));
   };
 
+  const handleCardClick = (key) => {
+    setExpandedCard(expandedCard === key ? null : key);
+  };
+
+  const renderTabContent = (key) => {
+    const commonProps = { canEdit, canDelete, setError, setSuccess, updateStats };
+    switch (key) {
+      case "expenseCategories": return <ExpenseCategoriesTab {...commonProps} />;
+      case "revenueCategories": return <RevenueCategoriesTab {...commonProps} />;
+      case "leasePlans": return <LeasePlansRatesTab {...commonProps} />;
+      case "leaseOverrides": return <LeaseRateOverridesTab {...commonProps} />;
+      case "merchantMappings": return <MerchantMappingsTab {...commonProps} />;
+      case "attributeCosts": return <AttributeCostsTab canEdit={canEdit} />;
+      case "itemRates": return <ItemRatesTab {...commonProps} />;
+      case "itemOverrides": return <ItemRateOverridesTab {...commonProps} />;
+      case "taxes": return <TaxesTab canEdit={canEdit} setError={setError} setSuccess={setSuccess} />;
+      case "commissions": return <CommissionsTab canEdit={canEdit} setError={setError} setSuccess={setSuccess} />;
+      default: return null;
+    }
+  };
+
   if (!currentUser) return null;
 
   return (
@@ -104,119 +139,94 @@ export default function FinancialSetupPage() {
           {/* Statistics Cards */}
           <FinancialStats stats={stats} onHelpClick={() => setHelpDialogOpen(true)} />
 
-          {/* Tabs */}
-          <Paper elevation={0} sx={{ overflow: "hidden", border: "1px solid #e5e7eb", borderRadius: 2 }}>
-              <Tabs
-                value={currentTab}
-                onChange={(e, newValue) => setCurrentTab(newValue)}
-                variant="scrollable"
-                scrollButtons="auto"
+          {/* Category Cards Grid */}
+          <Grid container spacing={2} sx={{ mb: 3 }}>
+            {categories.map((cat) => {
+              const Icon = cat.icon;
+              const isExpanded = expandedCard === cat.key;
+              return (
+                <Grid item xs={12} sm={6} md={4} lg={3} key={cat.key}>
+                  <Card
+                    elevation={isExpanded ? 4 : 1}
+                    sx={{
+                      border: isExpanded ? `2px solid ${cat.color}` : "1px solid #e5e7eb",
+                      borderRadius: 2,
+                      transition: "all 0.2s ease",
+                      "&:hover": { boxShadow: 3, borderColor: cat.color },
+                    }}
+                  >
+                    <CardActionArea onClick={() => handleCardClick(cat.key)} sx={{ p: 2 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                        <Box
+                          sx={{
+                            width: 44, height: 44, borderRadius: 1.5,
+                            backgroundColor: `${cat.color}15`,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                          }}
+                        >
+                          <Icon sx={{ color: cat.color, fontSize: 24 }} />
+                        </Box>
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+                            {cat.label}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                            {cat.description}
+                          </Typography>
+                        </Box>
+                        <ExpandMoreIcon
+                          sx={{
+                            color: "text.secondary",
+                            transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                            transition: "transform 0.2s",
+                          }}
+                        />
+                      </Box>
+                    </CardActionArea>
+                  </Card>
+                </Grid>
+              );
+            })}
+          </Grid>
+
+          {/* Expanded Content */}
+          <Collapse in={expandedCard !== null} timeout={300}>
+            {expandedCard && (
+              <Paper
+                elevation={2}
+                sx={{
+                  border: `2px solid ${categories.find(c => c.key === expandedCard)?.color || "#ccc"}`,
+                  borderRadius: 2,
+                  overflow: "hidden",
+                  mb: 3,
+                }}
               >
-                <Tab label="Expense Categories" icon={<CategoryIcon />} iconPosition="start" />
-                <Tab label="Revenue Categories" icon={<RevenueIcon />} iconPosition="start" />
-                <Tab label="Lease Plans & Rates" icon={<ReceiptIcon />} iconPosition="start" />
-                <Tab label="Lease Rate Overrides" icon={<MoneyIcon />} iconPosition="start" />
-                <Tab label="Merchant Mappings" icon={<MerchantIcon />} iconPosition="start" />
-                <Tab label="Attribute Costs" icon={<AttributeIcon />} iconPosition="start" />
-                <Tab label="Item Rates" icon={<SpeedIcon />} iconPosition="start" />
-                <Tab label="Item Rate Overrides" icon={<TuneIcon />} iconPosition="start" />
-                <Tab label="Taxes" icon={<TaxIcon />} iconPosition="start" />
-                <Tab label="Commissions" icon={<CommissionIcon />} iconPosition="start" />
-              </Tabs>
-
-            {/* Tab Content */}
-            {currentTab === 0 && (
-              <ExpenseCategoriesTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
+                <Box
+                  sx={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    px: 3, py: 1.5,
+                    backgroundColor: `${categories.find(c => c.key === expandedCard)?.color}10`,
+                    borderBottom: "1px solid #e5e7eb",
+                  }}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                    {(() => {
+                      const cat = categories.find(c => c.key === expandedCard);
+                      const Icon = cat?.icon;
+                      return Icon ? <Icon sx={{ color: cat.color, fontSize: 22 }} /> : null;
+                    })()}
+                    <Typography variant="h6" fontWeight={600} sx={{ color: categories.find(c => c.key === expandedCard)?.color }}>
+                      {categories.find(c => c.key === expandedCard)?.label}
+                    </Typography>
+                  </Box>
+                  <IconButton size="small" onClick={() => setExpandedCard(null)}>
+                    <CloseIcon />
+                  </IconButton>
+                </Box>
+                {renderTabContent(expandedCard)}
+              </Paper>
             )}
-
-            {currentTab === 1 && (
-              <RevenueCategoriesTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
-            )}
-
-            {currentTab === 2 && (
-              <LeasePlansRatesTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
-            )}
-
-            {currentTab === 3 && (
-              <LeaseRateOverridesTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
-            )}
-
-            {currentTab === 4 && (
-              <MerchantMappingsTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
-            )}
-
-            {currentTab === 5 && (
-              <AttributeCostsTab
-                canEdit={canEdit}
-              />
-            )}
-
-            {currentTab === 6 && (
-              <ItemRatesTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
-            )}
-
-            {currentTab === 7 && (
-              <ItemRateOverridesTab
-                canEdit={canEdit}
-                canDelete={canDelete}
-                setError={setError}
-                setSuccess={setSuccess}
-                updateStats={updateStats}
-              />
-            )}
-
-            {currentTab === 8 && (
-              <TaxesTab
-                canEdit={canEdit}
-                setError={setError}
-                setSuccess={setSuccess}
-              />
-            )}
-
-            {currentTab === 9 && (
-              <CommissionsTab
-                canEdit={canEdit}
-                setError={setError}
-                setSuccess={setSuccess}
-              />
-            )}
-          </Paper>
+          </Collapse>
 
           {/* Help Dialog */}
           <FinancialHelpDialog open={helpDialogOpen} onClose={() => setHelpDialogOpen(false)} />

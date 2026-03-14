@@ -38,6 +38,8 @@ import {
   Divider,
   CircularProgress,
   Autocomplete,
+  FormControlLabel,
+  Checkbox,
 } from "@mui/material";
 import {
   Timeline,
@@ -140,6 +142,11 @@ export default function ShiftsPage() {
   const [currentAttributes, setCurrentAttributes] = useState([]);
   const [attributeHistoryAll, setAttributeHistoryAll] = useState([]);
 
+  // Stats state (for banner)
+  const [allShiftsStats, setAllShiftsStats] = useState({ total: 0, active: 0 });
+  const [allShiftsData, setAllShiftsData] = useState([]);
+  const [showAll, setShowAll] = useState(false);
+
   // Tab state
   const [tabValue, setTabValue] = useState(0);
   
@@ -194,8 +201,30 @@ export default function ShiftsPage() {
   }, [router]);
 
   const loadData = async () => {
-    await Promise.all([loadCabs(), loadDrivers(), loadShiftProfiles()]);
+    await Promise.all([loadCabs(), loadDrivers(), loadShiftProfiles(), loadAllShiftsStats()]);
     setLoading(false);
+  };
+
+  const loadAllShiftsStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/shifts`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const allShifts = Array.isArray(data) ? data : (data.content || []);
+        setAllShiftsData(allShifts);
+        setAllShiftsStats({
+          total: allShifts.length,
+          active: allShifts.filter(s => s.isActive || s.active).length,
+        });
+      }
+    } catch (err) {
+      console.error("Error loading shifts stats:", err);
+    }
   };
 
   const loadCabs = async () => {
@@ -597,29 +626,60 @@ export default function ShiftsPage() {
 
   const filteredShifts = getFilteredShifts();
 
+  // Derive sets of cab IDs that have shifts and owner IDs that have active shifts
+  const cabIdsWithShifts = new Set(allShiftsData.map(s => s.cabId));
+  const activeShifts = allShiftsData.filter(s => s.isActive || s.active);
+  const ownerIdsWithActiveShifts = new Set(activeShifts.map(s => s.currentOwnerId).filter(Boolean));
+  const ownerIdsWithAnyShifts = new Set(allShiftsData.map(s => s.currentOwnerId).filter(Boolean));
+
   const getFilteredCabs = () => {
-    if (!cabSearchText) return cabs;
-    
-    const searchLower = cabSearchText.toLowerCase();
-    return cabs.filter(cab =>
-      (cab.cabNumber && cab.cabNumber.toLowerCase().includes(searchLower)) ||
-      (cab.registrationNumber && cab.registrationNumber.toLowerCase().includes(searchLower)) ||
-      (cab.make && cab.make.toLowerCase().includes(searchLower)) ||
-      (cab.model && cab.model.toLowerCase().includes(searchLower))
-    );
+    let result = cabs;
+
+    // Unless "Show All" is checked, only show active cabs that have shifts
+    if (!showAll) {
+      result = result.filter(cab => cab.status === "ACTIVE" && cabIdsWithShifts.has(cab.id));
+    }
+
+    if (cabSearchText) {
+      const searchLower = cabSearchText.toLowerCase();
+      result = result.filter(cab =>
+        (cab.cabNumber && cab.cabNumber.toLowerCase().includes(searchLower)) ||
+        (cab.registrationNumber && cab.registrationNumber.toLowerCase().includes(searchLower)) ||
+        (cab.make && cab.make.toLowerCase().includes(searchLower)) ||
+        (cab.model && cab.model.toLowerCase().includes(searchLower))
+      );
+    }
+
+    return result;
   };
 
   const getFilteredOwners = () => {
-    if (!ownerSearchText) return drivers;
-    
-    const searchLower = ownerSearchText.toLowerCase();
-    return drivers.filter(driver =>
-      (driver.firstName && driver.firstName.toLowerCase().includes(searchLower)) ||
-      (driver.lastName && driver.lastName.toLowerCase().includes(searchLower)) ||
-      (driver.driverNumber && driver.driverNumber.toLowerCase().includes(searchLower)) ||
-      (driver.firstName && driver.lastName && 
-        `${driver.firstName} ${driver.lastName}`.toLowerCase().includes(searchLower))
-    );
+    let result = drivers;
+
+    // Default: only owners with active shifts. Show All: owners with any shifts + all drivers
+    if (!showAll) {
+      result = result.filter(driver => ownerIdsWithActiveShifts.has(driver.id));
+    }
+
+    if (ownerSearchText) {
+      const searchLower = ownerSearchText.toLowerCase();
+      result = result.filter(driver =>
+        (driver.firstName && driver.firstName.toLowerCase().includes(searchLower)) ||
+        (driver.lastName && driver.lastName.toLowerCase().includes(searchLower)) ||
+        (driver.driverNumber && driver.driverNumber.toLowerCase().includes(searchLower)) ||
+        (driver.firstName && driver.lastName &&
+          `${driver.firstName} ${driver.lastName}`.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Sort by first name
+    result.sort((a, b) => {
+      const nameA = (a.firstName || "").toLowerCase();
+      const nameB = (b.firstName || "").toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    return result;
   };
 
   const filteredCabs = getFilteredCabs();
@@ -678,6 +738,7 @@ export default function ShiftsPage() {
         const data = await response.json();
         setSuccess(data.message || "Shift created successfully");
         setOpenCreateDialog(false);
+        loadAllShiftsStats();
         if (selectedCab) {
           loadShiftsForCab(selectedCab.id);
         }
@@ -1075,80 +1136,84 @@ export default function ShiftsPage() {
           </Alert>
         )}
 
-        {/* Stats Cards */}
+        {/* Page Header */}
+        <Box sx={{ mb: 3, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: "#3e5244" }}>
+              Shift Management
+            </Typography>
+            <Typography variant="body1" color="text.secondary">
+              View and manage cab shifts, ownership, profiles, and attributes
+            </Typography>
+          </Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={showAll}
+                onChange={(e) => setShowAll(e.target.checked)}
+              />
+            }
+            label={<Typography variant="body1" fontWeight={600}>Show All (incl. inactive)</Typography>}
+            sx={{ mt: 0.5, border: "1px solid #e0e0e0", borderRadius: 1, px: 1.5, py: 0.25, backgroundColor: showAll ? "#e3f2fd" : "transparent" }}
+          />
+        </Box>
+
+        {/* Stats Banner */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Total Cabs
-                </Typography>
-                <Typography variant="h4">{cabs.length}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Total Shifts
-                </Typography>
-                <Typography variant="h4">{shifts.length}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Owner Drivers
-                </Typography>
-                <Typography variant="h4">{drivers.length}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          <Grid item xs={12} sm={6} md={3}>
-            <Card>
-              <CardContent>
-                <Typography color="textSecondary" gutterBottom>
-                  Active Shifts
-                </Typography>
-                <Typography variant="h4" color="success.main">
-                  {shifts.filter(s => s.isActive).length}
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
+          {[
+            { label: "Total Cabs", value: cabs.length, icon: DirectionsCar, color: "#1565c0" },
+            { label: "Total Drivers / Owners", value: drivers.length, icon: Person, color: "#2e7d32" },
+            { label: "Total Shifts", value: allShiftsStats.total, icon: AttachMoney, color: "#ed6c02" },
+            { label: "Active Shifts", value: allShiftsStats.active, icon: AttachMoney, color: "#2e7d32" },
+          ].map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Grid item xs={6} sm={3} key={stat.label}>
+                <Card elevation={0} sx={{ border: "1px solid #e5e7eb", borderRadius: 2 }}>
+                  <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box sx={{
+                        width: 40, height: 40, borderRadius: 1.5,
+                        backgroundColor: `${stat.color}15`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                      }}>
+                        <Icon sx={{ color: stat.color, fontSize: 22 }} />
+                      </Box>
+                      <Box>
+                        <Typography variant="caption" color="text.secondary">{stat.label}</Typography>
+                        <Typography variant="h5" fontWeight={700}>{stat.value}</Typography>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
         </Grid>
 
-        {/* Main Content */}
-        <Grid container spacing={3}>
-          {/* Left Panel - Cab/Owner Selection */}
-          <Grid item xs={12} md={4}>
-            <Paper elevation={0} sx={{
-              overflow: 'hidden',
-              border: '1px solid #e5e7eb',
-              borderRadius: 2,
-              position: 'sticky',
-              top: 16,
-              maxHeight: 'calc(100vh - 32px)',
-              display: 'flex',
-              flexDirection: 'column'
-            }}>
-                <Tabs
-                  value={viewMode === "by-cab" ? 0 : 1}
-                  onChange={(e, newValue) => {
-                    if (newValue === 0) {
-                      setViewMode("by-cab");
-                      setShifts([]);
-                      setSelectedCab(null);
-                      setSelectedOwner(null);
-                      setCabFilter("");
-                      setOwnerFilter("");
-                      setCabSearchText("");
-                      setOwnerSearchText("");
-                    } else {
-                      setViewMode("by-owner");
+        {/* View Mode Cards */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {[
+            { key: "by-cab", label: "Browse by Cab", description: `${cabs.length} cabs registered`, icon: DirectionsCar, color: "#1565c0" },
+            { key: "by-owner", label: "Browse by Owner", description: `${drivers.length} owner drivers`, icon: Person, color: "#2e7d32" },
+          ].map((mode) => {
+            const Icon = mode.icon;
+            const isActive = viewMode === mode.key;
+            return (
+              <Grid item xs={12} sm={6} key={mode.key}>
+                <Card
+                  elevation={isActive ? 4 : 1}
+                  sx={{
+                    border: isActive ? `2px solid ${mode.color}` : "1px solid #e5e7eb",
+                    borderRadius: 2,
+                    transition: "all 0.2s ease",
+                    cursor: "pointer",
+                    "&:hover": { boxShadow: 3, borderColor: mode.color },
+                  }}
+                  onClick={() => {
+                    if (viewMode !== mode.key) {
+                      setViewMode(mode.key);
                       setShifts([]);
                       setSelectedCab(null);
                       setSelectedOwner(null);
@@ -1159,17 +1224,64 @@ export default function ShiftsPage() {
                     }
                   }}
                 >
-                  <Tab label="By Cab" />
-                  <Tab label="By Owner" />
-                </Tabs>
+                  <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box sx={{
+                        width: 44, height: 44, borderRadius: 1.5,
+                        backgroundColor: `${mode.color}15`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                      }}>
+                        <Icon sx={{ color: mode.color, fontSize: 24 }} />
+                      </Box>
+                      <Box sx={{ flex: 1 }}>
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+                          {mode.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {mode.description}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+
+        {/* Main Content */}
+        <Grid container spacing={3}>
+          {/* Left Panel - Cab/Owner Selection */}
+          <Grid item xs={12} md={4}>
+            <Paper elevation={0} sx={{
+              overflow: 'hidden',
+              border: `2px solid ${viewMode === "by-cab" ? "#1565c0" : "#2e7d32"}`,
+              borderRadius: 2,
+              position: 'sticky',
+              top: 16,
+              maxHeight: 'calc(100vh - 32px)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}>
+              <Box sx={{
+                px: 2, py: 1.5,
+                backgroundColor: viewMode === "by-cab" ? "#1565c010" : "#2e7d3210",
+                borderBottom: "1px solid #e5e7eb",
+                display: "flex", alignItems: "center", gap: 1,
+              }}>
+                {viewMode === "by-cab"
+                  ? <DirectionsCar sx={{ color: "#1565c0", fontSize: 20 }} />
+                  : <Person sx={{ color: "#2e7d32", fontSize: 20 }} />
+                }
+                <Typography variant="subtitle1" fontWeight={600} sx={{ color: viewMode === "by-cab" ? "#1565c0" : "#2e7d32" }}>
+                  {viewMode === "by-cab" ? "Select a Cab" : "Select an Owner"}
+                </Typography>
+              </Box>
 
               <Box sx={{ p: 2, overflow: 'auto', flex: 1 }}>
               {viewMode === "by-cab" ? (
                 <>
-                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", flexShrink: 0 }}>
-                    Select Cab
-                  </Typography>
-                  
                   <TextField
                     placeholder="Search cabs..."
                     value={cabSearchText}
@@ -1238,10 +1350,6 @@ export default function ShiftsPage() {
                 </>
               ) : (
                 <>
-                  <Typography variant="h6" sx={{ mb: 2, fontWeight: "bold", flexShrink: 0 }}>
-                    Select Owner
-                  </Typography>
-                  
                   <TextField
                     placeholder="Search owners..."
                     value={ownerSearchText}
@@ -1316,21 +1424,32 @@ export default function ShiftsPage() {
           {/* Right Panel - Shift Details */}
           <Grid item xs={12} md={8}>
             {(selectedCab || selectedOwner) ? (
-              <Paper sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 3 }}>
-                  <Box>
-                    <Typography variant="h5" fontWeight="bold">
-                      {viewMode === "by-cab" 
-                        ? `${selectedCab?.cabNumber} - Shifts`
-                        : `${selectedOwner?.firstName} ${selectedOwner?.lastName}'s Shifts`
-                      }
-                    </Typography>
-                    <Typography variant="body2" color="textSecondary">
-                      {viewMode === "by-cab"
-                        ? `${selectedCab?.registrationNumber}`
-                        : `${selectedOwner?.driverNumber} - ${shifts.length} shift(s) owned`
-                      }
-                    </Typography>
+              <Paper elevation={0} sx={{ border: "1px solid #e5e7eb", borderRadius: 2, overflow: "hidden" }}>
+                <Box sx={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  px: 3, py: 2,
+                  backgroundColor: viewMode === "by-cab" ? "#1565c010" : "#2e7d3210",
+                  borderBottom: "1px solid #e5e7eb",
+                }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                    {viewMode === "by-cab"
+                      ? <DirectionsCar sx={{ color: "#1565c0", fontSize: 28 }} />
+                      : <Person sx={{ color: "#2e7d32", fontSize: 28 }} />
+                    }
+                    <Box>
+                      <Typography variant="h6" fontWeight={700} sx={{ color: viewMode === "by-cab" ? "#1565c0" : "#2e7d32" }}>
+                        {viewMode === "by-cab"
+                          ? `Cab ${selectedCab?.cabNumber}`
+                          : `${selectedOwner?.firstName} ${selectedOwner?.lastName}`
+                        }
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {viewMode === "by-cab"
+                          ? `${selectedCab?.registrationNumber} - ${shifts.length} shift(s)`
+                          : `${selectedOwner?.driverNumber} - ${shifts.length} shift(s) owned`
+                        }
+                      </Typography>
+                    </Box>
                   </Box>
                   {canEdit && viewMode === "by-cab" && shifts.length < 2 && (
                     <Button
@@ -1342,6 +1461,7 @@ export default function ShiftsPage() {
                     </Button>
                   )}
                 </Box>
+                <Box sx={{ p: 3 }}>
 
                 {viewMode === "by-owner" && shifts.length > 0 && (
                   <Box sx={{ mb: 3 }}>
@@ -1745,9 +1865,10 @@ export default function ShiftsPage() {
                     ))}
                   </Grid>
                 )}
+                </Box>
               </Paper>
             ) : (
-              <Paper sx={{ p: 5, textAlign: "center" }}>
+              <Paper elevation={0} sx={{ p: 5, textAlign: "center", border: "1px solid #e5e7eb", borderRadius: 2 }}>
                 {viewMode === "by-cab" ? (
                   <>
                     <DirectionsCar sx={{ fontSize: 80, color: "#ccc", mb: 2 }} />

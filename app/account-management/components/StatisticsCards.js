@@ -126,8 +126,8 @@ export default function StatisticsCards({
 
   // Calculate displayed data based on current tab
   // Tab 0: Customers, Tab 1: Trip Charges, Tab 2: All Charges, Tab 3: Invoices
-  const displayedCustomers = currentTab === 0 ? safeFilteredCustomers : safeCustomers;
-  const displayedInvoices = currentTab === 3 ? safeFilteredInvoices : safeInvoices;
+  const displayedCustomers = currentTab === "customers" ? safeFilteredCustomers : safeCustomers;
+  const displayedInvoices = currentTab === "invoices" ? safeFilteredInvoices : safeInvoices;
 
   // Always use backend summary for charge statistics
   const totalChargesCount = summary.totalCharges;

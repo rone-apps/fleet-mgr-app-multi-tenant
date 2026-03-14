@@ -5,15 +5,19 @@ import {
   Box,
   Typography,
   Paper,
-  Tabs,
-  Tab,
   Alert,
+  Grid,
+  Card,
+  CardContent,
+  IconButton,
 } from "@mui/material";
 import {
   Business as BusinessIcon,
   Receipt as ReceiptIcon,
   Assignment as AllChargesIcon,
   Description as InvoiceIcon,
+  Close as CloseIcon,
+  ExpandMore as ExpandMoreIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { useAccountManagement } from "./hooks/useAccountManagement";
@@ -31,6 +35,13 @@ import {
   RecordPaymentDialog,
   CancelInvoiceDialog,
 } from "./components";
+
+const accountCards = [
+  { key: "customers", label: "Account Customers", description: "Manage corporate customer accounts and profiles", icon: BusinessIcon, color: "#1565c0" },
+  { key: "tripCharges", label: "Trip Charges", description: "View and manage trip charges by customer", icon: ReceiptIcon, color: "#c62828" },
+  { key: "allCharges", label: "All Charges", description: "Search and filter across all charge records", icon: AllChargesIcon, color: "#e65100" },
+  { key: "invoices", label: "Invoices", description: "Generate, send, and manage customer invoices", icon: InvoiceIcon, color: "#2e7d32" },
+];
 
 export default function AccountManagementPage() {
   const [allChargesSummary, setAllChargesSummary] = useState(null);
@@ -82,7 +93,7 @@ export default function AccountManagementPage() {
     showAllCustomersInCharges,
     setShowAllCustomersInCharges,
 
-    // Trip Charges (Tab 2)
+    // Trip Charges
     selectedCustomer,
     charges,
     openChargeDialog,
@@ -99,7 +110,7 @@ export default function AccountManagementPage() {
     setEndDate,
     handleFilterCharges,
 
-    // Bulk Edit (Tab 2)
+    // Bulk Edit
     bulkEditMode,
     bulkEditCharges,
     confirmBulkEditDialog,
@@ -110,7 +121,7 @@ export default function AccountManagementPage() {
     handleSaveBulkEdit,
     handleConfirmBulkEdit,
 
-    // All Charges (Tab 3)
+    // All Charges
     filteredCharges,
     filterCustomerName,
     setFilterCustomerName,
@@ -141,7 +152,7 @@ export default function AccountManagementPage() {
     drivers,
     paymentMethods,
 
-    // Invoices (Tab 4)
+    // Invoices
     invoices,
     filteredInvoices,
     selectedInvoice,
@@ -178,6 +189,10 @@ export default function AccountManagementPage() {
     clearInvoiceFilters,
   } = useAccountManagement();
 
+  const handleCardClick = (key) => {
+    setCurrentTab(currentTab === key ? null : key);
+  };
+
   if (loading) {
     return (
       <Box>
@@ -188,6 +203,8 @@ export default function AccountManagementPage() {
       </Box>
     );
   }
+
+  const activeCat = accountCards.find(c => c.key === currentTab);
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f6f9fc' }}>
@@ -231,128 +248,194 @@ export default function AccountManagementPage() {
           filterEndDate={filterEndDate}
         />
 
-        {/* Main Content */}
-        <Paper elevation={0} sx={{ overflow: "hidden", border: "1px solid #e5e7eb", borderRadius: 2 }}>
-          <Tabs
-            value={currentTab}
-            onChange={(e, newValue) => setCurrentTab(newValue)}
-            variant="scrollable"
-            scrollButtons="auto"
+        {/* Category Cards Grid */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          {accountCards.map((cat) => {
+            const Icon = cat.icon;
+            const isExpanded = currentTab === cat.key;
+            return (
+              <Grid item xs={12} sm={6} md={3} key={cat.key}>
+                <Card
+                  elevation={isExpanded ? 4 : 1}
+                  sx={{
+                    border: isExpanded ? `2px solid ${cat.color}` : "1px solid #e5e7eb",
+                    borderRadius: 2,
+                    transition: "all 0.2s ease",
+                    cursor: "pointer",
+                    "&:hover": { boxShadow: 3, borderColor: cat.color },
+                  }}
+                  onClick={() => handleCardClick(cat.key)}
+                >
+                  <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                      <Box
+                        sx={{
+                          width: 44, height: 44, borderRadius: 1.5,
+                          backgroundColor: `${cat.color}15`,
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Icon sx={{ color: cat.color, fontSize: 24 }} />
+                      </Box>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.3 }}>
+                          {cat.label}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.2 }}>
+                          {cat.description}
+                        </Typography>
+                      </Box>
+                      <ExpandMoreIcon
+                        sx={{
+                          color: "text.secondary",
+                          transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                          transition: "transform 0.2s",
+                        }}
+                      />
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            );
+          })}
+        </Grid>
+
+        {/* Expanded Content */}
+        {activeCat && (
+          <Paper
+            elevation={2}
+            sx={{
+              border: `2px solid ${activeCat.color}`,
+              borderRadius: 2,
+              overflow: "hidden",
+              mb: 3,
+            }}
           >
-            <Tab label="Account Customers" icon={<BusinessIcon />} iconPosition="start" />
-            <Tab label="Trip Charges" icon={<ReceiptIcon />} iconPosition="start" />
-            <Tab label="All Charges" icon={<AllChargesIcon />} iconPosition="start" />
-            <Tab label="Invoices" icon={<InvoiceIcon />} iconPosition="start" />
-          </Tabs>
+            <Box
+              sx={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                px: 3, py: 1.5,
+                backgroundColor: `${activeCat.color}10`,
+                borderBottom: "1px solid #e5e7eb",
+              }}
+            >
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+                <activeCat.icon sx={{ color: activeCat.color, fontSize: 22 }} />
+                <Typography variant="h6" fontWeight={600} sx={{ color: activeCat.color }}>
+                  {activeCat.label}
+                </Typography>
+              </Box>
+              <IconButton size="small" onClick={() => setCurrentTab(null)}>
+                <CloseIcon />
+              </IconButton>
+            </Box>
 
-          {/* Tab 1: Account Customers */}
-          {currentTab === 0 && (
-            <CustomersTab
-              filteredCustomers={filteredCustomers}
-              filterAccountId={filterAccountId}
-              setFilterAccountId={setFilterAccountId}
-              filterCompanyName={filterCompanyName}
-              setFilterCompanyName={setFilterCompanyName}
-              filterActiveStatus={filterActiveStatus}
-              setFilterActiveStatus={setFilterActiveStatus}
-              filterAccountType={filterAccountType}
-              setFilterAccountType={setFilterAccountType}
-              applyCustomerFilters={applyCustomerFilters}
-              clearCustomerFilters={clearCustomerFilters}
-              canEdit={canEdit}
-              handleOpenCustomerDialog={handleOpenCustomerDialog}
-              handleToggleCustomerActive={handleToggleCustomerActive}
-              handleSelectCustomer={handleSelectCustomer}
-              handleOpenGenerateInvoiceDialog={handleOpenGenerateInvoiceDialog}
-              setCurrentTab={setCurrentTab}
-              showAllCustomers={showAllCustomers}
-              setShowAllCustomers={setShowAllCustomers}
-            />
-          )}
+            {currentTab === "customers" && (
+              <CustomersTab
+                filteredCustomers={filteredCustomers}
+                filterAccountId={filterAccountId}
+                setFilterAccountId={setFilterAccountId}
+                filterCompanyName={filterCompanyName}
+                setFilterCompanyName={setFilterCompanyName}
+                filterActiveStatus={filterActiveStatus}
+                setFilterActiveStatus={setFilterActiveStatus}
+                filterAccountType={filterAccountType}
+                setFilterAccountType={setFilterAccountType}
+                applyCustomerFilters={applyCustomerFilters}
+                clearCustomerFilters={clearCustomerFilters}
+                canEdit={canEdit}
+                handleOpenCustomerDialog={handleOpenCustomerDialog}
+                handleToggleCustomerActive={handleToggleCustomerActive}
+                handleSelectCustomer={handleSelectCustomer}
+                handleOpenGenerateInvoiceDialog={handleOpenGenerateInvoiceDialog}
+                setCurrentTab={setCurrentTab}
+                showAllCustomers={showAllCustomers}
+                setShowAllCustomers={setShowAllCustomers}
+              />
+            )}
 
-          {/* Tab 2: Trip Charges */}
-          {currentTab === 1 && (
-            <TripChargesTab
-              customers={customers}
-              selectedCustomer={selectedCustomer}
-              charges={charges}
-              bulkEditMode={bulkEditMode}
-              bulkEditCharges={bulkEditCharges}
-              startDate={startDate}
-              setStartDate={setStartDate}
-              endDate={endDate}
-              setEndDate={setEndDate}
-              canEdit={canEdit}
-              canBulkEdit={canBulkEdit}
-              canMarkPaid={canMarkPaid}
-              showAllCustomersInCharges={showAllCustomersInCharges}
-              setShowAllCustomersInCharges={setShowAllCustomersInCharges}
-              handleSelectCustomer={handleSelectCustomer}
-              handleOpenChargeDialog={handleOpenChargeDialog}
-              handleMarkChargePaid={handleMarkChargePaid}
-              handleEnterBulkEdit={handleEnterBulkEdit}
-              handleCancelBulkEdit={handleCancelBulkEdit}
-              handleBulkEditChange={handleBulkEditChange}
-              handleSaveBulkEdit={handleSaveBulkEdit}
-              handleFilterCharges={handleFilterCharges}
-            />
-          )}
+            {currentTab === "tripCharges" && (
+              <TripChargesTab
+                customers={customers}
+                selectedCustomer={selectedCustomer}
+                charges={charges}
+                bulkEditMode={bulkEditMode}
+                bulkEditCharges={bulkEditCharges}
+                startDate={startDate}
+                setStartDate={setStartDate}
+                endDate={endDate}
+                setEndDate={setEndDate}
+                canEdit={canEdit}
+                canBulkEdit={canBulkEdit}
+                canMarkPaid={canMarkPaid}
+                showAllCustomersInCharges={showAllCustomersInCharges}
+                setShowAllCustomersInCharges={setShowAllCustomersInCharges}
+                handleSelectCustomer={handleSelectCustomer}
+                handleOpenChargeDialog={handleOpenChargeDialog}
+                handleMarkChargePaid={handleMarkChargePaid}
+                handleEnterBulkEdit={handleEnterBulkEdit}
+                handleCancelBulkEdit={handleCancelBulkEdit}
+                handleBulkEditChange={handleBulkEditChange}
+                handleSaveBulkEdit={handleSaveBulkEdit}
+                handleFilterCharges={handleFilterCharges}
+              />
+            )}
 
-          {/* Tab 3: All Charges */}
-          {currentTab === 2 && (
-            <AllChargesTab
-              filteredCharges={filteredCharges}
-              cabs={cabs}
-              drivers={drivers}
-              filterCustomerName={filterCustomerName}
-              setFilterCustomerName={setFilterCustomerName}
-              filterCabId={filterCabId}
-              setFilterCabId={setFilterCabId}
-              filterDriverId={filterDriverId}
-              setFilterDriverId={setFilterDriverId}
-              filterStartDate={filterStartDate}
-              setFilterStartDate={setFilterStartDate}
-              filterEndDate={filterEndDate}
-              setFilterEndDate={setFilterEndDate}
-              filterPaidStatus={filterPaidStatus}
-              setFilterPaidStatus={setFilterPaidStatus}
-              applyFilters={applyFilters}
-              clearFilters={clearFilters}
-              allChargesBulkEdit={allChargesBulkEdit}
-              bulkEditAllCharges={bulkEditAllCharges}
-              canEdit={canEdit}
-              canBulkEdit={canBulkEdit}
-              canMarkPaid={canMarkPaid}
-              handleEnterAllChargesBulkEdit={handleEnterAllChargesBulkEdit}
-              handleCancelAllChargesBulkEdit={handleCancelAllChargesBulkEdit}
-              handleAllChargesBulkEditChange={handleAllChargesBulkEditChange}
-              handleSaveAllChargesBulkEdit={handleSaveAllChargesBulkEdit}
-              handleMarkChargePaid={handleMarkChargePaid}
-              onTotalsUpdate={setAllChargesSummary}
-            />
-          )}
+            {currentTab === "allCharges" && (
+              <AllChargesTab
+                filteredCharges={filteredCharges}
+                cabs={cabs}
+                drivers={drivers}
+                filterCustomerName={filterCustomerName}
+                setFilterCustomerName={setFilterCustomerName}
+                filterCabId={filterCabId}
+                setFilterCabId={setFilterCabId}
+                filterDriverId={filterDriverId}
+                setFilterDriverId={setFilterDriverId}
+                filterStartDate={filterStartDate}
+                setFilterStartDate={setFilterStartDate}
+                filterEndDate={filterEndDate}
+                setFilterEndDate={setFilterEndDate}
+                filterPaidStatus={filterPaidStatus}
+                setFilterPaidStatus={setFilterPaidStatus}
+                applyFilters={applyFilters}
+                clearFilters={clearFilters}
+                allChargesBulkEdit={allChargesBulkEdit}
+                bulkEditAllCharges={bulkEditAllCharges}
+                canEdit={canEdit}
+                canBulkEdit={canBulkEdit}
+                canMarkPaid={canMarkPaid}
+                handleEnterAllChargesBulkEdit={handleEnterAllChargesBulkEdit}
+                handleCancelAllChargesBulkEdit={handleCancelAllChargesBulkEdit}
+                handleAllChargesBulkEditChange={handleAllChargesBulkEditChange}
+                handleSaveAllChargesBulkEdit={handleSaveAllChargesBulkEdit}
+                handleMarkChargePaid={handleMarkChargePaid}
+                onTotalsUpdate={setAllChargesSummary}
+              />
+            )}
 
-          {/* Tab 4: Invoices */}
-          {currentTab === 3 && (
-            <InvoicesTab
-              customers={customers}
-              filteredInvoices={filteredInvoices}
-              invoiceFilterCustomerId={invoiceFilterCustomerId}
-              setInvoiceFilterCustomerId={setInvoiceFilterCustomerId}
-              invoiceFilterStatus={invoiceFilterStatus}
-              setInvoiceFilterStatus={setInvoiceFilterStatus}
-              applyInvoiceFilters={applyInvoiceFilters}
-              clearInvoiceFilters={clearInvoiceFilters}
-              canEdit={canEdit}
-              canMarkPaid={canMarkPaid}
-              handleOpenGenerateInvoiceDialog={handleOpenGenerateInvoiceDialog}
-              handleViewInvoice={handleViewInvoice}
-              handleSendInvoice={handleSendInvoice}
-              handleOpenCancelInvoiceDialog={handleOpenCancelInvoiceDialog}
-              handleOpenRecordPaymentDialog={handleOpenRecordPaymentDialog}
-            />
-          )}
-        </Paper>
+            {currentTab === "invoices" && (
+              <InvoicesTab
+                customers={customers}
+                filteredInvoices={filteredInvoices}
+                invoiceFilterCustomerId={invoiceFilterCustomerId}
+                setInvoiceFilterCustomerId={setInvoiceFilterCustomerId}
+                invoiceFilterStatus={invoiceFilterStatus}
+                setInvoiceFilterStatus={setInvoiceFilterStatus}
+                applyInvoiceFilters={applyInvoiceFilters}
+                clearInvoiceFilters={clearInvoiceFilters}
+                canEdit={canEdit}
+                canMarkPaid={canMarkPaid}
+                handleOpenGenerateInvoiceDialog={handleOpenGenerateInvoiceDialog}
+                handleViewInvoice={handleViewInvoice}
+                handleSendInvoice={handleSendInvoice}
+                handleOpenCancelInvoiceDialog={handleOpenCancelInvoiceDialog}
+                handleOpenRecordPaymentDialog={handleOpenRecordPaymentDialog}
+              />
+            )}
+          </Paper>
+        )}
 
         {/* Dialogs */}
         <CustomerDialog
@@ -377,7 +460,6 @@ export default function AccountManagementPage() {
           error={error}
         />
 
-        {/* Bulk Edit Confirmation Dialog - Tab 2 */}
         <BulkEditConfirmDialog
           open={confirmBulkEditDialog}
           onClose={() => setConfirmBulkEditDialog(false)}
@@ -387,7 +469,6 @@ export default function AccountManagementPage() {
           isAllCharges={false}
         />
 
-        {/* Bulk Edit Confirmation Dialog - Tab 3 (All Charges) */}
         <BulkEditConfirmDialog
           open={confirmAllChargesBulkEditDialog}
           onClose={() => setConfirmAllChargesBulkEditDialog(false)}
