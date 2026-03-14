@@ -2312,6 +2312,8 @@ export default function DriverSummaryPage() {
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
                                   <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Commission</strong></TableCell>
+                                  <TableCell align="right"><strong>Net Amount</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -2323,24 +2325,40 @@ export default function DriverSummaryPage() {
                                   <TableRow key={idx} hover>
                                     <TableCell>{rev.revenueDate || "-"}</TableCell>
                                     <TableCell>{rev.description || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
                                       {formatCurrency(rev.amount)}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      {rev.commissionAmount ? `-${formatCurrency(rev.commissionAmount)}` : "-"}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      {formatCurrency(rev.netAmount != null ? rev.netAmount : rev.amount)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
                                 {/* Card Revenue Subtotal */}
-                                <TableRow sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
-                                  <TableCell colSpan={2} align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="success.main">
-                                      TOTAL CARD REVENUE
-                                    </Typography>
-                                  </TableCell>
-                                  <TableCell align="right">
-                                    <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>
-                                      {formatCurrency(driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE").reduce((sum, r) => sum + (r.amount || 0), 0))}
-                                    </Typography>
-                                  </TableCell>
-                                </TableRow>
+                                {(() => {
+                                  const ccItems = driverDetailReport.revenues.filter(r => r.revenueSubType === "CARD_REVENUE");
+                                  const totalAmt = ccItems.reduce((sum, r) => sum + (r.amount || 0), 0);
+                                  const totalComm = ccItems.reduce((sum, r) => sum + (r.commissionAmount || 0), 0);
+                                  const totalNet = ccItems.reduce((sum, r) => sum + (r.netAmount != null ? r.netAmount : (r.amount || 0)), 0);
+                                  return (
+                                    <TableRow sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
+                                      <TableCell colSpan={2} align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="success.main">TOTAL CARD REVENUE</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold">{formatCurrency(totalAmt)}</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">-{formatCurrency(totalComm)}</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="success.main" sx={{ fontSize: "1.1em" }}>{formatCurrency(totalNet)}</Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })()}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -2682,8 +2700,92 @@ export default function DriverSummaryPage() {
                           );
                         })()}
 
+                        {/* Tax Charges */}
+                        {driverDetailReport.taxExpenses && driverDetailReport.taxExpenses.length > 0 && (
+                          <Box sx={{ mb: 3 }}>
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1, color: "#6a1b9a" }}>Tax Charges</Typography>
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#f3e5f5" }}>
+                                    <TableCell><strong>Tax</strong></TableCell>
+                                    <TableCell><strong>On Expense</strong></TableCell>
+                                    <TableCell align="right"><strong>Base</strong></TableCell>
+                                    <TableCell align="right"><strong>Rate</strong></TableCell>
+                                    <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {driverDetailReport.taxExpenses.map((t, idx) => (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{t.taxTypeName}</TableCell>
+                                      <TableCell>{t.expenseCategoryName}</TableCell>
+                                      <TableCell align="right">{formatCurrency(t.baseAmount)}</TableCell>
+                                      <TableCell align="right">{t.taxRate}%</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(t.amount)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                  <TableRow sx={{ bgcolor: "#e1bee7", borderTop: "2px solid #6a1b9a" }}>
+                                    <TableCell colSpan={4} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="#6a1b9a">TAX SUBTOTAL</Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="#6a1b9a">
+                                        {formatCurrency(driverDetailReport.taxExpenses.reduce((s, t) => s + (t.amount || 0), 0))}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </Box>
+                        )}
+
+                        {/* Commission Charges */}
+                        {driverDetailReport.commissionExpenses && driverDetailReport.commissionExpenses.length > 0 && (
+                          <Box sx={{ mb: 3 }}>
+                            <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1, color: "#00695c" }}>Commission Charges</Typography>
+                            <TableContainer>
+                              <Table size="small">
+                                <TableHead>
+                                  <TableRow sx={{ bgcolor: "#e0f2f1" }}>
+                                    <TableCell><strong>Commission</strong></TableCell>
+                                    <TableCell><strong>On Revenue</strong></TableCell>
+                                    <TableCell align="right"><strong>Base</strong></TableCell>
+                                    <TableCell align="right"><strong>Rate</strong></TableCell>
+                                    <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  </TableRow>
+                                </TableHead>
+                                <TableBody>
+                                  {driverDetailReport.commissionExpenses.map((c, idx) => (
+                                    <TableRow key={idx} hover>
+                                      <TableCell>{c.commissionTypeName}</TableCell>
+                                      <TableCell>{c.revenueCategoryName}</TableCell>
+                                      <TableCell align="right">{formatCurrency(c.baseAmount)}</TableCell>
+                                      <TableCell align="right">{c.commissionRate}%</TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(c.amount)}</TableCell>
+                                    </TableRow>
+                                  ))}
+                                  <TableRow sx={{ bgcolor: "#b2dfdb", borderTop: "2px solid #00695c" }}>
+                                    <TableCell colSpan={4} align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="#00695c">COMMISSION SUBTOTAL</Typography>
+                                    </TableCell>
+                                    <TableCell align="right">
+                                      <Typography variant="body2" fontWeight="bold" color="#00695c">
+                                        {formatCurrency(driverDetailReport.commissionExpenses.reduce((s, c) => s + (c.amount || 0), 0))}
+                                      </Typography>
+                                    </TableCell>
+                                  </TableRow>
+                                </TableBody>
+                              </Table>
+                            </TableContainer>
+                          </Box>
+                        )}
+
                         {(!driverDetailReport.recurringExpenses || driverDetailReport.recurringExpenses.length === 0) &&
-                         (!driverDetailReport.oneTimeExpenses || driverDetailReport.oneTimeExpenses.length === 0) && (
+                         (!driverDetailReport.oneTimeExpenses || driverDetailReport.oneTimeExpenses.length === 0) &&
+                         (!driverDetailReport.taxExpenses || driverDetailReport.taxExpenses.length === 0) &&
+                         (!driverDetailReport.commissionExpenses || driverDetailReport.commissionExpenses.length === 0) && (
                           <Typography color="textSecondary">No expenses found</Typography>
                         )}
                       </Box>

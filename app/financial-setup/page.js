@@ -16,6 +16,8 @@ import MerchantMappingsTab from "./tabs/MerchantMappingsTab";
 import AttributeCostsTab from "../expenses/components/AttributeCostsTab";
 import ItemRatesTab from "./tabs/ItemRatesTab";
 import ItemRateOverridesTab from "./tabs/ItemRateOverridesTab";
+import TaxesTab from "./tabs/TaxesTab";
+import CommissionsTab from "./tabs/CommissionsTab";
 
 // Statistics Component
 import FinancialStats from "./components/FinancialStats";
@@ -33,6 +35,8 @@ import {
   Settings as AttributeIcon,
   Speed as SpeedIcon,
   Tune as TuneIcon,
+  AccountBalance as TaxIcon,
+  Percent as CommissionIcon,
 } from "@mui/icons-material";
 
 export default function FinancialSetupPage() {
@@ -116,6 +120,8 @@ export default function FinancialSetupPage() {
                 <Tab label="Attribute Costs" icon={<AttributeIcon />} iconPosition="start" />
                 <Tab label="Item Rates" icon={<SpeedIcon />} iconPosition="start" />
                 <Tab label="Item Rate Overrides" icon={<TuneIcon />} iconPosition="start" />
+                <Tab label="Taxes" icon={<TaxIcon />} iconPosition="start" />
+                <Tab label="Commissions" icon={<CommissionIcon />} iconPosition="start" />
               </Tabs>
 
             {/* Tab Content */}
@@ -192,6 +198,22 @@ export default function FinancialSetupPage() {
                 setError={setError}
                 setSuccess={setSuccess}
                 updateStats={updateStats}
+              />
+            )}
+
+            {currentTab === 8 && (
+              <TaxesTab
+                canEdit={canEdit}
+                setError={setError}
+                setSuccess={setSuccess}
+              />
+            )}
+
+            {currentTab === 9 && (
+              <CommissionsTab
+                canEdit={canEdit}
+                setError={setError}
+                setSuccess={setSuccess}
               />
             )}
           </Paper>

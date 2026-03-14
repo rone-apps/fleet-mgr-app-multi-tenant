@@ -457,6 +457,8 @@ One-Time Expenses: $${parseFloat(reportData.totalOneTimeExpenses || 0).toFixed(2
 Per-Unit Expenses: $${parseFloat(reportData.totalPerUnitExpenses || 0).toFixed(2)}
 Mileage Expenses: $${reportData?.mileageExpenses?.reduce((sum, exp) => sum + parseFloat(exp.totalLeaseAmount || 0), 0).toFixed(2) || '0.00'}
 Insurance Mileage Expenses: $${parseFloat(reportData.totalInsuranceMileageExpenses || 0).toFixed(2)}
+Taxes: $${parseFloat(reportData.totalTaxExpenses || 0).toFixed(2)}
+Commissions: $${parseFloat(reportData.totalCommissionExpenses || 0).toFixed(2)}
 Total Expenses: $${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
 Previous Due: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
 Paid Amount: $${parseFloat(paidAmount || 0).toFixed(2)}
@@ -1035,6 +1037,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Card Type</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
                                   <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Commission</strong></TableCell>
+                                  <TableCell align="right"><strong>Net Amount</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -1044,15 +1048,31 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     <TableCell>{rev.cabNumber || "-"}</TableCell>
                                     <TableCell>{rev.categoryName || "-"}</TableCell>
                                     <TableCell>{rev.description || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                    <TableCell align="right" sx={{ fontWeight: "bold" }}>
                                       ${parseFloat(rev.amount).toFixed(2)}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                      {rev.commissionAmount ? `-$${parseFloat(rev.commissionAmount).toFixed(2)}` : "-"}
+                                    </TableCell>
+                                    <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
+                                      ${parseFloat(rev.netAmount != null ? rev.netAmount : rev.amount).toFixed(2)}
                                     </TableCell>
                                   </TableRow>
                                 ))}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(getFilteredCreditCards()).toFixed(2)}</strong></TableCell>
-                                </TableRow>
+                                {(() => {
+                                  const items = getFilteredCreditCards();
+                                  const totalAmt = items.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+                                  const totalComm = items.reduce((s, r) => s + parseFloat(r.commissionAmount || 0), 0);
+                                  const totalNet = items.reduce((s, r) => s + parseFloat(r.netAmount != null ? r.netAmount : (r.amount || 0)), 0);
+                                  return (
+                                    <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                      <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Total:</strong></TableCell>
+                                      <TableCell align="right"><strong>${totalAmt.toFixed(2)}</strong></TableCell>
+                                      <TableCell align="right" sx={{ color: "#d32f2f" }}><strong>-${totalComm.toFixed(2)}</strong></TableCell>
+                                      <TableCell align="right" sx={{ color: "#388e3c" }}><strong>${totalNet.toFixed(2)}</strong></TableCell>
+                                    </TableRow>
+                                  );
+                                })()}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -2089,6 +2109,34 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     <Typography variant="body2">${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</Typography>
                   </Box>
                 )}
+                {reportData.taxExpenses && reportData.taxExpenses.length > 0 && (
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Taxes</Typography>
+                      <Typography variant="body2" fontWeight="bold">${reportData.taxExpenses.reduce((s, t) => s + parseFloat(t.amount || 0), 0).toFixed(2)}</Typography>
+                    </Box>
+                    {reportData.taxExpenses.map((t, i) => (
+                      <Box key={i} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
+                        <Typography variant="caption" color="text.secondary">{t.taxTypeName} on {t.expenseCategoryName} ({t.taxRate}%)</Typography>
+                        <Typography variant="caption" color="text.secondary">${parseFloat(t.amount).toFixed(2)}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+                {reportData.commissionExpenses && reportData.commissionExpenses.length > 0 && (
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Commissions</Typography>
+                      <Typography variant="body2" fontWeight="bold">${reportData.commissionExpenses.reduce((s, c) => s + parseFloat(c.amount || 0), 0).toFixed(2)}</Typography>
+                    </Box>
+                    {reportData.commissionExpenses.map((c, i) => (
+                      <Box key={i} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
+                        <Typography variant="caption" color="text.secondary">{c.commissionTypeName} on {c.revenueCategoryName} ({c.commissionRate}%)</Typography>
+                        <Typography variant="caption" color="text.secondary">${parseFloat(c.amount).toFixed(2)}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
                 <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.5, mt: 0.5 }}>
                   <Typography variant="body2" fontWeight="bold" sx={{ color: "#d32f2f" }}>Total Expenses</Typography>
                   <Typography variant="body2" fontWeight="bold" sx={{ color: "#d32f2f" }}>${parseFloat(reportData.totalExpenses || 0).toFixed(2)}</Typography>
@@ -2261,6 +2309,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           <TableCell>Cab #</TableCell>
                           <TableCell>Description</TableCell>
                           <TableCell align="right">Amount</TableCell>
+                          <TableCell align="right">Commission</TableCell>
+                          <TableCell align="right">Net Amount</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2271,12 +2321,24 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             <TableCell>{rev.cabNumber || "-"}</TableCell>
                             <TableCell>{rev.description || "-"}</TableCell>
                             <TableCell align="right">${parseFloat(rev.amount).toFixed(2)}</TableCell>
+                            <TableCell align="right" sx={{ color: "#d32f2f" }}>{rev.commissionAmount ? `-$${parseFloat(rev.commissionAmount).toFixed(2)}` : "-"}</TableCell>
+                            <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>${parseFloat(rev.netAmount != null ? rev.netAmount : rev.amount).toFixed(2)}</TableCell>
                           </TableRow>
                         ))}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(getCreditCardRevenues()).toFixed(2)}</strong></TableCell>
-                        </TableRow>
+                        {(() => {
+                          const items = getCreditCardRevenues();
+                          const totalAmt = items.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
+                          const totalComm = items.reduce((s, r) => s + parseFloat(r.commissionAmount || 0), 0);
+                          const totalNet = items.reduce((s, r) => s + parseFloat(r.netAmount != null ? r.netAmount : (r.amount || 0)), 0);
+                          return (
+                            <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                              <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Subtotal:</strong></TableCell>
+                              <TableCell align="right"><strong>${totalAmt.toFixed(2)}</strong></TableCell>
+                              <TableCell align="right" sx={{ color: "#d32f2f" }}><strong>-${totalComm.toFixed(2)}</strong></TableCell>
+                              <TableCell align="right" sx={{ color: "#388e3c" }}><strong>${totalNet.toFixed(2)}</strong></TableCell>
+                            </TableRow>
+                          );
+                        })()}
                       </TableBody>
                     </Table>
                   </TableContainer>
@@ -2599,6 +2661,80 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
                           <TableCell colSpan={4} align="right"><strong>Insurance Mileage Expenses Subtotal:</strong></TableCell>
                           <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Tax Expenses Section */}
+              {reportData.taxExpenses && reportData.taxExpenses.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#6a1b9a" }}>
+                    Tax Charges
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Tax</TableCell>
+                          <TableCell>On Expense</TableCell>
+                          <TableCell align="right">Base Amount</TableCell>
+                          <TableCell align="right">Rate</TableCell>
+                          <TableCell align="right">Tax Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.taxExpenses.map((t, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{t.taxTypeName}</TableCell>
+                            <TableCell>{t.expenseCategoryName}</TableCell>
+                            <TableCell align="right">${parseFloat(t.baseAmount || 0).toFixed(2)}</TableCell>
+                            <TableCell align="right">{t.taxRate}%</TableCell>
+                            <TableCell align="right">${parseFloat(t.amount || 0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={4} align="right"><strong>Tax Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${reportData.taxExpenses.reduce((s, t) => s + parseFloat(t.amount || 0), 0).toFixed(2)}</strong></TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* Commission Expenses Section */}
+              {reportData.commissionExpenses && reportData.commissionExpenses.length > 0 && (
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#00695c" }}>
+                    Commission Charges
+                  </Typography>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Commission</TableCell>
+                          <TableCell>On Revenue</TableCell>
+                          <TableCell align="right">Base Amount</TableCell>
+                          <TableCell align="right">Rate</TableCell>
+                          <TableCell align="right">Commission Amount</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {reportData.commissionExpenses.map((c, idx) => (
+                          <TableRow key={idx}>
+                            <TableCell>{c.commissionTypeName}</TableCell>
+                            <TableCell>{c.revenueCategoryName}</TableCell>
+                            <TableCell align="right">${parseFloat(c.baseAmount || 0).toFixed(2)}</TableCell>
+                            <TableCell align="right">{c.commissionRate}%</TableCell>
+                            <TableCell align="right">${parseFloat(c.amount || 0).toFixed(2)}</TableCell>
+                          </TableRow>
+                        ))}
+                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                          <TableCell colSpan={4} align="right"><strong>Commission Subtotal:</strong></TableCell>
+                          <TableCell align="right"><strong>${reportData.commissionExpenses.reduce((s, c) => s + parseFloat(c.amount || 0), 0).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
