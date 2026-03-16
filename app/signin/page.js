@@ -118,7 +118,10 @@ export default function SignInPage() {
         document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
         document.cookie = `tenantId=${schemaName}; path=/; max-age=86400; SameSite=Strict`;
 
-        window.location.replace("/");
+        // Redirect to the page they were trying to access, or home
+        const params = new URLSearchParams(window.location.search);
+        const redirectTo = params.get("redirect") || "/";
+        window.location.replace(redirectTo);
       } else {
         const errorData = await response.json().catch(() => ({}));
         setError(errorData.message || "Invalid company, username or password");

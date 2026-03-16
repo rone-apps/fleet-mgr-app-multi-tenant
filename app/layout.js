@@ -1,6 +1,7 @@
 import './globals.css'
 import Script from 'next/script'
 import NewRelicTenantContext from './components/NewRelicTenantContext'
+import AuthGuard from './components/AuthGuard'
 import { getNewRelicScript } from './lib/newrelic-browser'
 
 export const metadata = {
@@ -28,7 +29,7 @@ export default function RootLayout({ children }) {
       <body>
         {/* New Relic Tenant Context - Sets custom attributes after hydration */}
         <NewRelicTenantContext />
-        {children}
+        <AuthGuard>{children}</AuthGuard>
       </body>
     </html>
   )
