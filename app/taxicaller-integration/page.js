@@ -286,6 +286,7 @@ export default function TaxiCallerIntegrationPage() {
 
     if (driverJobsDriverIdFilter) {
       filtered = filtered.filter(job =>
+        job.driver_username?.toString().toLowerCase().includes(driverJobsDriverIdFilter.toLowerCase()) ||
         job.driver_id?.toString().toLowerCase().includes(driverJobsDriverIdFilter.toLowerCase()) ||
         job.driverId?.toString().toLowerCase().includes(driverJobsDriverIdFilter.toLowerCase())
       );
@@ -390,6 +391,36 @@ export default function TaxiCallerIntegrationPage() {
     }
   };
 
+
+  const saveDriverJobs = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/taxicaller/reports/load-driver-jobs?startDate=${startDate}&endDate=${endDate}`,
+        {
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        setSuccess(data.message);
+      } else {
+        setError(data.message || "Failed to save driver jobs");
+      }
+    } catch (err) {
+      console.error("Error saving driver jobs:", err);
+      setError(`Failed to save driver jobs: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const importDriverLogons = async () => {
     setLoading(true);
@@ -845,7 +876,7 @@ export default function TaxiCallerIntegrationPage() {
                     importDriverLogons();
                     setCurrentTab(1);
                   } else if (dataType === "driver_jobs") {
-                    fetchDriverJobs();
+                    saveDriverJobs();
                     setCurrentTab(2);
                   }
                 }}
@@ -853,7 +884,7 @@ export default function TaxiCallerIntegrationPage() {
                 startIcon={<RefreshIcon />}
                 sx={{ height: "56px" }}
               >
-                Import TaxiCaller Data
+                Import Data (Save to DB)
               </Button>
             </Grid>
           </Grid>
@@ -1311,9 +1342,11 @@ export default function TaxiCallerIntegrationPage() {
                             )}
                           </Box>
                         </TableCell>
+                        <TableCell>Job ID</TableCell>
+                        <TableCell>Account</TableCell>
                         <TableCell>Pickup</TableCell>
                         <TableCell>Dropoff</TableCell>
-                        <TableCell 
+                        <TableCell
                           sx={{ cursor: 'pointer', userSelect: 'none', '&:hover': { backgroundColor: '#f5f5f5' } }}
                           onClick={() => handleDriverJobsSort('tariff')}
                         >
@@ -1330,10 +1363,12 @@ export default function TaxiCallerIntegrationPage() {
                     <TableBody>
                       {filteredDriverJobs.map((job, index) => (
                         <TableRow key={index} hover>
-                          <TableCell><Chip label={job.driver_id || job.driverId || "-"} size="small" color="primary" /></TableCell>
+                          <TableCell><Chip label={job.driver_username || job.driver_id || job.driverId || "-"} size="small" color="primary" /></TableCell>
                           <TableCell><strong>{job.driver || job.driverName || "-"}</strong></TableCell>
                           <TableCell>{job.date || "-"}</TableCell>
                           <TableCell>{job.vehicle_num || job.vehicle || "-"}</TableCell>
+                          <TableCell>{job.job_id || job.jobId || "-"}</TableCell>
+                          <TableCell>{job.account || "-"}</TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {job["pick-up"] || job.pickup || "-"}

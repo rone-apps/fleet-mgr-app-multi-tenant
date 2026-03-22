@@ -605,6 +605,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Smart CRM',
             gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
             accent: '#667eea'
+          },
+          {
+            title: 'Driver Trips',
+            description: 'Browse driver trips & link to account charges',
+            icon: StorefrontOutlined,
+            path: '/driver-trips',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Trip Mgmt',
+            gradient: 'linear-gradient(135deg, #6a1b9a 0%, #ab47bc 100%)',
+            accent: '#6a1b9a'
           }
         ];
 

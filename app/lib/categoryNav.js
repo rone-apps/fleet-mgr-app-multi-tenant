@@ -63,6 +63,7 @@ export const pageMetadata = {
   '/shifts': { name: 'Shift Ownership', category: 'operations' },
   '/shift-attributes': { name: 'Shift Attributes', category: 'operations' },
   '/account-management': { name: 'Customers', category: 'account' },
+  '/driver-trips': { name: 'Driver Trips', category: 'account' },
   '/expenses': { name: 'Expenses & Revenue', category: 'financials' },
   '/financial-setup': { name: 'Financial Setup', category: 'financials' },
   '/reports': { name: 'Reports', category: 'reports' },

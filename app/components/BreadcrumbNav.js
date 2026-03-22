@@ -14,6 +14,7 @@ const routeLabels = {
   "/shift-attributes": "Shift Attributes",
   "/shift-profiles": "Shift Profiles",
   "/account-management": "Account Management",
+  "/driver-trips": "Driver Trips",
   "/expenses": "Expenses",
   "/driver-payments": "Driver & Owner Payments",
   "/financial-setup": "Financial Setup",
