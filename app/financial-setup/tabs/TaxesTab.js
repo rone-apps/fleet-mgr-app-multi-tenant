@@ -40,7 +40,7 @@ export default function TaxesTab({ canEdit, setError, setSuccess }) {
   const [showHistory, setShowHistory] = useState(false);
   const [openAssignDialog, setOpenAssignDialog] = useState(false);
   const [expenseCategories, setExpenseCategories] = useState([]);
-  const [assignForm, setAssignForm] = useState({ taxTypeId: "", expenseCategoryId: "", notes: "" });
+  const [assignForm, setAssignForm] = useState({ taxTypeId: "", expenseCategoryId: "", notes: "", effectiveFrom: new Date() });
 
   useEffect(() => { loadTaxTypes(); loadAssignments(); loadExpenseCategories(); }, []);
 
@@ -135,9 +135,15 @@ export default function TaxesTab({ canEdit, setError, setSuccess }) {
   const saveAssignment = async () => {
     try {
       if (!assignForm.taxTypeId || !assignForm.expenseCategoryId) { setError("Tax type and category are required"); return; }
+      const payload = {
+        taxTypeId: assignForm.taxTypeId,
+        expenseCategoryId: assignForm.expenseCategoryId,
+        notes: assignForm.notes,
+        effectiveFrom: assignForm.effectiveFrom ? assignForm.effectiveFrom.toISOString().split("T")[0] : null,
+      };
       const res = await fetch(`${API_BASE_URL}/tax-commissions/tax-assignments`, {
         method: "POST", headers: headers(),
-        body: JSON.stringify(assignForm),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const err = await res.json();
@@ -271,7 +277,7 @@ export default function TaxesTab({ canEdit, setError, setSuccess }) {
           <Box sx={{ display: "flex", gap: 2, mb: 2 }}>
             {canEdit && (
               <Button variant="contained" startIcon={<LinkIcon />} onClick={() => {
-                setAssignForm({ taxTypeId: "", expenseCategoryId: "", notes: "" });
+                setAssignForm({ taxTypeId: "", expenseCategoryId: "", notes: "", effectiveFrom: new Date() });
                 setOpenAssignDialog(true);
               }}>
                 Assign Tax to Category
@@ -288,8 +294,8 @@ export default function TaxesTab({ canEdit, setError, setSuccess }) {
                 <TableRow sx={{ bgcolor: "#f5f5f5" }}>
                   <TableCell sx={{ fontWeight: 700 }}>Tax Type</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Expense Category</TableCell>
-                  <TableCell sx={{ fontWeight: 700 }}>Assigned</TableCell>
-                  {showHistory && <TableCell sx={{ fontWeight: 700 }}>Unassigned</TableCell>}
+                  <TableCell sx={{ fontWeight: 700 }}>Effective From</TableCell>
+                  {showHistory && <TableCell sx={{ fontWeight: 700 }}>Effective To</TableCell>}
                   <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                   <TableCell sx={{ fontWeight: 700 }}>Notes</TableCell>
                   <TableCell sx={{ fontWeight: 700 }} align="center">Actions</TableCell>
@@ -391,6 +397,9 @@ export default function TaxesTab({ canEdit, setError, setSuccess }) {
               ))}
             </Select>
           </FormControl>
+          <DatePicker label="Effective From" value={assignForm.effectiveFrom}
+            onChange={(v) => setAssignForm({ ...assignForm, effectiveFrom: v })}
+            slotProps={{ textField: { fullWidth: true, sx: { mb: 2 }, helperText: "Date from which this tax applies to this category" } }} />
           <TextField fullWidth label="Notes (Optional)" multiline rows={2} value={assignForm.notes}
             onChange={(e) => setAssignForm({ ...assignForm, notes: e.target.value })} />
         </DialogContent>

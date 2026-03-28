@@ -1752,41 +1752,94 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     {expenseTabIndex === 4 && (
                       <Box sx={{ p: { xs: 1.5, md: 3 } }}>
                         {getAirportExpenses().length > 0 ? (
-                          <TableContainer sx={{ overflowX: 'auto' }}>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
-                                  <TableCell><strong>Date</strong></TableCell>
-                                  <TableCell><strong>Cab #</strong></TableCell>
-                                  <TableCell align="right"><strong>Trips</strong></TableCell>
-                                  <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {getAirportExpenses()
-                                  .sort((a, b) => new Date(b.date || "") - new Date(a.date || ""))
-                                  .map((exp, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{exp.date || "-"}</TableCell>
-                                    <TableCell>{exp.cabNumber || "-"}</TableCell>
-                                    <TableCell align="right">{exp.tripCount || "-"}</TableCell>
-                                    <TableCell align="right">{exp.ratePerUnit ? `$${parseFloat(exp.ratePerUnit).toFixed(2)}` : "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                      ${parseFloat(exp.amount || 0).toFixed(2)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={2} align="right">
-                                    <strong>Total: {getAirportExpenses().reduce((sum, e) => sum + (e.tripCount || 0), 0)} trips</strong>
-                                  </TableCell>
-                                  <TableCell colSpan={2} align="right"><strong>Airport Trips Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(getAirportExpenses()).toFixed(2)}</strong></TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
+                          (() => {
+                            const airportItems = getAirportExpenses();
+                            const grouped = {};
+                            airportItems.forEach((exp) => {
+                              const cab = exp.cabNumber || "Unknown";
+                              if (!grouped[cab]) grouped[cab] = [];
+                              grouped[cab].push(exp);
+                            });
+                            const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                            const totalTrips = airportItems.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+
+                            return (
+                              <TableContainer sx={{ overflowX: 'auto' }}>
+                                <Table size="small">
+                                  <TableHead>
+                                    <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                                      <TableCell><strong>Date</strong></TableCell>
+                                      <TableCell><strong>Cab #</strong></TableCell>
+                                      <TableCell align="right"><strong>Trips</strong></TableCell>
+                                      <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
+                                      <TableCell align="right"><strong>Amount</strong></TableCell>
+                                      {airportItems.some(e => e.taxAmount) && <TableCell align="right"><strong>Tax</strong></TableCell>}
+                                      {airportItems.some(e => e.taxAmount) && <TableCell align="right"><strong>Total</strong></TableCell>}
+                                    </TableRow>
+                                  </TableHead>
+                                  <TableBody>
+                                    {sortedCabs.map((cab) => {
+                                      const items = grouped[cab].sort((a, b) => new Date(a.date || "") - new Date(b.date || ""));
+                                      const cabTrips = items.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+                                      const cabTotal = items.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                                      const cabTax = items.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                                      const hasTax = airportItems.some(e => e.taxAmount);
+                                      const colSpan = hasTax ? 7 : 5;
+                                      return [
+                                        <TableRow key={`cab-header-${cab}`} sx={{ backgroundColor: "#bbdefb" }}>
+                                          <TableCell colSpan={colSpan}>
+                                            <strong>Cab {cab}</strong>
+                                          </TableCell>
+                                        </TableRow>,
+                                        ...items.map((exp, idx) => (
+                                          <TableRow key={`${cab}-${idx}`} hover>
+                                            <TableCell>{exp.date || "-"}</TableCell>
+                                            <TableCell>Cab {cab}</TableCell>
+                                            <TableCell align="right">{exp.tripCount || 0}</TableCell>
+                                            <TableCell align="right">{exp.ratePerUnit ? `$${parseFloat(exp.ratePerUnit).toFixed(2)}` : "-"}</TableCell>
+                                            <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                              ${parseFloat(exp.amount || 0).toFixed(2)}
+                                            </TableCell>
+                                            {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>
+                                              {exp.taxAmount ? `${exp.taxTypeName || "Tax"} $${parseFloat(exp.taxAmount).toFixed(2)}` : "-"}
+                                            </TableCell>}
+                                            {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                              ${parseFloat(exp.amountWithTax || exp.amount || 0).toFixed(2)}
+                                            </TableCell>}
+                                          </TableRow>
+                                        )),
+                                        <TableRow key={`cab-sub-${cab}`} sx={{ backgroundColor: "#e3f2fd" }}>
+                                          <TableCell colSpan={2} align="right">
+                                            <strong>Cab {cab}: {cabTrips} trips</strong>
+                                          </TableCell>
+                                          <TableCell colSpan={2} align="right"><strong>Subtotal:</strong></TableCell>
+                                          <TableCell align="right"><strong>${cabTotal.toFixed(2)}</strong></TableCell>
+                                          {hasTax && <TableCell align="right"><strong>${cabTax.toFixed(2)}</strong></TableCell>}
+                                          {hasTax && <TableCell align="right"><strong>${(cabTotal + cabTax).toFixed(2)}</strong></TableCell>}
+                                        </TableRow>
+                                      ];
+                                    })}
+                                    {(() => {
+                                      const hasTax = airportItems.some(e => e.taxAmount);
+                                      const totalTax = airportItems.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                                      const totalAmount = calculateSubtotal(airportItems);
+                                      return (
+                                        <TableRow sx={{ backgroundColor: "#1565c0" }}>
+                                          <TableCell colSpan={2} align="right">
+                                            <strong style={{ color: "#fff" }}>TOTAL: {totalTrips} trips</strong>
+                                          </TableCell>
+                                          <TableCell colSpan={2} align="right"><strong style={{ color: "#fff" }}>TOTAL AIRPORT EXPENSE</strong></TableCell>
+                                          <TableCell align="right"><strong style={{ color: "#fff" }}>${totalAmount.toFixed(2)}</strong></TableCell>
+                                          {hasTax && <TableCell align="right"><strong style={{ color: "#fff" }}>${totalTax.toFixed(2)}</strong></TableCell>}
+                                          {hasTax && <TableCell align="right"><strong style={{ color: "#fff" }}>${(totalAmount + totalTax).toFixed(2)}</strong></TableCell>}
+                                        </TableRow>
+                                      );
+                                    })()}
+                                  </TableBody>
+                                </Table>
+                              </TableContainer>
+                            );
+                          })()
                         ) : (
                           <Typography color="textSecondary">No airport trip expenses</Typography>
                         )}
@@ -2098,9 +2151,32 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   </Box>
                 )}
                 {getAirportExpenses().length > 0 && (
-                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
-                    <Typography variant="body2" color="textSecondary">Airport Trip Expenses</Typography>
-                    <Typography variant="body2">${calculateSubtotal(getAirportExpenses()).toFixed(2)}</Typography>
+                  <Box sx={{ px: 1, py: 0.3 }}>
+                    <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Airport Trip Expenses</Typography>
+                      <Typography variant="body2" fontWeight="bold">${calculateSubtotal(getAirportExpenses()).toFixed(2)}</Typography>
+                    </Box>
+                    {(() => {
+                      const grouped = {};
+                      getAirportExpenses().forEach((exp) => {
+                        const cab = exp.cabNumber || "Unknown";
+                        if (!grouped[cab]) grouped[cab] = { trips: 0, cost: 0, tax: 0 };
+                        grouped[cab].trips += (exp.tripCount || 0);
+                        grouped[cab].cost += (parseFloat(exp.amount) || 0);
+                        grouped[cab].tax += (parseFloat(exp.taxAmount) || 0);
+                      });
+                      return Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999)).map((cab) => (
+                        <Box key={cab} sx={{ display: "flex", justifyContent: "space-between", pl: 2 }}>
+                          <Typography variant="caption" color="textSecondary">
+                            Cab {cab} - {grouped[cab].trips} trips
+                            {grouped[cab].tax > 0 ? ` (+ tax $${grouped[cab].tax.toFixed(2)})` : ""}
+                          </Typography>
+                          <Typography variant="caption">
+                            ${grouped[cab].tax > 0 ? (grouped[cab].cost + grouped[cab].tax).toFixed(2) : grouped[cab].cost.toFixed(2)}
+                          </Typography>
+                        </Box>
+                      ));
+                    })()}
                   </Box>
                 )}
                 {reportData.insuranceMileageExpenses && reportData.insuranceMileageExpenses.length > 0 && (
@@ -2386,30 +2462,46 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#e65100" }}>
                     Recurring Expenses
                   </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Category</TableCell>
-                          <TableCell>Target</TableCell>
-                          <TableCell align="right">Amount</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0).map((exp, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{exp.categoryName || "-"}</TableCell>
-                            <TableCell>{exp.entityDescription || "-"}</TableCell>
-                            <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={2} align="right"><strong>Recurring Expenses Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</strong></TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  {(() => {
+                    const items = reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0);
+                    const hasTax = items.some(e => e.taxAmount);
+                    return (
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Category</TableCell>
+                              <TableCell>Target</TableCell>
+                              <TableCell align="right">Amount</TableCell>
+                              {hasTax && <TableCell align="right">Tax</TableCell>}
+                              {hasTax && <TableCell align="right">Total</TableCell>}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {items.map((exp, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell>{exp.categoryName || "-"}</TableCell>
+                                <TableCell>{exp.entityDescription || "-"}</TableCell>
+                                <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                                {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>
+                                  {exp.taxAmount ? `${exp.taxTypeName || "Tax"} $${parseFloat(exp.taxAmount).toFixed(2)}` : "-"}
+                                </TableCell>}
+                                {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                  ${parseFloat(exp.amountWithTax || exp.amount || 0).toFixed(2)}
+                                </TableCell>}
+                              </TableRow>
+                            ))}
+                            <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                              <TableCell colSpan={2} align="right"><strong>Recurring Expenses Subtotal:</strong></TableCell>
+                              <TableCell align="right"><strong>${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</strong></TableCell>
+                              {hasTax && <TableCell align="right"><strong>${items.reduce((s, e) => s + (parseFloat(e.taxAmount) || 0), 0).toFixed(2)}</strong></TableCell>}
+                              {hasTax && <TableCell align="right"><strong>${items.reduce((s, e) => s + (parseFloat(e.amountWithTax || e.amount) || 0), 0).toFixed(2)}</strong></TableCell>}
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    );
+                  })()}
                 </Box>
               )}
 
@@ -2589,39 +2681,87 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#1565c0" }}>
                     Airport Trip Expenses
                   </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell>Cab #</TableCell>
-                          <TableCell align="right">Trips</TableCell>
-                          <TableCell align="right">Rate/Trip</TableCell>
-                          <TableCell align="right">Amount</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {getAirportExpenses()
-                          .sort((a, b) => new Date(b.date || "") - new Date(a.date || ""))
-                          .map((exp, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>{exp.date || "-"}</TableCell>
-                            <TableCell>{exp.cabNumber || "-"}</TableCell>
-                            <TableCell align="right">{exp.tripCount || "-"}</TableCell>
-                            <TableCell align="right">{exp.ratePerUnit ? `$${parseFloat(exp.ratePerUnit).toFixed(2)}` : "-"}</TableCell>
-                            <TableCell align="right">${parseFloat(exp.amount || 0).toFixed(2)}</TableCell>
-                          </TableRow>
-                        ))}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={2} align="right">
-                            <strong>Total: {getAirportExpenses().reduce((sum, e) => sum + (e.tripCount || 0), 0)} trips</strong>
-                          </TableCell>
-                          <TableCell colSpan={2} align="right"><strong>Airport Trips Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(getAirportExpenses()).toFixed(2)}</strong></TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
+                  {(() => {
+                    const airportItems = getAirportExpenses();
+                    const grouped = {};
+                    airportItems.forEach((exp) => {
+                      const cab = exp.cabNumber || "Unknown";
+                      if (!grouped[cab]) grouped[cab] = [];
+                      grouped[cab].push(exp);
+                    });
+                    const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+
+                    return (
+                      <TableContainer>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow>
+                              <TableCell>Date</TableCell>
+                              <TableCell>Cab #</TableCell>
+                              <TableCell align="right">Trips</TableCell>
+                              <TableCell align="right">Rate/Trip</TableCell>
+                              <TableCell align="right">Amount</TableCell>
+                              {airportItems.some(e => e.taxAmount) && <TableCell align="right">Tax</TableCell>}
+                              {airportItems.some(e => e.taxAmount) && <TableCell align="right">Total</TableCell>}
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {sortedCabs.map((cab) => {
+                              const items = grouped[cab].sort((a, b) => new Date(a.date || "") - new Date(b.date || ""));
+                              const cabTrips = items.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+                              const cabTotal = items.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                              const cabTax = items.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                              const hasTax = airportItems.some(e => e.taxAmount);
+                              const colSpan = hasTax ? 7 : 5;
+                              return [
+                                <TableRow key={`ph-${cab}`} sx={{ backgroundColor: "#e3f2fd" }}>
+                                  <TableCell colSpan={colSpan}><strong>Cab {cab}</strong></TableCell>
+                                </TableRow>,
+                                ...items.map((exp, idx) => (
+                                  <TableRow key={`p-${cab}-${idx}`}>
+                                    <TableCell>{exp.date || "-"}</TableCell>
+                                    <TableCell>Cab {cab}</TableCell>
+                                    <TableCell align="right">{exp.tripCount || 0}</TableCell>
+                                    <TableCell align="right">{exp.ratePerUnit ? `$${parseFloat(exp.ratePerUnit).toFixed(2)}` : "-"}</TableCell>
+                                    <TableCell align="right">${parseFloat(exp.amount || 0).toFixed(2)}</TableCell>
+                                    {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>
+                                      {exp.taxAmount ? `$${parseFloat(exp.taxAmount).toFixed(2)}` : "-"}
+                                    </TableCell>}
+                                    {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                      ${parseFloat(exp.amountWithTax || exp.amount || 0).toFixed(2)}
+                                    </TableCell>}
+                                  </TableRow>
+                                )),
+                                <TableRow key={`ps-${cab}`} sx={{ backgroundColor: "#f5f5f5" }}>
+                                  <TableCell colSpan={2} align="right"><strong>Cab {cab}: {cabTrips} trips</strong></TableCell>
+                                  <TableCell colSpan={2} align="right"><strong>Subtotal:</strong></TableCell>
+                                  <TableCell align="right"><strong>${cabTotal.toFixed(2)}</strong></TableCell>
+                                  {hasTax && <TableCell align="right"><strong>${cabTax.toFixed(2)}</strong></TableCell>}
+                                  {hasTax && <TableCell align="right"><strong>${(cabTotal + cabTax).toFixed(2)}</strong></TableCell>}
+                                </TableRow>
+                              ];
+                            })}
+                            {(() => {
+                              const hasTax = airportItems.some(e => e.taxAmount);
+                              const totalTax = airportItems.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                              const totalAmount = calculateSubtotal(airportItems);
+                              return (
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={2} align="right">
+                                    <strong>Total: {airportItems.reduce((sum, e) => sum + (e.tripCount || 0), 0)} trips</strong>
+                                  </TableCell>
+                                  <TableCell colSpan={2} align="right"><strong>Airport Trips Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${totalAmount.toFixed(2)}</strong></TableCell>
+                                  {hasTax && <TableCell align="right"><strong>${totalTax.toFixed(2)}</strong></TableCell>}
+                                  {hasTax && <TableCell align="right"><strong>${(totalAmount + totalTax).toFixed(2)}</strong></TableCell>}
+                                </TableRow>
+                              );
+                            })()}
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    );
+                  })()}
                 </Box>
               )}
 

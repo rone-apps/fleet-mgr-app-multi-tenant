@@ -35,6 +35,7 @@ import {
 import {
   CreditCard as CreditCardIcon,
   FlightTakeoff as AirportIcon,
+  PersonPin as PersonPinIcon,
   Speed as MileageIcon,
   Search as SearchIcon,
   Edit as EditIcon,
@@ -111,6 +112,13 @@ export default function ViewDataSection({ currentUser }) {
               id="view-tab-2"
               aria-controls="view-tabpanel-2"
             />
+            <Tab
+              icon={<PersonPinIcon />}
+              iconPosition="start"
+              label="Airport Trips (Driver)"
+              id="view-tab-3"
+              aria-controls="view-tabpanel-3"
+            />
           </Tabs>
         </Paper>
 
@@ -123,6 +131,9 @@ export default function ViewDataSection({ currentUser }) {
         </TabPanel>
         <TabPanel value={activeTab} index={2}>
           <AirportTripsDataView currentUser={currentUser} />
+        </TabPanel>
+        <TabPanel value={activeTab} index={3}>
+          <AirportTripsDriverDataView currentUser={currentUser} />
         </TabPanel>
       </Box>
     </LocalizationProvider>
@@ -990,6 +1001,266 @@ function AirportTripsDataView({ currentUser }) {
                     </TableRow>
                   );
                 })
+              )}
+            </TableBody>
+          </Table>
+        </TableContainer>
+        <TablePagination
+          component="div"
+          count={totalCount}
+          page={page}
+          onPageChange={(e, p) => setPage(p)}
+          rowsPerPage={rowsPerPage}
+          onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+          rowsPerPageOptions={[10, 25, 50, 100]}
+        />
+      </Paper>
+    </Box>
+  );
+}
+
+// ==================== Airport Trips (Driver) Data View ====================
+function AirportTripsDriverDataView({ currentUser }) {
+  const [data, setData] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(25);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // Filters
+  const [startDate, setStartDate] = useState(subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState(new Date());
+  const [cabNumber, setCabNumber] = useState("");
+  const [driverNumber, setDriverNumber] = useState("");
+
+  // Dropdowns
+  const [cabs, setCabs] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+
+  useEffect(() => {
+    fetchDropdowns();
+  }, []);
+
+  const fetchDropdowns = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const [cabsRes, driversRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/cabs`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") } }),
+        fetch(`${API_BASE_URL}/drivers`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") } }),
+      ]);
+      if (cabsRes.ok) setCabs(await cabsRes.json());
+      if (driversRes.ok) setDrivers(await driversRes.json());
+    } catch (e) {
+      console.error("Error fetching dropdowns:", e);
+    }
+  };
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const token = localStorage.getItem("token");
+      const params = new URLSearchParams({
+        startDate: format(startDate, "yyyy-MM-dd"),
+        endDate: format(endDate, "yyyy-MM-dd"),
+        page: page.toString(),
+        size: rowsPerPage.toString(),
+      });
+      if (cabNumber) params.append("cabNumber", cabNumber);
+      if (driverNumber) params.append("driverNumber", driverNumber);
+
+      const response = await fetch(`${API_BASE_URL}/data-view/airport-trip-drivers?${params}`, {
+        headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
+      });
+
+      if (!response.ok) throw new Error("Failed to fetch data");
+
+      const result = await response.json();
+      setData(result.content || []);
+      setTotalCount(result.totalElements || 0);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (data.length > 0 || totalCount > 0) fetchData();
+  }, [page, rowsPerPage]);
+
+  const handleSearch = () => {
+    setPage(0);
+    fetchData();
+  };
+
+  const getMethodColor = (method) => {
+    switch (method) {
+      case "MIDPOINT": return "success";
+      case "CLOSEST": return "warning";
+      case "OWNER_FALLBACK": return "info";
+      default: return "default";
+    }
+  };
+
+  const getMethodLabel = (method) => {
+    switch (method) {
+      case "MIDPOINT": return "Midpoint";
+      case "CLOSEST": return "Closest";
+      case "OWNER_FALLBACK": return "Owner";
+      default: return method || "-";
+    }
+  };
+
+  const getDriverName = (driverNum) => {
+    const driver = drivers.find((d) => d.driverNumber === driverNum);
+    return driver ? `${driver.firstName} ${driver.lastName}` : "";
+  };
+
+  return (
+    <Box>
+      {/* Filters */}
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" sx={{ mb: 2, display: "flex", alignItems: "center", gap: 1 }}>
+          <FilterIcon /> Filters
+        </Typography>
+        <Grid container spacing={2} alignItems="center">
+          <Grid item xs={12} sm={6} md={2}>
+            <DatePicker
+              label="Start Date"
+              value={startDate}
+              onChange={setStartDate}
+              slotProps={{ textField: { size: "small", fullWidth: true } }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <DatePicker
+              label="End Date"
+              value={endDate}
+              onChange={setEndDate}
+              slotProps={{ textField: { size: "small", fullWidth: true } }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <Autocomplete
+              options={cabs}
+              getOptionLabel={(option) => option.cabNumber || ""}
+              value={cabs.find((c) => c.cabNumber === cabNumber) || null}
+              onChange={(e, v) => setCabNumber(v?.cabNumber || "")}
+              renderInput={(params) => <TextField {...params} label="Cab #" size="small" />}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={2}>
+            <Autocomplete
+              options={drivers}
+              getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
+              value={drivers.find((d) => d.driverNumber === driverNumber) || null}
+              onChange={(e, v) => setDriverNumber(v?.driverNumber || "")}
+              renderInput={(params) => <TextField {...params} label="Driver" size="small" />}
+            />
+          </Grid>
+          <Grid item xs={12} sm={12} md={4}>
+            <Button
+              variant="contained"
+              startIcon={<SearchIcon />}
+              onClick={handleSearch}
+              disabled={loading}
+            >
+              Search
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={() => { setCabNumber(""); setDriverNumber(""); }}
+              sx={{ ml: 1 }}
+            >
+              Clear
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {/* Data Table */}
+      <Paper>
+        <TableContainer>
+          <Table stickyHeader size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Trip Date</TableCell>
+                <TableCell>Cab #</TableCell>
+                <TableCell>Driver #</TableCell>
+                <TableCell>Driver Name</TableCell>
+                <TableCell align="center">Hour</TableCell>
+                <TableCell align="center">Trip Count</TableCell>
+                <TableCell align="center">Daily Total</TableCell>
+                <TableCell align="center">Assignment</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    <CircularProgress />
+                  </TableCell>
+                </TableRow>
+              ) : data.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                    No data found. Use filters and click Search.
+                  </TableCell>
+                </TableRow>
+              ) : (
+                data.map((row) => (
+                  <TableRow key={row.id}>
+                    <TableCell>{row.tripDate}</TableCell>
+                    <TableCell>
+                      <Chip label={row.cabNumber || "-"} size="small" />
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={row.driverNumber || "N/A"}
+                        size="small"
+                        color="primary"
+                        variant="filled"
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" color="text.secondary">
+                        {getDriverName(row.driverNumber)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Chip
+                        label={`${row.hour}:00 - ${row.hour}:59`}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {row.tripCount || 0}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Typography variant="body2" color="text.secondary">
+                        {row.totalDailyTrips || "-"}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center">
+                      <Tooltip title={row.assignmentMethod || ""}>
+                        <Chip
+                          label={getMethodLabel(row.assignmentMethod)}
+                          size="small"
+                          color={getMethodColor(row.assignmentMethod)}
+                          variant="filled"
+                        />
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>

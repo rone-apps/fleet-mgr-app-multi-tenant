@@ -2655,10 +2655,26 @@ export default function DriverSummaryPage() {
                           );
                         })()}
 
-                        {/* Airport Trip Expenses (filtered from oneTimeExpenses by categoryCode) */}
+                        {/* Airport Trip Expenses — per-cab summary */}
                         {(() => {
                           const airportItems = (driverDetailReport.oneTimeExpenses || []).filter(e => e.categoryCode === "AIRPORT_TRIP");
                           if (airportItems.length === 0) return null;
+
+                          // Group by cab for summary
+                          const grouped = {};
+                          airportItems.forEach((exp) => {
+                            const cab = exp.cabNumber || "Unknown";
+                            if (!grouped[cab]) grouped[cab] = { trips: 0, cost: 0, tax: 0 };
+                            grouped[cab].trips += (exp.tripCount || 0);
+                            grouped[cab].cost += (parseFloat(exp.amount) || 0);
+                            grouped[cab].tax += (parseFloat(exp.taxAmount) || 0);
+                          });
+                          const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                          const totalTrips = airportItems.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+                          const totalCost = airportItems.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                          const totalTax = airportItems.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                          const hasTax = totalTax > 0;
+
                           return (
                             <Box sx={{ mb: 3 }}>
                               <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 1 }}>Airport Trip Expenses</Typography>
@@ -2666,32 +2682,43 @@ export default function DriverSummaryPage() {
                                 <Table size="small">
                                   <TableHead>
                                     <TableRow sx={{ bgcolor: "#ffebee" }}>
-                                      <TableCell><strong>Date</strong></TableCell>
                                       <TableCell><strong>Cab</strong></TableCell>
                                       <TableCell align="right"><strong>Trips</strong></TableCell>
-                                      <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
-                                      <TableCell align="right"><strong>Amount</strong></TableCell>
+                                      <TableCell align="right"><strong>Cost</strong></TableCell>
+                                      {hasTax && <TableCell align="right"><strong>Tax</strong></TableCell>}
+                                      {hasTax && <TableCell align="right"><strong>Total</strong></TableCell>}
                                     </TableRow>
                                   </TableHead>
                                   <TableBody>
-                                    {airportItems.sort((a, b) => new Date(b.date || "") - new Date(a.date || "")).map((exp, idx) => (
-                                      <TableRow key={idx} hover>
-                                        <TableCell>{exp.date || "-"}</TableCell>
-                                        <TableCell>{exp.cabNumber || "-"}</TableCell>
-                                        <TableCell align="right">{exp.tripCount || "-"}</TableCell>
-                                        <TableCell align="right">{exp.ratePerUnit ? formatCurrency(exp.ratePerUnit) : "-"}</TableCell>
-                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                    {sortedCabs.map((cab) => (
+                                      <TableRow key={cab} hover>
+                                        <TableCell>Cab {cab}</TableCell>
+                                        <TableCell align="right">{grouped[cab].trips}</TableCell>
+                                        <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(grouped[cab].cost)}</TableCell>
+                                        {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>{formatCurrency(grouped[cab].tax)}</TableCell>}
+                                        {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>{formatCurrency(grouped[cab].cost + grouped[cab].tax)}</TableCell>}
                                       </TableRow>
                                     ))}
                                     <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                      <TableCell colSpan={4} align="right">
-                                        <Typography variant="body2" fontWeight="bold" color="error.main">AIRPORT SUBTOTAL</Typography>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL: {totalTrips} trips</Typography>
+                                      </TableCell>
+                                      <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main">SUBTOTAL</Typography>
                                       </TableCell>
                                       <TableCell align="right">
                                         <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
-                                          {formatCurrency(airportItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
+                                          {formatCurrency(totalCost)}
                                         </Typography>
                                       </TableCell>
+                                      {hasTax && <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="#6a1b9a">{formatCurrency(totalTax)}</Typography>
+                                      </TableCell>}
+                                      {hasTax && <TableCell align="right">
+                                        <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.05em" }}>
+                                          {formatCurrency(totalCost + totalTax)}
+                                        </Typography>
+                                      </TableCell>}
                                     </TableRow>
                                   </TableBody>
                                 </Table>
@@ -3020,6 +3047,8 @@ export default function DriverSummaryPage() {
                           });
                           const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
                           const totalTrips = airportItems.reduce((sum, e) => sum + (e.tripCount || 0), 0);
+                          const hasTax = airportItems.some(e => e.taxAmount);
+                          const colSpan = hasTax ? 7 : 5;
 
                           return (
                             <TableContainer>
@@ -3031,16 +3060,19 @@ export default function DriverSummaryPage() {
                                     <TableCell align="right"><strong>Trips</strong></TableCell>
                                     <TableCell align="right"><strong>Rate/Trip</strong></TableCell>
                                     <TableCell align="right"><strong>Amount</strong></TableCell>
+                                    {hasTax && <TableCell align="right"><strong>Tax</strong></TableCell>}
+                                    {hasTax && <TableCell align="right"><strong>Total</strong></TableCell>}
                                   </TableRow>
                                 </TableHead>
                                 <TableBody>
                                   {sortedCabs.map((cab) => {
                                     const items = grouped[cab].sort((a, b) => new Date(b.date || "") - new Date(a.date || ""));
                                     const cabTrips = items.reduce((sum, e) => sum + (e.tripCount || 0), 0);
-                                    const cabTotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
+                                    const cabTotal = items.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                                    const cabTax = items.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
                                     return [
                                       <TableRow key={`cab-header-${cab}`} sx={{ bgcolor: "#ffcdd2" }}>
-                                        <TableCell colSpan={5}>
+                                        <TableCell colSpan={colSpan}>
                                           <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
                                         </TableCell>
                                       </TableRow>,
@@ -3051,6 +3083,12 @@ export default function DriverSummaryPage() {
                                           <TableCell align="right">{exp.tripCount || 0}</TableCell>
                                           <TableCell align="right">{exp.ratePerUnit ? formatCurrency(exp.ratePerUnit) : "-"}</TableCell>
                                           <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
+                                          {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>
+                                            {exp.taxAmount ? formatCurrency(exp.taxAmount) : "-"}
+                                          </TableCell>}
+                                          {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                            {formatCurrency(parseFloat(exp.amountWithTax || exp.amount || 0))}
+                                          </TableCell>}
                                         </TableRow>
                                       )),
                                       <TableRow key={`cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #f44336" }}>
@@ -3063,22 +3101,42 @@ export default function DriverSummaryPage() {
                                         <TableCell align="right">
                                           <Typography variant="caption" fontWeight="bold" color="error.main">{formatCurrency(cabTotal)}</Typography>
                                         </TableCell>
+                                        {hasTax && <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="#6a1b9a">{formatCurrency(cabTax)}</Typography>
+                                        </TableCell>}
+                                        {hasTax && <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">{formatCurrency(cabTotal + cabTax)}</Typography>
+                                        </TableCell>}
                                       </TableRow>
                                     ];
                                   })}
-                                  <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                    <TableCell colSpan={2} align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL: {totalTrips} trips</Typography>
-                                    </TableCell>
-                                    <TableCell colSpan={2} align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL AIRPORT EXPENSE</Typography>
-                                    </TableCell>
-                                    <TableCell align="right">
-                                      <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
-                                        {formatCurrency(airportItems.reduce((sum, e) => sum + (e.amount || 0), 0))}
-                                      </Typography>
-                                    </TableCell>
-                                  </TableRow>
+                                  {(() => {
+                                    const totalAmount = airportItems.reduce((sum, e) => sum + (parseFloat(e.amount) || 0), 0);
+                                    const totalTaxAmt = airportItems.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                                    return (
+                                      <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
+                                        <TableCell colSpan={2} align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL: {totalTrips} trips</Typography>
+                                        </TableCell>
+                                        <TableCell colSpan={2} align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL AIRPORT EXPENSE</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                            {formatCurrency(totalAmount)}
+                                          </Typography>
+                                        </TableCell>
+                                        {hasTax && <TableCell align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="#6a1b9a">{formatCurrency(totalTaxAmt)}</Typography>
+                                        </TableCell>}
+                                        {hasTax && <TableCell align="right">
+                                          <Typography variant="body2" fontWeight="bold" color="error.main" sx={{ fontSize: "1.1em" }}>
+                                            {formatCurrency(totalAmount + totalTaxAmt)}
+                                          </Typography>
+                                        </TableCell>}
+                                      </TableRow>
+                                    );
+                                  })()}
                                 </TableBody>
                               </Table>
                             </TableContainer>
