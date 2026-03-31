@@ -197,7 +197,8 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
         const cardInfo = getCardTypeInfo(item.cardType);
         return cardInfo.code.toLowerCase().includes(searchCard.toLowerCase()) ||
                cardInfo.name.toLowerCase().includes(searchCard.toLowerCase()) ||
-               item.cardLastFour?.includes(searchCard);
+               item.cardLastFour?.includes(searchCard) ||
+               item.cardholderNumber?.includes(searchCard);
       });
     }
 
@@ -245,7 +246,7 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
       "Auth Code",
       "Terminal ID",
       "Card Type",
-      "Last 4",
+      "Card Number",
       "Cab",
       "Amount",
       "Tip",
@@ -264,7 +265,7 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
         item.authorizationCode,
         item.terminalId,
         cardInfo.name,
-        item.cardLastFour || "",
+        item.cardholderNumber || (item.cardLastFour ? `****${item.cardLastFour}` : ""),
         item.cabNumber || "",
         item.amount?.toFixed(2) || "0.00",
         item.tipAmount?.toFixed(2) || "0.00",
@@ -572,16 +573,14 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
                               cardInfo.icon
                             )}
                           </Box>
-                          {/* Card Name and Last 4 */}
+                          {/* Card Name and Number */}
                           <Box>
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                               {cardInfo.code}
                             </Typography>
-                            {item.cardLastFour && (
-                              <Typography variant="caption" color="text.secondary">
-                                ****{item.cardLastFour}
-                              </Typography>
-                            )}
+                            <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace" }}>
+                              {item.cardholderNumber || (item.cardLastFour ? `****${item.cardLastFour}` : "")}
+                            </Typography>
                           </Box>
                         </Box>
                       </Tooltip>

@@ -328,6 +328,7 @@ function CreditCardDataView({ currentUser }) {
                 <TableCell>Driver #</TableCell>
                 <TableCell>Amount</TableCell>
                 <TableCell>Card Type</TableCell>
+                <TableCell>Card Number</TableCell>
                 <TableCell>Auth Code</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
@@ -335,13 +336,13 @@ function CreditCardDataView({ currentUser }) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     No data found. Use filters and click Search.
                   </TableCell>
                 </TableRow>
@@ -374,6 +375,9 @@ function CreditCardDataView({ currentUser }) {
                     </TableCell>
                     <TableCell>${row.amount?.toFixed(2)}</TableCell>
                     <TableCell>{row.cardType || "-"}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+                      {row.cardholderNumber || (row.cardLastFour ? `****${row.cardLastFour}` : "-")}
+                    </TableCell>
                     <TableCell>{row.authorizationCode || "-"}</TableCell>
                     <TableCell align="right">
                       {editingId === row.id ? (
@@ -1202,13 +1206,13 @@ function AirportTripsDriverDataView({ currentUser }) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
                     No data found. Use filters and click Search.
                   </TableCell>
                 </TableRow>

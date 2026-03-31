@@ -594,9 +594,11 @@ export default function DataPreviewStep({
                             </Box>
                             <Box>
                               <Typography variant="caption" color="text.secondary">
-                                Card Last 4
+                                Card Number
                               </Typography>
-                              <Typography variant="body2">{row.cardLastFour || "-"}</Typography>
+                              <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                                {row.cardholderNumber || (row.cardLastFour ? `****${row.cardLastFour}` : "-")}
+                              </Typography>
                             </Box>
                             <Box>
                               <Typography variant="caption" color="text.secondary">
