@@ -157,11 +157,16 @@ function CreditCardDataView({ currentUser }) {
   const [endDate, setEndDate] = useState(new Date());
   const [cabNumber, setCabNumber] = useState("");
   const [driverNumber, setDriverNumber] = useState("");
-  
+
   // Edit state
   const [editingId, setEditingId] = useState(null);
+  const [editCabNumber, setEditCabNumber] = useState("");
   const [editDriverNumber, setEditDriverNumber] = useState("");
-  
+
+  // Re-enrich state
+  const [enriching, setEnriching] = useState(false);
+  const [enrichResult, setEnrichResult] = useState(null);
+
   // Dropdowns
   const [cabs, setCabs] = useState([]);
   const [drivers, setDrivers] = useState([]);
@@ -169,6 +174,33 @@ function CreditCardDataView({ currentUser }) {
   useEffect(() => {
     fetchDropdowns();
   }, []);
+
+  const handleReEnrich = async () => {
+    setEnriching(true);
+    setEnrichResult(null);
+    try {
+      const token = localStorage.getItem("token");
+      const params = new URLSearchParams({
+        startDate: format(startDate, "yyyy-MM-dd"),
+        endDate: format(endDate, "yyyy-MM-dd"),
+      });
+      const response = await fetch(`${API_BASE_URL}/data-view/credit-card-transactions/re-enrich?${params}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") },
+      });
+      if (!response.ok) throw new Error("Failed to re-enrich");
+      const result = await response.json();
+      setEnrichResult(result);
+      if (result.cabsUpdated > 0 || result.driversUpdated > 0) {
+        fetchData();
+      }
+      setTimeout(() => setEnrichResult(null), 8000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setEnriching(false);
+    }
+  };
 
   const fetchDropdowns = async () => {
     try {
@@ -236,7 +268,7 @@ function CreditCardDataView({ currentUser }) {
           Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ driverNumber: editDriverNumber || null }),
+        body: JSON.stringify({ cabNumber: editCabNumber || null, driverNumber: editDriverNumber || null }),
       });
 
       if (!response.ok) throw new Error("Failed to update");
@@ -315,15 +347,36 @@ function CreditCardDataView({ currentUser }) {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
+      {enrichResult && (
+        <Alert severity={enrichResult.cabsUpdated > 0 || enrichResult.driversUpdated > 0 ? "success" : "info"} sx={{ mb: 2 }}>
+          Checked {enrichResult.totalChecked} transactions — updated {enrichResult.cabsUpdated} cab(s) and {enrichResult.driversUpdated} driver(s)
+        </Alert>
+      )}
 
       {/* Data Table */}
       <Paper>
+        <Box sx={{ display: "flex", justifyContent: "flex-end", p: 1.5, borderBottom: "1px solid #e5e7eb" }}>
+          <Tooltip title="Re-lookup missing cab numbers and drivers using latest merchant mappings and shift data">
+            <span>
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={enriching ? <CircularProgress size={16} /> : <RefreshIcon />}
+                onClick={handleReEnrich}
+                disabled={enriching || data.length === 0}
+              >
+                {enriching ? "Refreshing..." : "Refresh Cab/Driver Assignments"}
+              </Button>
+            </span>
+          </Tooltip>
+        </Box>
         <TableContainer>
           <Table stickyHeader size="small">
             <TableHead>
               <TableRow>
                 <TableCell>Date</TableCell>
                 <TableCell>Time</TableCell>
+                <TableCell>Merchant #</TableCell>
                 <TableCell>Cab #</TableCell>
                 <TableCell>Driver #</TableCell>
                 <TableCell>Amount</TableCell>
@@ -336,13 +389,13 @@ function CreditCardDataView({ currentUser }) {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
                     No data found. Use filters and click Search.
                   </TableCell>
                 </TableRow>
@@ -351,8 +404,22 @@ function CreditCardDataView({ currentUser }) {
                   <TableRow key={row.id}>
                     <TableCell>{row.transactionDate}</TableCell>
                     <TableCell>{row.transactionTime}</TableCell>
+                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
+                      {row.merchantId || "-"}
+                    </TableCell>
                     <TableCell>
-                      <Chip label={row.cabNumber || "-"} size="small" />
+                      {editingId === row.id ? (
+                        <Autocomplete
+                          options={cabs}
+                          getOptionLabel={(option) => option.cabNumber || ""}
+                          value={cabs.find((c) => c.cabNumber === editCabNumber) || null}
+                          onChange={(e, v) => setEditCabNumber(v?.cabNumber || "")}
+                          renderInput={(params) => <TextField {...params} size="small" sx={{ minWidth: 100 }} />}
+                          size="small"
+                        />
+                      ) : (
+                        <Chip label={row.cabNumber || "-"} size="small" />
+                      )}
                     </TableCell>
                     <TableCell>
                       {editingId === row.id ? (
@@ -365,9 +432,9 @@ function CreditCardDataView({ currentUser }) {
                           size="small"
                         />
                       ) : (
-                        <Chip 
-                          label={row.driverNumber || "N/A"} 
-                          size="small" 
+                        <Chip
+                          label={row.driverNumber || "N/A"}
+                          size="small"
                           color={row.driverNumber ? "primary" : "default"}
                           variant={row.driverNumber ? "filled" : "outlined"}
                         />
@@ -390,9 +457,9 @@ function CreditCardDataView({ currentUser }) {
                           </IconButton>
                         </>
                       ) : (
-                        <IconButton 
-                          size="small" 
-                          onClick={() => { setEditingId(row.id); setEditDriverNumber(row.driverNumber || ""); }}
+                        <IconButton
+                          size="small"
+                          onClick={() => { setEditingId(row.id); setEditCabNumber(row.cabNumber || ""); setEditDriverNumber(row.driverNumber || ""); }}
                         >
                           <EditIcon />
                         </IconButton>
