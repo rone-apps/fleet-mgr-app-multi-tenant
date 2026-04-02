@@ -23,6 +23,8 @@ import {
   UploadFile as UploadFileIcon,
   CheckCircle as CheckCircleIcon,
   PostAdd as PostAddIcon,
+  AccountBalance as BankIcon,
+  Payment as PaymentIcon,
 } from "@mui/icons-material";
 import { useRouter } from "next/navigation";
 import { getCurrentUser } from "../lib/api";
@@ -34,14 +36,20 @@ import CreateBatchDialog from "./components/dialogs/CreateBatchDialog";
 import PostBatchDialog from "./components/dialogs/PostBatchDialog";
 import RecallStatementDialog from "./components/dialogs/RecallStatementDialog";
 import AuditHistoryDialog from "./components/dialogs/AuditHistoryDialog";
+import GenerateEftDialog from "./components/dialogs/GenerateEftDialog";
+import EftConfigTab from "../financial-setup/tabs/EftConfigTab";
 import { formatCurrency, formatDate, getStatusColor } from "./utils/helpers";
 
 export default function DriverPaymentsPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeSection, setActiveSection] = useState(null); // null | "payments" | "eftConfig"
   const [showBatchList, setShowBatchList] = useState(true);
   const [completeBatchDialog, setCompleteBatchDialog] = useState(false);
+  const [eftDialog, setEftDialog] = useState(false);
+  const [eftError, setEftError] = useState("");
+  const [eftSuccess, setEftSuccess] = useState("");
 
   const {
     batches,
@@ -188,8 +196,12 @@ export default function DriverPaymentsPage() {
             variant="outlined"
             startIcon={<ArrowBackIcon />}
             onClick={() => {
-              localStorage.removeItem('dashboardCategory');
-              router.push('/');
+              if (activeSection) {
+                setActiveSection(null);
+              } else {
+                localStorage.removeItem('dashboardCategory');
+                router.push('/');
+              }
             }}
             sx={{
               color: '#667eea',
@@ -203,18 +215,116 @@ export default function DriverPaymentsPage() {
               }
             }}
           >
-            Back to Dashboard
+            {activeSection ? 'Back to Payments' : 'Back to Dashboard'}
           </Button>
           <Box>
             <Typography variant="h4" fontWeight="bold" gutterBottom sx={{ color: '#3e5244' }}>
-              Driver & Owner Payments
+              {activeSection === 'eftConfig' ? 'EFT Configuration' : 'Driver & Owner Payments'}
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              Manage bulk payment batches and settlements for drivers and owners
+              {activeSection === 'eftConfig'
+                ? 'Configure bank details and originator settings for EFT file generation'
+                : 'Manage bulk payment batches, settlements, and EFT configuration'}
             </Typography>
           </Box>
         </Box>
 
+        {/* Section Selector Cards */}
+        {!activeSection && (
+          <Grid container spacing={3} sx={{ mb: 4 }}>
+            <Grid item xs={12} sm={6}>
+              <Card
+                elevation={2}
+                sx={{
+                  cursor: 'pointer',
+                  border: '2px solid transparent',
+                  borderRadius: 2,
+                  transition: 'all 0.2s ease',
+                  '&:hover': { borderColor: '#667eea', boxShadow: 4 },
+                }}
+                onClick={() => setActiveSection('payments')}
+              >
+                <CardContent sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2.5 }}>
+                  <Box
+                    sx={{
+                      width: 56, height: 56, borderRadius: 2,
+                      backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <PaymentIcon sx={{ color: '#667eea', fontSize: 32 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#3e5244' }}>
+                      Driver & Owner Payments
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Create payment batches, manage settlements, post and process payments
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <Card
+                elevation={2}
+                sx={{
+                  cursor: 'pointer',
+                  border: '2px solid transparent',
+                  borderRadius: 2,
+                  transition: 'all 0.2s ease',
+                  '&:hover': { borderColor: '#1565c0', boxShadow: 4 },
+                }}
+                onClick={() => setActiveSection('eftConfig')}
+              >
+                <CardContent sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2.5 }}>
+                  <Box
+                    sx={{
+                      width: 56, height: 56, borderRadius: 2,
+                      backgroundColor: 'rgba(21, 101, 192, 0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >
+                    <BankIcon sx={{ color: '#1565c0', fontSize: 32 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#3e5244' }}>
+                      EFT Configuration
+                    </Typography>
+                    <Typography variant="body2" color="textSecondary">
+                      Configure bank details and originator settings for EFT file generation (CPA 005)
+                    </Typography>
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        )}
+
+        {/* EFT Configuration Section */}
+        {activeSection === 'eftConfig' && (
+          <Box>
+            {eftError && (
+              <Alert severity="error" onClose={() => setEftError("")} sx={{ mb: 2 }}>
+                {eftError}
+              </Alert>
+            )}
+            {eftSuccess && (
+              <Alert severity="success" onClose={() => setEftSuccess("")} sx={{ mb: 2 }}>
+                {eftSuccess}
+              </Alert>
+            )}
+            <EftConfigTab
+              canEdit={user?.role === "ADMIN" || user?.role === "MANAGER"}
+              setError={setEftError}
+              setSuccess={setEftSuccess}
+            />
+          </Box>
+        )}
+
+        {/* Payments Section */}
+        {activeSection === 'payments' && (
+        <>
         {/* Alerts */}
         {error && (
           <Alert
@@ -393,23 +503,44 @@ export default function DriverPaymentsPage() {
               )}
 
               {selectedBatch?.status === "POSTED" && (
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<CheckCircleIcon />}
-                  onClick={() => setCompleteBatchDialog(true)}
-                  disabled={loading}
-                >
-                  Complete Batch
-                </Button>
+                <>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<CheckCircleIcon />}
+                    onClick={() => setCompleteBatchDialog(true)}
+                    disabled={loading}
+                  >
+                    Complete Batch
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<BankIcon />}
+                    onClick={() => setEftDialog(true)}
+                    disabled={loading}
+                    sx={{ borderColor: "#6366f1", color: "#6366f1" }}
+                  >
+                    Generate EFT File
+                  </Button>
+                </>
               )}
 
               {selectedBatch?.status === "PROCESSED" && (
-                <Chip
-                  label="Batch Completed"
-                  color="success"
-                  icon={<CheckCircleIcon />}
-                />
+                <>
+                  <Chip
+                    label="Batch Completed"
+                    color="success"
+                    icon={<CheckCircleIcon />}
+                  />
+                  <Button
+                    variant="outlined"
+                    startIcon={<BankIcon />}
+                    onClick={() => setEftDialog(true)}
+                    sx={{ borderColor: "#6366f1", color: "#6366f1" }}
+                  >
+                    Generate EFT File
+                  </Button>
+                </>
               )}
             </Box>
 
@@ -425,6 +556,8 @@ export default function DriverPaymentsPage() {
               />
             </Paper>
           </>
+        )}
+        </>
         )}
       </Box>
 
@@ -492,6 +625,13 @@ export default function DriverPaymentsPage() {
         onFetchHistory={loadAuditHistory}
         statement={selectedStatement}
         isLoading={loading}
+      />
+
+      <GenerateEftDialog
+        open={eftDialog}
+        onClose={() => setEftDialog(false)}
+        batch={selectedBatch}
+        rows={batchRows}
       />
     </Box>
   );
