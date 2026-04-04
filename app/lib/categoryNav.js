@@ -25,7 +25,8 @@ export const getCategoryTitle = (category) => {
     financials: 'Financials',
     reports: 'Reports',
     integrations: 'Data & Integrations',
-    profiles: 'Shift Profiles'
+    profiles: 'Shift Profiles',
+    taxes: 'Do Your Own Taxes'
   };
   return titles[category] || null;
 };
@@ -70,10 +71,13 @@ export const pageMetadata = {
   '/driver-summary': { name: 'Driver Summary', category: 'reports' },
   '/taxicaller-integration': { name: 'Taxi Caller Integration', category: 'integrations' },
   '/data-uploads': { name: 'Data Uploads', category: 'integrations' },
+  '/moneris-integration': { name: 'Moneris Transactions', category: 'integrations' },
+  '/year-end-report': { name: 'Year-End Report', category: 'reports' },
   '/shift-profiles': { name: 'Shift Profiles', category: 'profiles' },
   '/driver-payments': { name: 'Driver & Owner Payments', category: 'payments' },
   '/statement-builder': { name: 'Statement Builder', category: 'reports' },
-  '/shift-data': { name: 'Driver Shift Data', category: 'reports' }
+  '/shift-data': { name: 'Driver Shift Data', category: 'reports' },
+  '/tax-returns': { name: 'Do Your Own Taxes', category: 'taxes' }
 };
 
 // Get metadata for a page

@@ -426,6 +426,23 @@ function HomePageContent() {
                 </Grid>
               )}
 
+              {/* Do Your Own Taxes */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DISPATCHER'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Do Your Own Taxes"
+                    description="Generate CRA T2125 tax worksheets for drivers & owners"
+                    icon={Description}
+                    gradient="linear-gradient(135deg, #b91c1c 0%, #ef4444 100%)"
+                    accent="#b91c1c"
+                    onClick={() => {
+                      storeCategoryNav('taxes');
+                      router.push('/tax-returns');
+                    }}
+                  />
+                </Grid>
+              )}
+
             </Grid>
           </>
         ) : (
@@ -758,6 +775,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Audit',
             gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
             accent: '#38f9d7'
+          },
+          {
+            title: 'Year-End Report',
+            description: 'Annual financial summary for drivers & owners with configurable line items',
+            icon: Assessment,
+            path: '/year-end-report',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DISPATCHER'],
+            badge: 'Annual',
+            gradient: 'linear-gradient(135deg, #6a1b9a 0%, #ce93d8 100%)',
+            accent: '#ce93d8'
           }
         ];
 
@@ -772,6 +799,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Connected',
             gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
             accent: '#38f9d7'
+          },
+          {
+            title: 'Moneris Transactions',
+            description: 'Browse & filter credit card transactions from Moneris',
+            icon: CreditCard,
+            path: '/moneris-integration',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Payments',
+            gradient: 'linear-gradient(135deg, #7B1FA2 0%, #CE93D8 100%)',
+            accent: '#CE93D8'
           },
           {
             title: 'Data Import',
