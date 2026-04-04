@@ -311,8 +311,17 @@ export default function YearEndReportContent({ showTaxButtons = true }) {
                 <TableBody>
                   {expenses.map((e, i) => (
                     <TableRow key={i} sx={{ "&:last-child td": { borderBottom: 0 } }}>
-                      <TableCell sx={{ pl: 3 }}>{e.label}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, color: "#e53935", whiteSpace: "nowrap" }}>{fmt(e.amount)}</TableCell>
+                      <TableCell sx={{ pl: e.indent ? 6 : 3, color: e.indent ? "text.secondary" : "text.primary", fontSize: e.indent ? 13 : 14 }}>
+                        {e.label}
+                      </TableCell>
+                      <TableCell align="right" sx={{
+                        fontWeight: e.indent ? 400 : 600,
+                        color: e.indent ? "text.secondary" : "#e53935",
+                        whiteSpace: "nowrap",
+                        fontSize: e.indent ? 13 : 14,
+                      }}>
+                        {fmt(e.amount)}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
