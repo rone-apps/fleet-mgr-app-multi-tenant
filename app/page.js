@@ -20,7 +20,8 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  TextField
 } from "@mui/material";
 import {
   People,
@@ -145,7 +146,7 @@ function HomePageContent() {
         <Box sx={{ textAlign: 'center' }}>
           <LocalTaxi sx={{ fontSize: 60, color: '#ffc107', mb: 2, animation: 'spin 2s linear infinite' }} />
           <Typography variant="h6" sx={{ color: '#3e5244', fontWeight: 600 }}>
-            🚕 Maclures Cabs
+            Smart Fleets
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
             Loading dashboard...
@@ -1016,6 +1017,42 @@ function MarketingLandingPage({ router }) {
   const green = '#0a9e6f';
   const cyan = '#00d4ff';
 
+  // Contact form state
+  const [contactForm, setContactForm] = useState({ firstName: '', lastName: '', email: '', company: '', fleetSize: '', message: '' });
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSuccess, setContactSuccess] = useState('');
+  const [contactError, setContactError] = useState('');
+
+  const handleContactField = (field) => (e) => {
+    setContactForm(prev => ({ ...prev, [field]: e.target.value }));
+    setContactError('');
+  };
+
+  const handleContactSubmit = async () => {
+    if (!contactForm.firstName.trim() || !contactForm.email.trim()) {
+      setContactError('First name and email are required');
+      return;
+    }
+    setContactSubmitting(true);
+    setContactError('');
+    setContactSuccess('');
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/contact`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(contactForm),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to send');
+      setContactSuccess(data.message);
+      setContactForm({ firstName: '', lastName: '', email: '', company: '', fleetSize: '', message: '' });
+    } catch (e) {
+      setContactError(e.message);
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
+
   // Reusable section header
   const SectionHeader = ({ overline, title, subtitle, light = false }) => (
     <Box sx={{ textAlign: 'center', mb: { xs: 5, md: 8 } }}>
@@ -1133,6 +1170,7 @@ function MarketingLandingPage({ router }) {
             </Button>
             <Button
               size="large" endIcon={<ArrowForward />}
+              onClick={() => document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' })}
               sx={{ color: accent, fontWeight: 600, px: 4, py: 1.5, borderRadius: '8px', fontSize: '1rem', textTransform: 'none', '&:hover': { backgroundColor: alpha(accent, 0.06) } }}
             >
               Contact sales
@@ -1151,7 +1189,7 @@ function MarketingLandingPage({ router }) {
             Powering the smartest fleets in the industry
           </Typography>
           <Grid container spacing={4} justifyContent="center" alignItems="center">
-            {['Maclures Cabs', 'City Taxi Co', 'Metro Fleet Services', 'Express Dispatch', 'Premier Cars'].map((name, idx) => (
+            {['Pacific Fleet Co', 'City Taxi Co', 'Metro Fleet Services', 'Express Dispatch', 'Premier Cars'].map((name, idx) => (
               <Grid item key={idx}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 2 }}>
                   <LocalTaxi sx={{ fontSize: 18, color: alpha(textSecondary, 0.3) }} />
@@ -1551,35 +1589,102 @@ function MarketingLandingPage({ router }) {
         </Container>
       </Box>
 
-      {/* ─── CTA Section ─── */}
-      <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: bgLight }}>
-        <Container maxWidth="md" sx={{ textAlign: 'center' }}>
-          <Typography
-            variant="h3"
-            sx={{ fontWeight: 700, color: textPrimary, mb: 2, letterSpacing: '-0.5px', fontSize: { xs: '1.8rem', md: '2.4rem' } }}
-          >
-            The future of fleet finance is autonomous
-          </Typography>
-          <Typography sx={{ color: textSecondary, mb: 5, fontSize: '1.1rem', maxWidth: 520, mx: 'auto', lineHeight: 1.6 }}>
-            Join the fleet operators who stopped managing finances and started letting AI handle it. Get started in minutes.
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Button
-              variant="contained" size="large" onClick={() => router.push('/signin')} endIcon={<ArrowForward />}
-              sx={{
-                backgroundColor: accent, color: '#fff', fontWeight: 600, px: 5, py: 1.5, borderRadius: '8px', fontSize: '1rem', textTransform: 'none', boxShadow: 'none',
-                '&:hover': { backgroundColor: accentLight, boxShadow: '0 6px 20px rgba(99,91,255,0.35)' },
-              }}
-            >
-              Start now
-            </Button>
-            <Button
-              size="large"
-              sx={{ color: textSecondary, fontWeight: 600, px: 4, py: 1.5, borderRadius: '8px', fontSize: '1rem', textTransform: 'none', '&:hover': { color: textPrimary, backgroundColor: alpha(textPrimary, 0.04) } }}
-            >
-              Contact sales
-            </Button>
-          </Box>
+      {/* ─── Contact Sales / CTA Section ─── */}
+      <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: bgLight }} id="contact">
+        <Container maxWidth="lg">
+          <Grid container spacing={6} alignItems="center">
+            <Grid item xs={12} md={5}>
+              <Typography
+                variant="h3"
+                sx={{ fontWeight: 700, color: textPrimary, mb: 2, letterSpacing: '-0.5px', fontSize: { xs: '1.8rem', md: '2.4rem' } }}
+              >
+                Ready to transform your fleet operations?
+              </Typography>
+              <Typography sx={{ color: textSecondary, mb: 4, fontSize: '1.05rem', lineHeight: 1.7 }}>
+                Talk to our team about how Smart Fleets can automate your financial workflows, reduce errors, and save you hours every week.
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ width: 36, height: 36, borderRadius: '8px', backgroundColor: alpha(accent, 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Business sx={{ fontSize: 18, color: accent }} />
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontWeight: 600, color: textPrimary, fontSize: '0.9rem' }}>Email us</Typography>
+                    <Typography sx={{ color: accent, fontSize: '0.9rem', fontWeight: 500 }}>info@smartfleets.ai</Typography>
+                  </Box>
+                </Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  <Box sx={{ width: 36, height: 36, borderRadius: '8px', backgroundColor: alpha(green, 0.1), display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Schedule sx={{ fontSize: 18, color: green }} />
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontWeight: 600, color: textPrimary, fontSize: '0.9rem' }}>Response time</Typography>
+                    <Typography sx={{ color: textSecondary, fontSize: '0.9rem' }}>We typically respond within 24 hours</Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Grid>
+            <Grid item xs={12} md={7}>
+              <Paper
+                elevation={0}
+                sx={{ p: { xs: 3, md: 5 }, borderRadius: '16px', border: '1px solid #e3e8ee', backgroundColor: '#fff' }}
+              >
+                <Typography sx={{ fontWeight: 700, color: textPrimary, mb: 0.5, fontSize: '1.2rem' }}>
+                  Contact Sales
+                </Typography>
+                <Typography sx={{ color: textSecondary, mb: 3, fontSize: '0.9rem' }}>
+                  Fill out the form and our team will get back to you shortly.
+                </Typography>
+                {contactSuccess && (
+                  <Box sx={{ mb: 2, p: 2, borderRadius: '8px', backgroundColor: alpha(green, 0.08), border: `1px solid ${alpha(green, 0.2)}` }}>
+                    <Typography sx={{ color: green, fontWeight: 600, fontSize: '0.9rem' }}>{contactSuccess}</Typography>
+                  </Box>
+                )}
+                {contactError && (
+                  <Box sx={{ mb: 2, p: 2, borderRadius: '8px', backgroundColor: alpha('#e53935', 0.08), border: '1px solid rgba(229,57,53,0.2)' }}>
+                    <Typography sx={{ color: '#e53935', fontWeight: 600, fontSize: '0.9rem' }}>{contactError}</Typography>
+                  </Box>
+                )}
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="First name" variant="outlined" required
+                      value={contactForm.firstName} onChange={handleContactField('firstName')} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Last name" variant="outlined"
+                      value={contactForm.lastName} onChange={handleContactField('lastName')} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField fullWidth size="small" label="Work email" type="email" variant="outlined" required
+                      value={contactForm.email} onChange={handleContactField('email')} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Company name" variant="outlined"
+                      value={contactForm.company} onChange={handleContactField('company')} />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField fullWidth size="small" label="Fleet size" variant="outlined" placeholder="e.g., 50 vehicles"
+                      value={contactForm.fleetSize} onChange={handleContactField('fleetSize')} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <TextField fullWidth size="small" label="How can we help?" multiline rows={3} variant="outlined"
+                      value={contactForm.message} onChange={handleContactField('message')} />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button
+                      variant="contained" fullWidth size="large" onClick={handleContactSubmit} disabled={contactSubmitting}
+                      sx={{
+                        backgroundColor: accent, color: '#fff', fontWeight: 600, py: 1.5, borderRadius: '8px', fontSize: '1rem', textTransform: 'none', boxShadow: 'none',
+                        '&:hover': { backgroundColor: accentLight, boxShadow: '0 6px 20px rgba(99,91,255,0.35)' },
+                      }}
+                    >
+                      {contactSubmitting ? 'Sending...' : 'Get in touch'}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </Grid>
+          </Grid>
         </Container>
       </Box>
 
@@ -1592,8 +1697,11 @@ function MarketingLandingPage({ router }) {
                 <LocalTaxi sx={{ fontSize: 22, color: accent }} />
                 <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: '1rem' }}>Smart Fleets</Typography>
               </Box>
-              <Typography sx={{ color: alpha('#fff', 0.5), fontSize: '0.85rem', lineHeight: 1.6, mb: 2 }}>
+              <Typography sx={{ color: alpha('#fff', 0.5), fontSize: '0.85rem', lineHeight: 1.6, mb: 1.5 }}>
                 AI-powered financial intelligence for modern fleet operators.
+              </Typography>
+              <Typography sx={{ color: alpha('#fff', 0.65), fontSize: '0.85rem', mb: 0.5 }}>
+                info@smartfleets.ai
               </Typography>
             </Grid>
             <Grid item xs={6} sm={3} md={2}>
