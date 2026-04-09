@@ -28,6 +28,8 @@ const routeLabels = {
   "/shift-data": "Driver Shift Data",
   "/cab-attributes/types": "Cab Types",
   "/cabs/attributes": "Cab Attributes",
+  "/spare-machines": "Spare Machines",
+  "/merchant-mappings": "Merchant Mappings",
 };
 
 export default function BreadcrumbNav() {

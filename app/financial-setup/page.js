@@ -13,7 +13,6 @@ import ExpenseCategoriesTab from "./tabs/ExpenseCategoriesTab";
 import RevenueCategoriesTab from "./tabs/RevenueCategoriesTab";
 import LeasePlansRatesTab from "./tabs/LeasePlansRatesTab";
 import LeaseRateOverridesTab from "./tabs/LeaseRateOverridesTab";
-import MerchantMappingsTab from "./tabs/MerchantMappingsTab";
 import AttributeCostsTab from "../expenses/components/AttributeCostsTab";
 import ItemRatesTab from "./tabs/ItemRatesTab";
 import ItemRateOverridesTab from "./tabs/ItemRateOverridesTab";
@@ -32,7 +31,6 @@ import {
   TrendingUp as RevenueIcon,
   Receipt as ReceiptIcon,
   AttachMoney as MoneyIcon,
-  CreditCard as MerchantIcon,
   Settings as AttributeIcon,
   Speed as SpeedIcon,
   Tune as TuneIcon,
@@ -45,7 +43,6 @@ const categories = [
   { key: "revenueCategories", label: "Revenue Categories", description: "Define and manage revenue streams and income types", icon: RevenueIcon, color: "#43a047" },
   { key: "leasePlans", label: "Lease Plans & Rates", description: "Configure lease plans and their associated rates", icon: ReceiptIcon, color: "#1e88e5" },
   { key: "leaseOverrides", label: "Lease Rate Overrides", description: "Set rate overrides for specific drivers or cabs", icon: MoneyIcon, color: "#fb8c00" },
-  { key: "merchantMappings", label: "Merchant Mappings", description: "Map payment processor merchants to categories", icon: MerchantIcon, color: "#8e24aa" },
   { key: "attributeCosts", label: "Attribute Costs", description: "Configure costs based on shift attributes", icon: AttributeIcon, color: "#00897b" },
   { key: "itemRates", label: "Item Rates", description: "Manage insurance, mileage, and other item rates", icon: SpeedIcon, color: "#5c6bc0" },
   { key: "itemOverrides", label: "Item Rate Overrides", description: "Set item rate overrides for specific entities", icon: TuneIcon, color: "#78909c" },
@@ -68,7 +65,6 @@ export default function FinancialSetupPage() {
     leasePlans: 0,
     leaseRates: 0,
     leaseRateOverrides: 0,
-    merchantMappings: 0,
     attributeCosts: 0,
   });
 
@@ -100,7 +96,6 @@ export default function FinancialSetupPage() {
       case "revenueCategories": return <RevenueCategoriesTab {...commonProps} />;
       case "leasePlans": return <LeasePlansRatesTab {...commonProps} />;
       case "leaseOverrides": return <LeaseRateOverridesTab {...commonProps} />;
-      case "merchantMappings": return <MerchantMappingsTab {...commonProps} />;
       case "attributeCosts": return <AttributeCostsTab canEdit={canEdit} />;
       case "itemRates": return <ItemRatesTab {...commonProps} />;
       case "itemOverrides": return <ItemRateOverridesTab {...commonProps} />;
@@ -122,7 +117,7 @@ export default function FinancialSetupPage() {
             Financial Configuration
           </Typography>
           <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-            Manage expense categories, revenue categories, lease plans, rates, overrides, merchant mappings, and attribute costs
+            Manage expense categories, revenue categories, lease plans, rates, overrides, and attribute costs
           </Typography>
 
           {error && (

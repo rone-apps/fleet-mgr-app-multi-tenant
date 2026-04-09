@@ -72,12 +72,14 @@ export const pageMetadata = {
   '/taxicaller-integration': { name: 'Taxi Caller Integration', category: 'integrations' },
   '/data-uploads': { name: 'Data Uploads', category: 'integrations' },
   '/moneris-integration': { name: 'Moneris Transactions', category: 'integrations' },
+  '/spare-machines': { name: 'Spare Machines', category: 'integrations' },
   '/year-end-report': { name: 'Year-End Report', category: 'reports' },
   '/shift-profiles': { name: 'Shift Profiles', category: 'profiles' },
   '/driver-payments': { name: 'Driver & Owner Payments', category: 'payments' },
   '/statement-builder': { name: 'Statement Builder', category: 'reports' },
   '/shift-data': { name: 'Driver Shift Data', category: 'reports' },
-  '/tax-returns': { name: 'Do Your Own Taxes', category: 'taxes' }
+  '/tax-returns': { name: 'Do Your Own Taxes', category: 'taxes' },
+  '/merchant-mappings': { name: 'Merchant Mappings', category: 'operations' }
 };
 
 // Get metadata for a page

@@ -6,7 +6,7 @@ import {
   TextField, CircularProgress, Chip, FormControl, InputLabel, Select,
   MenuItem, Switch, Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Collapse, Divider, IconButton, FormControlLabel,
-  Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions,
+  Autocomplete, Dialog, DialogTitle, DialogContent, DialogActions, Checkbox,
 } from "@mui/material";
 import {
   Settings as SettingsIcon, Print as PrintIcon,
@@ -16,7 +16,7 @@ import {
   ExpandLess as ExpandLessIcon, Sync as SyncIcon,
   CheckCircle as CheckIcon, Email as EmailIcon,
   PictureAsPdf as PdfIcon, Description as T2125Icon,
-  ReceiptLong as GstIcon,
+  ReceiptLong as GstIcon, Delete as DeleteIcon, Edit as EditIcon,
 } from "@mui/icons-material";
 import GlobalNav from "./GlobalNav";
 import { getCurrentUser, isAuthenticated, API_BASE_URL, getAuthHeaders } from "../lib/api";
@@ -61,6 +61,38 @@ export default function YearEndReportContent({ showTaxButtons = true }) {
   const [configItems, setConfigItems] = useState([]);
   const [configDirty, setConfigDirty] = useState(false);
   const [savingConfig, setSavingConfig] = useState(false);
+
+  // Tax Deductions Card
+  const [taxCardOpen, setTaxCardOpen] = useState(false);
+  const [selectedDriverForTax, setSelectedDriverForTax] = useState(null);
+  const [taxYear, setTaxYear] = useState(currentYear);
+  const [taxEntries, setTaxEntries] = useState([]);
+  const [taxLoading, setTaxLoading] = useState(false);
+  const [taxTabIndex, setTaxTabIndex] = useState(0);
+  const [taxDialogOpen, setTaxDialogOpen] = useState(false);
+  const [editingTaxEntry, setEditingTaxEntry] = useState(null);
+  const [taxFormData, setTaxFormData] = useState({
+    entryType: "T_SLIP",
+    slipType: "T4",
+    issuerName: "",
+    boxLabel: "",
+    amount: "",
+    notes: "",
+  });
+
+  // Tax Profile & Calculation
+  const [taxProfile, setTaxProfile] = useState({
+    province: "ON",
+    language: "EN",
+    maritalStatus: "SINGLE",
+    numDependents: 0,
+    birthYear: new Date().getFullYear() - 40,
+    hasDisability: false,
+    spouseDisability: false,
+  });
+  const [taxProfileLoading, setTaxProfileLoading] = useState(false);
+  const [taxCalculationResult, setTaxCalculationResult] = useState(null);
+  const [taxCalculationLoading, setTaxCalculationLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated()) { router.push("/"); return; }
@@ -245,6 +277,154 @@ export default function YearEndReportContent({ showTaxButtons = true }) {
       URL.revokeObjectURL(a.href);
     } catch (e) { setError(e.message); }
     finally { setDownloadingGst(false); }
+  };
+
+  // Tax Deductions Functions
+  const loadTaxEntries = async () => {
+    if (!selectedDriverForTax) { setError("Please select a driver"); return; }
+    setTaxLoading(true);
+    try {
+      const driverId = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.number : selectedDriverForTax;
+      const res = await fetch(`${API_BASE_URL}/driver-tax-entries?driverId=${driverId}&taxYear=${taxYear}`, {
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to load tax entries");
+      const data = await res.json();
+      setTaxEntries(data || []);
+    } catch (e) { setError(e.message); }
+    finally { setTaxLoading(false); }
+  };
+
+  const saveTaxEntry = async () => {
+    if (!selectedDriverForTax) { setError("Please select a driver"); return; }
+    if (!taxFormData.amount || parseFloat(taxFormData.amount) <= 0) { setError("Amount must be greater than 0"); return; }
+
+    try {
+      const driverId = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.number : selectedDriverForTax;
+      const driverName = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.name : "";
+      const payload = {
+        ...taxFormData,
+        driverId,
+        driverName,
+        taxYear,
+        amount: parseFloat(taxFormData.amount),
+      };
+
+      const method = editingTaxEntry ? "PUT" : "POST";
+      const url = editingTaxEntry ? `${API_BASE_URL}/driver-tax-entries/${editingTaxEntry.id}` : `${API_BASE_URL}/driver-tax-entries`;
+
+      const res = await fetch(url, {
+        method,
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error(editingTaxEntry ? "Failed to update entry" : "Failed to create entry");
+
+      setSuccess(editingTaxEntry ? "Entry updated" : "Entry created");
+      setTaxDialogOpen(false);
+      setEditingTaxEntry(null);
+      setTaxFormData({ entryType: "T_SLIP", slipType: "T4", issuerName: "", boxLabel: "", amount: "", notes: "" });
+      await loadTaxEntries();
+    } catch (e) { setError(e.message); }
+  };
+
+  const deleteTaxEntry = async (id) => {
+    if (!confirm("Delete this entry?")) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/driver-tax-entries/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to delete entry");
+      setSuccess("Entry deleted");
+      await loadTaxEntries();
+    } catch (e) { setError(e.message); }
+  };
+
+  const openTaxDialog = (entry = null) => {
+    if (entry) {
+      setEditingTaxEntry(entry);
+      setTaxFormData({
+        entryType: entry.entryType,
+        slipType: entry.slipType || "T4",
+        boxLabel: entry.boxLabel || "",
+        issuerName: entry.issuerName || "",
+        amount: entry.amount.toString(),
+        notes: entry.notes || "",
+      });
+    } else {
+      setEditingTaxEntry(null);
+      setTaxFormData({ entryType: "T_SLIP", slipType: "T4", issuerName: "", boxLabel: "", amount: "", notes: "" });
+    }
+    setTaxDialogOpen(true);
+  };
+
+  const TAX_ENTRY_TYPES = [
+    { value: "T_SLIP", label: "T Slip" },
+    { value: "RRSP", label: "RRSP Contribution" },
+    { value: "DONATION", label: "Charitable Donation" },
+    { value: "OTHER_DEDUCTION", label: "Other Deduction" },
+  ];
+
+  const SLIP_TYPES = ["T4", "T4A", "T4A-OAS", "T5", "T3", "T4E", "RL-1", "RL-3"];
+
+  const TAX_TABS = ["T Slips", "RRSP Contributions", "Donations", "Other Deductions"];
+  const TAX_TAB_TYPES = ["T_SLIP", "RRSP", "DONATION", "OTHER_DEDUCTION"];
+
+  const getTabEntries = () => taxEntries.filter(e => e.entryType === TAX_TAB_TYPES[taxTabIndex]);
+  const getTabTotal = () => getTabEntries().reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+  const getTotalAll = () => taxEntries.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+
+  // Tax Profile & Calculation Functions
+  const loadTaxProfile = async () => {
+    if (!selectedDriverForTax) { setError("Please select a driver"); return; }
+    setTaxProfileLoading(true);
+    try {
+      const driverId = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.number : selectedDriverForTax;
+      const res = await fetch(`${API_BASE_URL}/driver-tax-profiles?driverId=${driverId}&taxYear=${taxYear}`, { headers: getAuthHeaders() });
+      if (!res.ok) throw new Error("Failed to load profile");
+      const data = await res.json();
+      setTaxProfile({ ...data, birthYear: data.birthYear || new Date().getFullYear() - 40 });
+      setSuccess("Profile loaded");
+    } catch (e) { setError(e.message); }
+    finally { setTaxProfileLoading(false); }
+  };
+
+  const saveTaxProfile = async () => {
+    if (!selectedDriverForTax) { setError("Please select a driver"); return; }
+    setTaxProfileLoading(true);
+    try {
+      const driverId = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.number : selectedDriverForTax;
+      const driverName = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.name : "";
+      const payload = { ...taxProfile, driverId, driverName, taxYear };
+      const res = await fetch(`${API_BASE_URL}/driver-tax-profiles`, {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error("Failed to save profile");
+      setSuccess("Profile saved");
+    } catch (e) { setError(e.message); }
+    finally { setTaxProfileLoading(false); }
+  };
+
+  const calculateTax = async () => {
+    if (!selectedDriverForTax) { setError("Please select a driver"); return; }
+    if (!taxProfile.province) { setError("Please set province in profile"); return; }
+    setTaxCalculationLoading(true);
+    try {
+      const driverId = typeof selectedDriverForTax === 'object' ? selectedDriverForTax.number : selectedDriverForTax;
+      const res = await fetch(`${API_BASE_URL}/tax-calculations/calculate?driverId=${driverId}&taxYear=${taxYear}`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to calculate tax");
+      const data = await res.json();
+      setTaxCalculationResult(data);
+      if (data.error) setError(data.error);
+      else setSuccess("Tax calculated");
+    } catch (e) { setError(e.message); }
+    finally { setTaxCalculationLoading(false); }
   };
 
   const fmt = (val) => {
@@ -564,7 +744,344 @@ export default function YearEndReportContent({ showTaxButtons = true }) {
             <Typography variant="caption" color="text.secondary">This may take a moment for large date ranges</Typography>
           </Paper>
         )}
+
+        {/* Tax Deductions Card */}
+        <Paper elevation={0} sx={{ p: 3, mb: 3, border: "2px solid #b91c1c", borderRadius: 2 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: taxCardOpen ? 2 : 0, cursor: "pointer" }}
+            onClick={() => setTaxCardOpen(!taxCardOpen)}>
+            <Typography variant="h6" sx={{ fontWeight: 700, color: "#b91c1c" }}>Personal Tax Deductions</Typography>
+            {taxCardOpen ? <ExpandLessIcon sx={{ color: "#b91c1c" }} /> : <ExpandMoreIcon sx={{ color: "#b91c1c" }} />}
+          </Box>
+
+          <Collapse in={taxCardOpen}>
+            {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
+            {success && <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess("")}>{success}</Alert>}
+
+            <Grid container spacing={2} sx={{ mb: 3 }}>
+              <Grid item xs={12} sm={4}>
+                <Autocomplete
+                  size="small"
+                  options={drivers}
+                  getOptionLabel={(option) => `${option.name} (${option.number})${option.isOwner ? " [Owner]" : ""}`}
+                  value={selectedDriverForTax}
+                  onChange={(_, val) => { setSelectedDriverForTax(val); setTaxEntries([]); }}
+                  isOptionEqualToValue={(option, value) => option.number === value.number}
+                  renderInput={(params) => <TextField {...params} label="Driver / Owner" />}
+                />
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <TextField fullWidth size="small" type="number" label="Tax Year" value={taxYear}
+                  onChange={(e) => setTaxYear(parseInt(e.target.value) || currentYear)} />
+              </Grid>
+              <Grid item xs={12} sm={5}>
+                <Button variant="contained" fullWidth disabled={!selectedDriverForTax || taxLoading}
+                  onClick={loadTaxEntries} startIcon={taxLoading ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                  sx={{ backgroundColor: "#b91c1c", "&:hover": { backgroundColor: "#991b1b" }, height: 40 }}>
+                  {taxLoading ? "Loading..." : "Load Entries"}
+                </Button>
+              </Grid>
+            </Grid>
+
+            {selectedDriverForTax && (
+              <>
+                <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+                  <InputLabel>Category</InputLabel>
+                  <Select value={taxTabIndex} label="Category" onChange={(e) => setTaxTabIndex(e.target.value)}>
+                    {TAX_TABS.map((tab, idx) => <MenuItem key={idx} value={idx}>{tab}</MenuItem>)}
+                  </Select>
+                </FormControl>
+
+                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                    {TAX_TABS[taxTabIndex]} ({getTabEntries().length} {getTabEntries().length === 1 ? "entry" : "entries"})
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Chip label={`Total: ${fmt(getTabTotal())}`} variant="outlined" sx={{ color: "#b91c1c", borderColor: "#b91c1c" }} />
+                    <Button variant="outlined" size="small" onClick={() => openTaxDialog()}>Add Entry</Button>
+                  </Box>
+                </Box>
+
+                <TableContainer component={Paper} sx={{ mb: 2 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
+                        {taxTabIndex === 0 && (
+                          <>
+                            <TableCell><strong>Slip Type</strong></TableCell>
+                            <TableCell><strong>Box Label</strong></TableCell>
+                            <TableCell><strong>Issuer</strong></TableCell>
+                          </>
+                        )}
+                        {taxTabIndex === 1 && (
+                          <>
+                            <TableCell><strong>Institution</strong></TableCell>
+                            <TableCell><strong>Notes</strong></TableCell>
+                          </>
+                        )}
+                        {taxTabIndex === 2 && (
+                          <>
+                            <TableCell><strong>Organization</strong></TableCell>
+                            <TableCell><strong>Notes</strong></TableCell>
+                          </>
+                        )}
+                        {taxTabIndex === 3 && (
+                          <>
+                            <TableCell><strong>Description</strong></TableCell>
+                            <TableCell><strong>Notes</strong></TableCell>
+                          </>
+                        )}
+                        <TableCell align="right"><strong>Amount</strong></TableCell>
+                        <TableCell align="center"><strong>Actions</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {getTabEntries().length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={taxTabIndex === 0 ? 5 : 4} align="center" sx={{ py: 3, color: "#999" }}>
+                            No entries yet. Click "Add Entry" to get started.
+                          </TableCell>
+                        </TableRow>
+                      ) : (
+                        getTabEntries().map(entry => (
+                          <TableRow key={entry.id} hover>
+                            {taxTabIndex === 0 && (
+                              <>
+                                <TableCell>{entry.slipType}</TableCell>
+                                <TableCell>{entry.boxLabel || "—"}</TableCell>
+                                <TableCell>{entry.issuerName || "—"}</TableCell>
+                              </>
+                            )}
+                            {taxTabIndex === 1 && (
+                              <>
+                                <TableCell>{entry.issuerName || "—"}</TableCell>
+                                <TableCell>{entry.notes || "—"}</TableCell>
+                              </>
+                            )}
+                            {taxTabIndex === 2 && (
+                              <>
+                                <TableCell>{entry.issuerName || "—"}</TableCell>
+                                <TableCell>{entry.notes || "—"}</TableCell>
+                              </>
+                            )}
+                            {taxTabIndex === 3 && (
+                              <>
+                                <TableCell>{entry.notes || "—"}</TableCell>
+                                <TableCell>{entry.boxLabel || "—"}</TableCell>
+                              </>
+                            )}
+                            <TableCell align="right">{fmt(entry.amount)}</TableCell>
+                            <TableCell align="center">
+                              <IconButton size="small" onClick={() => openTaxDialog(entry)}><EditIcon fontSize="small" /></IconButton>
+                              <IconButton size="small" color="error" onClick={() => deleteTaxEntry(entry.id)}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+
+                {taxEntries.length > 0 && (
+                  <Box sx={{ p: 2, backgroundColor: "#f9f9f9", borderRadius: 1, textAlign: "right" }}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600, color: "#b91c1c" }}>
+                      Grand Total (All Categories): {fmt(getTotalAll())}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Divider sx={{ my: 3 }} />
+
+                {/* Tax Profile Section */}
+                <Typography variant="h6" sx={{ fontWeight: 700, color: "#b91c1c", mb: 2 }}>Tax Profile</Typography>
+                <Grid container spacing={2} sx={{ mb: 3 }}>
+                  <Grid item xs={12} sm={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Province</InputLabel>
+                      <Select label="Province" value={taxProfile.province}
+                        onChange={(e) => setTaxProfile({ ...taxProfile, province: e.target.value })}>
+                        {["AB", "BC", "MB", "NB", "NL", "NS", "NT", "NU", "ON", "PE", "QC", "SK", "YT"].map(p =>
+                          <MenuItem key={p} value={p}>{p}</MenuItem>
+                        )}
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Language</InputLabel>
+                      <Select label="Language" value={taxProfile.language}
+                        onChange={(e) => setTaxProfile({ ...taxProfile, language: e.target.value })}>
+                        <MenuItem value="EN">English</MenuItem>
+                        <MenuItem value="FR">Français</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Marital Status</InputLabel>
+                      <Select label="Marital Status" value={taxProfile.maritalStatus}
+                        onChange={(e) => setTaxProfile({ ...taxProfile, maritalStatus: e.target.value })}>
+                        <MenuItem value="SINGLE">Single</MenuItem>
+                        <MenuItem value="MARRIED">Married</MenuItem>
+                        <MenuItem value="COMMON_LAW">Common-law</MenuItem>
+                        <MenuItem value="DIVORCED">Divorced</MenuItem>
+                        <MenuItem value="WIDOWED">Widowed</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <TextField fullWidth size="small" type="number" label="# Dependents"
+                      value={taxProfile.numDependents}
+                      onChange={(e) => setTaxProfile({ ...taxProfile, numDependents: parseInt(e.target.value) || 0 })} />
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <TextField fullWidth size="small" type="number" label="Birth Year"
+                      value={taxProfile.birthYear}
+                      onChange={(e) => setTaxProfile({ ...taxProfile, birthYear: parseInt(e.target.value) || 1980 })} />
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <FormControlLabel
+                      control={<Checkbox checked={taxProfile.hasDisability}
+                        onChange={(e) => setTaxProfile({ ...taxProfile, hasDisability: e.target.checked })} />}
+                      label="Self Disabled" />
+                  </Grid>
+                  <Grid item xs={6} sm={3}>
+                    <FormControlLabel
+                      control={<Checkbox checked={taxProfile.spouseDisability}
+                        onChange={(e) => setTaxProfile({ ...taxProfile, spouseDisability: e.target.checked })} />}
+                      label="Spouse Disabled" />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Button variant="contained" onClick={saveTaxProfile} disabled={taxProfileLoading}
+                      sx={{ backgroundColor: "#b91c1c", "&:hover": { backgroundColor: "#991b1b" } }}>
+                      {taxProfileLoading ? "Saving..." : "Save Profile"}
+                    </Button>
+                  </Grid>
+                </Grid>
+
+                {/* Tax Calculation Results */}
+                {taxCalculationResult && !taxCalculationResult.error && (
+                  <>
+                    <Divider sx={{ my: 2 }} />
+                    <Button variant="contained" onClick={calculateTax} disabled={taxCalculationLoading}
+                      sx={{ mb: 2, backgroundColor: "#b91c1c", "&:hover": { backgroundColor: "#991b1b" } }}>
+                      {taxCalculationLoading ? "Calculating..." : "Recalculate 2024 Tax"}
+                    </Button>
+
+                    <Paper sx={{ p: 3, backgroundColor: "#fafafa", border: "1px solid #e0e0e0" }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, mb: 2 }}>
+                        2024 Tax Summary — {taxProfile.province}
+                      </Typography>
+
+                      <Grid container spacing={2} sx={{ mb: 2 }}>
+                        <Grid item xs={6}><Typography>Employment Income</Typography></Grid>
+                        <Grid item xs={6} align="right"><strong>{fmt(taxCalculationResult.totalEmploymentIncome)}</strong></Grid>
+
+                        <Grid item xs={6}><Typography>- RRSP Deduction</Typography></Grid>
+                        <Grid item xs={6} align="right"><strong>({fmt(taxCalculationResult.rrspDeduction)})</strong></Grid>
+
+                        <Grid item xs={6}><Typography>- Donations</Typography></Grid>
+                        <Grid item xs={6} align="right"><strong>({fmt(taxCalculationResult.donationDeduction)})</strong></Grid>
+
+                        <Grid item xs={6}><Typography>- Other Deductions</Typography></Grid>
+                        <Grid item xs={6} align="right"><strong>({fmt(taxCalculationResult.otherDeductions)})</strong></Grid>
+
+                        <Grid item xs={6} sx={{ pt: 2, borderTop: "1px solid #ddd" }}><Typography sx={{ fontWeight: 600 }}>Taxable Income</Typography></Grid>
+                        <Grid item xs={6} align="right" sx={{ pt: 2, borderTop: "1px solid #ddd" }}><strong>{fmt(taxCalculationResult.taxableIncome)}</strong></Grid>
+
+                        <Grid item xs={6} sx={{ pt: 1 }}><Typography>Federal Tax</Typography></Grid>
+                        <Grid item xs={6} align="right" sx={{ pt: 1 }}><Typography>{fmt(taxCalculationResult.netFederalTax)}</Typography></Grid>
+
+                        <Grid item xs={6}><Typography>Provincial Tax ({taxProfile.province})</Typography></Grid>
+                        <Grid item xs={6} align="right"><Typography>{fmt(taxCalculationResult.netProvincialTax)}</Typography></Grid>
+
+                        <Grid item xs={6}><Typography>CPP Contributions</Typography></Grid>
+                        <Grid item xs={6} align="right"><Typography>{fmt(taxCalculationResult.cppContributions)}</Typography></Grid>
+
+                        <Grid item xs={6}><Typography>EI Premiums</Typography></Grid>
+                        <Grid item xs={6} align="right"><Typography>{fmt(taxCalculationResult.eiPremiums)}</Typography></Grid>
+
+                        <Grid item xs={6} sx={{ pt: 2, borderTop: "2px solid #b91c1c" }}><Typography variant="h6" sx={{ fontWeight: 700, color: "#b91c1c" }}>Total Tax Payable</Typography></Grid>
+                        <Grid item xs={6} align="right" sx={{ pt: 2, borderTop: "2px solid #b91c1c" }}><Typography variant="h6" sx={{ fontWeight: 700, color: "#b91c1c" }}>{fmt(taxCalculationResult.totalTaxPayable)}</Typography></Grid>
+                      </Grid>
+                    </Paper>
+                  </>
+                )}
+
+                {!taxCalculationResult && (
+                  <Button variant="outlined" onClick={calculateTax} disabled={taxCalculationLoading}
+                    sx={{ mt: 2, borderColor: "#b91c1c", color: "#b91c1c", "&:hover": { backgroundColor: "#fef2f2" } }}>
+                    {taxCalculationLoading ? "Calculating..." : "Calculate 2024 Tax Estimate"}
+                  </Button>
+                )}
+              </>
+            )}
+          </Collapse>
+        </Paper>
       </Box>
+
+      {/* Tax Entry Dialog */}
+      <Dialog open={taxDialogOpen} onClose={() => setTaxDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>{editingTaxEntry ? "Edit Tax Entry" : "Add Tax Entry"}</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Entry Type</InputLabel>
+                <Select label="Entry Type" value={taxFormData.entryType}
+                  onChange={(e) => { setTaxFormData({ ...taxFormData, entryType: e.target.value, slipType: e.target.value === "T_SLIP" ? "T4" : "" }); }}>
+                  {TAX_ENTRY_TYPES.map(t => <MenuItem key={t.value} value={t.value}>{t.label}</MenuItem>)}
+                </Select>
+              </FormControl>
+            </Grid>
+
+            {taxFormData.entryType === "T_SLIP" && (
+              <>
+                <Grid item xs={6}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Slip Type</InputLabel>
+                    <Select label="Slip Type" value={taxFormData.slipType}
+                      onChange={(e) => setTaxFormData({ ...taxFormData, slipType: e.target.value })}>
+                      {SLIP_TYPES.map(st => <MenuItem key={st} value={st}>{st}</MenuItem>)}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={6}>
+                  <TextField fullWidth size="small" label="Box Label" value={taxFormData.boxLabel}
+                    onChange={(e) => setTaxFormData({ ...taxFormData, boxLabel: e.target.value })}
+                    placeholder="e.g., Box 14" />
+                </Grid>
+              </>
+            )}
+
+            <Grid item xs={12}>
+              <TextField fullWidth size="small" label={taxFormData.entryType === "T_SLIP" ? "Employer Name" : taxFormData.entryType === "RRSP" ? "Institution" : taxFormData.entryType === "DONATION" ? "Organization" : "Description"}
+                value={taxFormData.issuerName}
+                onChange={(e) => setTaxFormData({ ...taxFormData, issuerName: e.target.value })} />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField fullWidth size="small" type="number" label="Amount" value={taxFormData.amount}
+                onChange={(e) => setTaxFormData({ ...taxFormData, amount: e.target.value })}
+                inputProps={{ step: "0.01", min: "0" }} />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField fullWidth size="small" label="Notes" value={taxFormData.notes}
+                onChange={(e) => setTaxFormData({ ...taxFormData, notes: e.target.value })}
+                placeholder="Optional notes" />
+            </Grid>
+          </Grid>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTaxDialogOpen(false)}>Cancel</Button>
+          <Button variant="contained" onClick={saveTaxEntry}
+            sx={{ backgroundColor: "#b91c1c", "&:hover": { backgroundColor: "#991b1b" } }}>
+            {editingTaxEntry ? "Update" : "Add"} Entry
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Email Dialog */}
       <Dialog open={emailDialogOpen} onClose={() => setEmailDialogOpen(false)} maxWidth="sm" fullWidth>

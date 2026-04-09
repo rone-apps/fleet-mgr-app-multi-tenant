@@ -697,6 +697,26 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Templates',
             gradient: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
             accent: '#38f9d7'
+          },
+          {
+            title: 'Merchant to Cab Mappings',
+            description: 'Map payment processor merchants to cabs & shifts',
+            icon: CreditCard,
+            path: '/merchant-mappings',
+            roles: ['ADMIN', 'MANAGER'],
+            badge: 'Routing',
+            gradient: 'linear-gradient(135deg, #8e24aa 0%, #ce93d8 100%)',
+            accent: '#8e24aa'
+          },
+          {
+            title: 'Spare Machines',
+            description: 'Manage backup credit card terminals & cab assignments',
+            icon: SmartToy,
+            path: '/spare-machines',
+            roles: ['ADMIN', 'MANAGER'],
+            badge: 'Equipment',
+            gradient: 'linear-gradient(135deg, #FF6B6B 0%, #FF8E53 100%)',
+            accent: '#FF8E53'
           }
         ];
 
