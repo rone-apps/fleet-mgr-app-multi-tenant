@@ -72,7 +72,7 @@ export const pageMetadata = {
   '/taxicaller-integration': { name: 'Taxi Caller Integration', category: 'integrations' },
   '/data-uploads': { name: 'Data Uploads', category: 'integrations' },
   '/moneris-integration': { name: 'Moneris Transactions', category: 'integrations' },
-  '/spare-machines': { name: 'Spare Machines', category: 'integrations' },
+  '/spare-machines': { name: 'Spare Machines', category: 'operations' },
   '/year-end-report': { name: 'Year-End Report', category: 'reports' },
   '/shift-profiles': { name: 'Shift Profiles', category: 'profiles' },
   '/driver-payments': { name: 'Driver & Owner Payments', category: 'payments' },
