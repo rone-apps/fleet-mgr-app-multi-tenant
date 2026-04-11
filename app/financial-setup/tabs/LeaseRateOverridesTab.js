@@ -50,6 +50,7 @@ export default function LeaseRateOverridesTab({
   updateStats,
 }) {
   const [owners, setOwners] = useState([]);
+  const [allDrivers, setAllDrivers] = useState([]); // All drivers for beneficiary dropdown
   const [selectedOwner, setSelectedOwner] = useState("");
   const [loadAllRates, setLoadAllRates] = useState(false);
   const [ownerCabs, setOwnerCabs] = useState([]);
@@ -65,6 +66,7 @@ export default function LeaseRateOverridesTab({
   const [overrideTabValue, setOverrideTabValue] = useState(0);
   const [overrideFormData, setOverrideFormData] = useState({
     ownerDriverNumber: "",
+    beneficiaryDriverNumber: "", // Driver-specific exemption
     cabNumber: "",
     shiftType: "",
     dayOfWeek: "",
@@ -76,6 +78,7 @@ export default function LeaseRateOverridesTab({
   });
   const [bulkOverrideFormData, setBulkOverrideFormData] = useState({
     ownerDriverNumber: "",
+    beneficiaryDriverNumber: "", // Driver-specific exemption
     cabNumber: "",
     shiftType: "",
     daysOfWeek: [],
@@ -111,6 +114,7 @@ export default function LeaseRateOverridesTab({
         const data = await response.json();
         const ownerDrivers = data.filter((d) => d.isOwner);
         setOwners(ownerDrivers);
+        setAllDrivers(data); // Store all drivers for beneficiary dropdown
       }
     } catch (err) {
       console.error("Error loading owners:", err);
@@ -252,6 +256,7 @@ export default function LeaseRateOverridesTab({
       setEditingOverride(override);
       setOverrideFormData({
         ownerDriverNumber: override.ownerDriverNumber,
+        beneficiaryDriverNumber: override.beneficiaryDriverNumber || "",
         cabNumber: override.cabNumber || "",
         shiftType: override.shiftType || "",
         dayOfWeek: override.dayOfWeek || "",
@@ -265,6 +270,7 @@ export default function LeaseRateOverridesTab({
       setEditingOverride(null);
       setOverrideFormData({
         ownerDriverNumber: selectedOwner,
+        beneficiaryDriverNumber: "",
         cabNumber: "",
         shiftType: "",
         dayOfWeek: "",
@@ -296,6 +302,7 @@ export default function LeaseRateOverridesTab({
         endDate: overrideFormData.endDate
           ? overrideFormData.endDate.toISOString().split("T")[0]
           : null,
+        beneficiaryDriverNumber: overrideFormData.beneficiaryDriverNumber || null,
         cabNumber: overrideFormData.cabNumber || null,
         shiftType: overrideFormData.shiftType || null,
         dayOfWeek: overrideFormData.dayOfWeek || null,
@@ -345,6 +352,7 @@ export default function LeaseRateOverridesTab({
       const payload = {
         ownerDriverNumber:
           bulkOverrideFormData.ownerDriverNumber || selectedOwner,
+        beneficiaryDriverNumber: bulkOverrideFormData.beneficiaryDriverNumber || null,
         cabNumber: bulkOverrideFormData.cabNumber || null,
         shiftType: bulkOverrideFormData.shiftType || null,
         daysOfWeek: bulkOverrideFormData.daysOfWeek,
@@ -382,6 +390,7 @@ export default function LeaseRateOverridesTab({
 
       setBulkOverrideFormData({
         ownerDriverNumber: selectedOwner,
+        beneficiaryDriverNumber: "",
         cabNumber: "",
         shiftType: "",
         daysOfWeek: [],
@@ -429,8 +438,11 @@ export default function LeaseRateOverridesTab({
 
   const handleDeleteOverride = (id) => {
     const override = leaseRateOverrides.find((o) => o.id === id);
+    const beneficiaryInfo = override?.beneficiaryDriverNumber
+      ? `Driver: ${override.beneficiaryDriverNumber} - `
+      : "";
     setDeleteWarningData({
-      info: `${override?.cabNumber || "All Cabs"} - ${override?.shiftType || "Both"} - ${override?.dayOfWeek || "All Days"}`,
+      info: `${beneficiaryInfo}${override?.cabNumber || "All Cabs"} - ${override?.shiftType || "Both"} - ${override?.dayOfWeek || "All Days"}`,
     });
     setOpenDeleteWarning(true);
   };
@@ -519,6 +531,7 @@ export default function LeaseRateOverridesTab({
             <TableHead>
               <TableRow sx={{ bgcolor: "grey.100" }}>
                 {loadAllRates && <TableCell>Owner</TableCell>}
+                <TableCell>Beneficiary Driver</TableCell>
                 <TableCell>Cab</TableCell>
                 <TableCell>Shift</TableCell>
                 <TableCell>Day of Week</TableCell>
@@ -534,13 +547,13 @@ export default function LeaseRateOverridesTab({
             <TableBody>
               {leaseRateOverrides.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={loadAllRates ? 11 : 10} align="center">
+                  <TableCell colSpan={loadAllRates ? 12 : 11} align="center">
                     <Typography
                       variant="body2"
                       color="text.secondary"
                       sx={{ py: 4 }}
                     >
-                      {loadAllRates 
+                      {loadAllRates
                         ? "No overrides found in the system."
                         : "No overrides found. Click \"New Override\" to create one."}
                     </Typography>
@@ -567,6 +580,17 @@ export default function LeaseRateOverridesTab({
                         )}
                       </TableCell>
                     )}
+                    <TableCell>
+                      {override.beneficiaryDriverNumber ? (
+                        <Typography variant="body2" fontWeight="medium" color="primary">
+                          {override.beneficiaryDriverNumber}
+                        </Typography>
+                      ) : (
+                        <Typography variant="body2" color="text.secondary">
+                          All Drivers
+                        </Typography>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Typography variant="body2" fontWeight="medium">
                         {getDisplayValue(override.cabNumber, "All Cabs")}
@@ -718,6 +742,37 @@ export default function LeaseRateOverridesTab({
           {overrideTabValue === 0 && (
             <Grid container spacing={2}>
               <Grid item xs={12} sm={6}>
+                <Autocomplete
+                  options={allDrivers.sort((a, b) => {
+                    const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+                    const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+                    return nameA.localeCompare(nameB);
+                  })}
+                  getOptionLabel={(option) =>
+                    `${option.driverNumber} - ${option.firstName} ${option.lastName}`
+                  }
+                  value={allDrivers.find((d) => d.driverNumber === overrideFormData.beneficiaryDriverNumber) || null}
+                  onChange={(e, newValue) =>
+                    setOverrideFormData({
+                      ...overrideFormData,
+                      beneficiaryDriverNumber: newValue?.driverNumber || "",
+                    })
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Beneficiary Driver (Optional)"
+                      placeholder="Leave empty for all drivers"
+                      helperText="Select a specific driver if this override applies only to them"
+                    />
+                  )}
+                  isOptionEqualToValue={(option, value) =>
+                    option.driverNumber === value.driverNumber
+                  }
+                  fullWidth
+                />
+              </Grid>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel>Cab Number</InputLabel>
                   <Select
@@ -855,6 +910,37 @@ export default function LeaseRateOverridesTab({
                   Bulk create allows you to create multiple overrides for
                   different days with the same rate.
                 </Alert>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <Autocomplete
+                  options={allDrivers.sort((a, b) => {
+                    const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+                    const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+                    return nameA.localeCompare(nameB);
+                  })}
+                  getOptionLabel={(option) =>
+                    `${option.driverNumber} - ${option.firstName} ${option.lastName}`
+                  }
+                  value={allDrivers.find((d) => d.driverNumber === bulkOverrideFormData.beneficiaryDriverNumber) || null}
+                  onChange={(e, newValue) =>
+                    setBulkOverrideFormData({
+                      ...bulkOverrideFormData,
+                      beneficiaryDriverNumber: newValue?.driverNumber || "",
+                    })
+                  }
+                  renderInput={(params) => (
+                    <TextField
+                      {...params}
+                      label="Beneficiary Driver (Optional)"
+                      placeholder="Leave empty for all drivers"
+                      helperText="Select a specific driver if this override applies only to them"
+                    />
+                  )}
+                  isOptionEqualToValue={(option, value) =>
+                    option.driverNumber === value.driverNumber
+                  }
+                  fullWidth
+                />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
