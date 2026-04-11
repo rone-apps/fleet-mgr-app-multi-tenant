@@ -32,7 +32,7 @@ export default function ShiftDataPage() {
 
   // Sorting
   const [orderBy, setOrderBy] = useState("logonTime");
-  const [order, setOrder] = useState("desc");
+  const [order, setOrder] = useState("asc");
 
   // Expanded rows for session detail
   const [expandedRows, setExpandedRows] = useState({});
