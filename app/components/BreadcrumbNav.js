@@ -30,6 +30,7 @@ const routeLabels = {
   "/cabs/attributes": "Cab Attributes",
   "/spare-machines": "Spare Machines",
   "/merchant-mappings": "Merchant Mappings",
+  "/trip-analytics": "Trip Analytics",
 };
 
 export default function BreadcrumbNav() {

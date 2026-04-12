@@ -427,6 +427,20 @@ function HomePageContent() {
                 </Grid>
               )}
 
+              {/* Business Insights (Trip Analytics) */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Business Insights"
+                    description="Analyze trip patterns, heatmaps & peak hours in Vancouver"
+                    icon={Insights}
+                    gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    accent="#667eea"
+                    onClick={() => router.push('/trip-analytics')}
+                  />
+                </Grid>
+              )}
+
               {/* Do Your Own Taxes */}
               {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DISPATCHER'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
