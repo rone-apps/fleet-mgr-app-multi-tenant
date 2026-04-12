@@ -37,6 +37,7 @@ import {
 import { calculateTotal } from "../../utils/helpers";
 import { API_BASE_URL } from "../../../lib/api";
 import FilteredStatsBanner from "../FilteredStatsBanner";
+import ManualChargeDialog from "../dialogs/ManualChargeDialog";
 
 export default function AllChargesTab({
   cabs,
@@ -90,6 +91,9 @@ export default function AllChargesTab({
   // Bulk edit state (managed internally)
   const [allChargesBulkEdit, setAllChargesBulkEdit] = useState(false);
   const [bulkEditAllCharges, setBulkEditAllCharges] = useState([]);
+
+  // Manual charge dialog state
+  const [manualChargeDialogOpen, setManualChargeDialogOpen] = useState(false);
   
   // Filter state (input values)
   const [filterCustomerName, setFilterCustomerName] = useState("");
@@ -744,39 +748,50 @@ export default function AllChargesTab({
         <Typography variant="h6">
           All Charges
         </Typography>
-        {canBulkEdit && (
-          <Box sx={{ display: "flex", gap: 1 }}>
-            {!allChargesBulkEdit && (
-              <Button
-                variant="outlined"
-                startIcon={<EditIcon />}
-                onClick={handleEnterAllChargesBulkEdit}
-                disabled={charges.length === 0}
-              >
-                Bulk Edit
-              </Button>
-            )}
-            {allChargesBulkEdit && (
-              <>
+        <Box sx={{ display: "flex", gap: 1 }}>
+          {canEdit && (
+            <Button
+              variant="outlined"
+              color="warning"
+              onClick={() => setManualChargeDialogOpen(true)}
+            >
+              Add Manual Charge
+            </Button>
+          )}
+          {canBulkEdit && (
+            <Box sx={{ display: "flex", gap: 1 }}>
+              {!allChargesBulkEdit && (
                 <Button
                   variant="outlined"
-                  startIcon={<CloseIcon />}
-                  onClick={handleCancelAllChargesBulkEdit}
+                  startIcon={<EditIcon />}
+                  onClick={handleEnterAllChargesBulkEdit}
+                  disabled={charges.length === 0}
                 >
-                  Cancel
+                  Bulk Edit
                 </Button>
-                <Button
-                  variant="contained"
-                  color="success"
-                  startIcon={<SaveIcon />}
-                  onClick={handleSaveAllChargesBulkEdit}
-                >
-                  Save All
-                </Button>
-              </>
-            )}
-          </Box>
-        )}
+              )}
+              {allChargesBulkEdit && (
+                <>
+                  <Button
+                    variant="outlined"
+                    startIcon={<CloseIcon />}
+                    onClick={handleCancelAllChargesBulkEdit}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    startIcon={<SaveIcon />}
+                    onClick={handleSaveAllChargesBulkEdit}
+                  >
+                    Save All
+                  </Button>
+                </>
+              )}
+            </Box>
+          )}
+        </Box>
       </Box>
 
       {/* All Charges Table */}
@@ -881,11 +896,20 @@ export default function AllChargesTab({
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  <Chip
-                    label={charge.paid ? "Paid" : "Unpaid"}
-                    color={charge.paid ? "success" : "warning"}
-                    size="small"
-                  />
+                  <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                    {charge.isManual && (
+                      <Chip
+                        label="MANUAL"
+                        color="warning"
+                        size="small"
+                      />
+                    )}
+                    <Chip
+                      label={charge.paid ? "Paid" : "Unpaid"}
+                      color={charge.paid ? "success" : "warning"}
+                      size="small"
+                    />
+                  </Box>
                 </TableCell>
                 {canEdit && (
                   <TableCell align="right">
@@ -962,6 +986,16 @@ export default function AllChargesTab({
           }
         />
       </TableContainer>
+
+      {/* Manual Charge Dialog */}
+      <ManualChargeDialog
+        open={manualChargeDialogOpen}
+        onClose={() => setManualChargeDialogOpen(false)}
+        onSuccess={() => {
+          setManualChargeDialogOpen(false);
+          loadChargesWithPagination();
+        }}
+      />
     </Box>
   );
 }
