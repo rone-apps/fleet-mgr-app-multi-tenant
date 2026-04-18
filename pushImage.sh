@@ -2,7 +2,7 @@
 git add .
 git commit . -m "Fixed stuff"
 git push
-npm install
+npm ci --legacy-peer-deps  
  docker buildx build \
   --platform linux/amd64 \
   --build-arg NEXT_PUBLIC_API_BASE_URL=/api \

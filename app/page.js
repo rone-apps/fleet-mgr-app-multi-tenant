@@ -371,6 +371,20 @@ function HomePageContent() {
                 </Grid>
               )}
 
+              {/* Scan Receipts */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Scan Receipts"
+                    description="Capture and analyze receipts with AI"
+                    icon={ReceiptOutlined}
+                    gradient="linear-gradient(135deg, #ec4899 0%, #f97316 100%)"
+                    accent="#ec4899"
+                    onClick={() => router.push('/receipt-scan')}
+                  />
+                </Grid>
+              )}
+
               {/* Financials */}
               {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
