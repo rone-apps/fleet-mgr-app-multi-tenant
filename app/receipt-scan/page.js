@@ -77,13 +77,22 @@ export default function ReceiptScanPage() {
   const handleFileSelect = (file) => {
     if (!file) return;
 
-    if (!file.type.startsWith("image/")) {
-      setError("Please select a valid image file");
+    const fileName = file.name.toLowerCase();
+    const mimeType = file.type.toLowerCase();
+
+    // Check for HEIC format
+    if (fileName.endsWith(".heic") || fileName.endsWith(".heif") || mimeType.includes("heic")) {
+      setError("HEIC format is not supported. Please convert your image to JPEG, PNG, GIF, or WebP. On iPhone: Use Settings > Camera > Formats > Most Compatible or export as JPEG from Photos.");
       return;
     }
 
-    if (file.type.includes("heic") || file.type.includes("heif") || file.name.toLowerCase().endsWith(".heic")) {
-      setError("HEIC format is not supported. Please convert your image to JPEG, PNG, GIF, or WebP. On iPhone: Use Settings > Camera > Formats > Most Compatible or export as JPEG from Photos.");
+    // Validate file is an image (check both MIME type and extension as fallback)
+    const supportedExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+    const hasSupportedExtension = supportedExtensions.some(ext => fileName.endsWith(ext));
+    const isImageMime = mimeType.startsWith("image/");
+
+    if (!isImageMime && !hasSupportedExtension) {
+      setError("Please select a valid image file (JPEG, PNG, GIF, or WebP)");
       return;
     }
 
@@ -356,8 +365,7 @@ export default function ReceiptScanPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
-                capture="environment"
+                accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
                 onChange={handleInputChange}
                 style={{ display: "none" }}
               />
