@@ -122,10 +122,13 @@ export default function ReceiptScanPage() {
     setSelectedReceiptImage(null);
   };
 
-  // Fetch receipts on component mount and when filters change
+  // Fetch receipts on component mount, when filters change, or when history view is toggled
   useEffect(() => {
-    fetchReceipts();
-  }, []);
+    if (showHistory) {
+      console.log("📜 History view toggled ON - fetching receipts with driver filter");
+      fetchReceipts();
+    }
+  }, [showHistory]);
 
   const fetchReceipts = async () => {
     console.log("🔍 Fetching receipts with filters:", filters);
@@ -139,6 +142,15 @@ export default function ReceiptScanPage() {
       if (filters.ownerId) params.append("ownerId", filters.ownerId);
       if (filters.vendorName) params.append("vendorName", filters.vendorName);
       if (filters.documentType) params.append("documentType", filters.documentType);
+
+      // If user is a driver, only show their receipts (use driverId, not userId)
+      if (user?.role === "DRIVER") {
+        const driverId = user?.driverId || user?.userId;
+        if (driverId) {
+          params.append("ownerId", driverId);
+          console.log("🚗 Driver filter applied - ownerId:", driverId);
+        }
+      }
 
       const url = `/api/receipts?${params.toString()}`;
       console.log("🌐 Request URL:", url);
@@ -390,23 +402,69 @@ export default function ReceiptScanPage() {
     }
   };
 
-  const fetchCabs = async () => {
-    console.log("🚗 Fetching cabs list");
+  const fetchCabs = async (ownerId = null) => {
+    console.log("🚗 ========== FETCHCABS CALLED ==========");
+    console.log("📊 ownerId parameter:", ownerId);
     setCabsLoading(true);
     try {
-      const response = await tenantFetch("/api/cabs");
+      let url = "/api/cabs";
+
+      // Use the ownerId if provided, otherwise fetch all
+      if (ownerId) {
+        url += `?ownerId=${ownerId}`;
+        console.log("🔍 Filtering by ownerId:", ownerId);
+      } else {
+        console.log("📋 No filter - fetching all cabs");
+      }
+
+      console.log("🌐 Making request to:", url);
+      const response = await tenantFetch(url);
+
+      console.log("📡 Response received:");
+      console.log("   Status:", response.status);
+      console.log("   OK:", response.ok);
+
       if (response.ok) {
         const data = await response.json();
-        const cabsList = Array.isArray(data) ? data : data.content || [];
-        console.log("✅ Cabs fetched:", cabsList.length);
+        console.log("📦 Response data:", data);
+
+        let cabsList = Array.isArray(data) ? data : data.content || [];
+        console.log("✅ Successfully fetched", cabsList.length, "cabs");
+
+        // Sort cabs by cab number in natural (integer) order
+        cabsList.sort((a, b) => {
+          const numA = parseInt(a.cabNumber) || 0;
+          const numB = parseInt(b.cabNumber) || 0;
+          return numA - numB;
+        });
+        console.log("📊 Sorted cabs by number");
+
+        if (cabsList.length === 0) {
+          console.warn("⚠️ WARNING: Cab list is empty!");
+        } else {
+          cabsList.forEach((c, i) => {
+            console.log(`   Cab ${i + 1}:`, {
+              id: c.id,
+              cabNumber: c.cabNumber,
+              ownerDriverId: c.ownerDriver?.id,
+              ownerDriverName: c.ownerDriver?.firstName + " " + c.ownerDriver?.lastName
+            });
+          });
+        }
+
         setCabs(cabsList);
       } else {
-        console.error("❌ Failed to fetch cabs:", response.status);
+        const errorText = await response.text();
+        console.error("❌ Failed to fetch cabs. Status:", response.status);
+        console.error("❌ Error response:", errorText);
+        setCabs([]);
       }
     } catch (err) {
-      console.error("❌ Error fetching cabs:", err);
+      console.error("❌ Exception in fetchCabs:", err);
+      setCabs([]);
     } finally {
       setCabsLoading(false);
+      console.log("🏁 ========== FETCHCABS COMPLETED ==========");
     }
   };
 
@@ -438,24 +496,100 @@ export default function ReceiptScanPage() {
         const data = await response.json();
         console.log("✅ Account customers fetched:", data.length || 0);
         setAccountCustomers(Array.isArray(data) ? data : data.content || []);
+      } else if (response.status === 403) {
+        console.warn("⚠️ Access denied to account customers (expected for drivers)");
+        setAccountCustomers([]);
       } else {
         console.error("❌ Failed to fetch account customers:", response.status);
+        setAccountCustomers([]);
       }
     } catch (err) {
       console.error("❌ Error fetching account customers:", err);
+      setAccountCustomers([]);
     } finally {
       setAccountCustomersLoading(false);
     }
   };
 
-  // Load cabs, owners, and account customers when component mounts or when step changes to 2
+  // Load data when step changes to 2
   useEffect(() => {
     if (step === 2) {
-      fetchCabs();
+      console.log("🎯 STEP 2 REACHED!");
+      console.log("👤 User object:", user);
+      console.log("🔍 User details:", {
+        role: user?.role,
+        id: user?.id,
+        userId: user?.userId,
+        driverId: user?.driverId,
+        firstName: user?.firstName,
+        lastName: user?.lastName
+      });
+
       fetchOwners();
       fetchAccountCustomers();
+
+      // For drivers, fetch their own cabs; for admins, fetch all cabs
+      if (user?.role === "DRIVER") {
+        // Use driverId if available, otherwise userId, otherwise id
+        const driverId = user?.driverId || user?.userId || user?.id;
+        console.log("🚗 DRIVER MODE - Fetching cabs for driver ID:", driverId);
+        console.log("   (user.id:", user?.id, ", user.userId:", user?.userId, ", user.driverId:", user?.driverId, ")");
+        if (!driverId) {
+          console.error("❌ ERROR: Driver ID is missing!");
+        }
+        fetchCabs(driverId);
+      } else {
+        console.log("👨‍💼 ADMIN/MANAGER MODE - Fetching all cabs");
+        fetchCabs(null);
+      }
+    } else {
+      console.log("⏸️ Step is", step, "- not loading cabs yet");
     }
-  }, [step]);
+  }, [step, user?.role, user?.id, user?.driverId, user?.userId]);
+
+  // When admin selects a driver, refetch that driver's cabs
+  useEffect(() => {
+    if (step === 2 && user?.role !== "DRIVER" && formData.ownerId) {
+      console.log("📍 Admin selected driver, fetching their cabs:", formData.ownerId);
+      fetchCabs(formData.ownerId);
+    }
+  }, [formData.ownerId]);
+
+  // Pre-populate driver field when step 2 is reached
+  useEffect(() => {
+    if (step === 2) {
+      setFormData(prev => {
+        // For drivers, always use their own driver ID
+        if (user?.role === "DRIVER" && !prev.ownerId) {
+          // Use driverId if available, otherwise try userId
+          const driverId = user?.driverId || user?.userId;
+          if (driverId) {
+            console.log("👤 Driver auto-populated:", user.firstName, user.lastName, "DriverID:", driverId);
+            return {
+              ...prev,
+              ownerId: driverId
+            };
+          }
+        }
+        // For admins/managers, try to match extracted driver name from receipt
+        else if (user?.role !== "DRIVER" && receiptData?.driverName && owners.length > 0 && !prev.ownerId) {
+          const driverNameLower = receiptData.driverName.toLowerCase();
+          const matchedOwner = owners.find((o) => {
+            const fullName = `${o.firstName || ""} ${o.lastName || ""}`.toLowerCase();
+            return fullName.includes(driverNameLower) || driverNameLower.includes(fullName);
+          });
+          if (matchedOwner) {
+            console.log("👤 Auto-matched driver from receipt:", receiptData.driverName, "to ID:", matchedOwner.id);
+            return {
+              ...prev,
+              ownerId: matchedOwner.id
+            };
+          }
+        }
+        return prev;
+      });
+    }
+  }, [step, user?.role, user?.driverId, user?.userId, receiptData, owners]);
 
   // Auto-match cab number and driver name when cabs/owners are loaded
   useEffect(() => {
@@ -473,18 +607,6 @@ export default function ReceiptScanPage() {
         }
       }
 
-      // Try to match driver name
-      if (receiptData.driverName && !formData.ownerId) {
-        const driverNameLower = receiptData.driverName.toLowerCase();
-        const matchedOwner = owners.find((o) => {
-          const fullName = `${o.firstName || ""} ${o.lastName || ""}`.toLowerCase();
-          return fullName.includes(driverNameLower) || driverNameLower.includes(fullName);
-        });
-        if (matchedOwner) {
-          console.log("👤 Auto-matched driver:", receiptData.driverName, "to ID:", matchedOwner.id);
-          updatedFormData.ownerId = matchedOwner.id;
-        }
-      }
 
       // Only update if something changed
       if (updatedFormData.cabId !== formData.cabId || updatedFormData.ownerId !== formData.ownerId) {
@@ -803,10 +925,18 @@ export default function ReceiptScanPage() {
 
   // Handle form field changes
   const handleFormChange = (field, value) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      // If clearing the driver/owner, also clear the cab and refetch all cabs for admins
+      if (field === "ownerId" && value === null) {
+        updated.cabId = null;
+        // For admins, refetch all cabs when driver is cleared
+        if (user?.role !== "DRIVER") {
+          fetchCabs(null);
+        }
+      }
+      return updated;
+    });
   };
 
   // Handle line item change
@@ -1015,9 +1145,16 @@ export default function ReceiptScanPage() {
         {showHistory ? (
           <Card sx={{ mb: 4 }}>
             <CardContent>
-              <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold', color: '#193366' }}>
-                Filter Receipts
-              </Typography>
+              <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: '#193366' }}>
+                  Filter Receipts
+                </Typography>
+                {user?.role === "DRIVER" && (
+                  <Alert severity="info" sx={{ flex: 1, ml: 2 }}>
+                    You can only view and edit your own receipts
+                  </Alert>
+                )}
+              </Box>
 
               <Grid container spacing={2} sx={{ mb: 3 }}>
                 <Grid item xs={12} sm={6} md={3}>
@@ -1106,7 +1243,8 @@ export default function ReceiptScanPage() {
                 </Box>
               ) : receipts.length > 0 ? (
                 <TableContainer component={Paper} sx={{ mt: 3 }}>
-                    {(selectedReceipts.size > 0 || editingRows.size > 0) && (
+                    {/* Show bulk edit toolbar only for non-drivers */}
+                    {user?.role !== "DRIVER" && (selectedReceipts.size > 0 || editingRows.size > 0) && (
                       <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee', display: 'flex', gap: 2, alignItems: 'center' }}>
                         {selectedReceipts.size > 0 && (
                           <>
@@ -1170,13 +1308,16 @@ export default function ReceiptScanPage() {
                     <Table size="small">
                       <TableHead>
                         <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                          <TableCell padding="checkbox">
-                            <Checkbox
-                              indeterminate={selectedReceipts.size > 0 && selectedReceipts.size < receipts.length}
-                              checked={selectedReceipts.size === receipts.length && receipts.length > 0}
-                              onChange={handleSelectAllReceipts}
-                            />
-                          </TableCell>
+                          {/* Only show checkbox for non-drivers */}
+                          {user?.role !== "DRIVER" && (
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                indeterminate={selectedReceipts.size > 0 && selectedReceipts.size < receipts.length}
+                                checked={selectedReceipts.size === receipts.length && receipts.length > 0}
+                                onChange={handleSelectAllReceipts}
+                              />
+                            </TableCell>
+                          )}
                           <TableCell><strong>ID</strong></TableCell>
                         <TableCell><strong>Vendor/Account</strong></TableCell>
                         <TableCell><strong>Shift</strong></TableCell>
@@ -1197,13 +1338,16 @@ export default function ReceiptScanPage() {
 
                         return (
                           <TableRow key={receipt.id} hover sx={{ backgroundColor: isEditing ? '#f9f9f9' : 'inherit' }}>
-                            <TableCell padding="checkbox">
-                              <Checkbox
-                                checked={selectedReceipts.has(receipt.id)}
-                                onChange={() => handleToggleReceiptSelection(receipt.id)}
-                                disabled={isEditing}
-                              />
-                            </TableCell>
+                            {/* Only show checkbox for non-drivers */}
+                            {user?.role !== "DRIVER" && (
+                              <TableCell padding="checkbox">
+                                <Checkbox
+                                  checked={selectedReceipts.has(receipt.id)}
+                                  onChange={() => handleToggleReceiptSelection(receipt.id)}
+                                  disabled={isEditing}
+                                />
+                              </TableCell>
+                            )}
                             <TableCell>#{receipt.id}</TableCell>
                             <TableCell>
                               {isEditing ? (
@@ -1314,7 +1458,12 @@ export default function ReceiptScanPage() {
                               )}
                             </TableCell>
                             <TableCell align="center">
-                              {isEditing ? (
+                              {/* Drivers cannot edit anything */}
+                              {user?.role === "DRIVER" ? (
+                                <Typography variant="caption" sx={{ color: '#999' }}>
+                                  View only
+                                </Typography>
+                              ) : isEditing ? (
                                 <Box sx={{ display: 'flex', gap: 1 }}>
                                   <Button
                                     size="small"
@@ -1654,39 +1803,49 @@ export default function ReceiptScanPage() {
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
-                  <Autocomplete
-                    options={owners}
-                    getOptionLabel={(option) => `${option?.firstName || ""} ${option?.lastName || ""}`.trim()}
-                    getOptionKey={(option) => `owner-${option?.id}`}
-                    value={owners.find((o) => o.id === formData.ownerId) || null}
-                    onChange={(e, newValue) => {
-                      console.log("👤 Driver selected:", newValue?.firstName, newValue?.lastName);
-                      handleFormChange("ownerId", newValue?.id || null);
-                    }}
-                    loading={ownersLoading}
-                    noOptionsText="No drivers found"
-                    loadingText="Loading drivers..."
-                    openOnFocus
-                    clearOnBlur
-                    selectOnFocus
-                    filterOptions={(options, state) => {
-                      if (!state.inputValue) return options;
-                      const fullName = `${state.inputValue}`.toLowerCase();
-                      return options.filter((option) => {
-                        const name = `${option?.firstName || ""} ${option?.lastName || ""}`.toLowerCase();
-                        return name.includes(fullName);
-                      });
-                    }}
-                    renderInput={(params) => (
-                      <TextField
-                        {...params}
-                        label="Driver / Owner"
-                        placeholder="Search driver name..."
-                        helperText={owners.length === 0 && !ownersLoading ? "No drivers available" : ""}
-                      />
-                    )}
-                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                  />
+                  {user?.role === "DRIVER" ? (
+                    <TextField
+                      disabled
+                      fullWidth
+                      label="Driver / Owner"
+                      value={`${user.firstName} ${user.lastName}`}
+                      helperText="Logged in as this driver"
+                    />
+                  ) : (
+                    <Autocomplete
+                      options={owners}
+                      getOptionLabel={(option) => `${option?.firstName || ""} ${option?.lastName || ""}`.trim()}
+                      getOptionKey={(option) => `owner-${option?.id}`}
+                      value={owners.find((o) => o.id === formData.ownerId) || null}
+                      onChange={(e, newValue) => {
+                        console.log("👤 Driver selected:", newValue?.firstName, newValue?.lastName);
+                        handleFormChange("ownerId", newValue?.id || null);
+                      }}
+                      loading={ownersLoading}
+                      noOptionsText="No drivers found"
+                      loadingText="Loading drivers..."
+                      openOnFocus
+                      clearOnBlur
+                      selectOnFocus
+                      filterOptions={(options, state) => {
+                        if (!state.inputValue) return options;
+                        const fullName = `${state.inputValue}`.toLowerCase();
+                        return options.filter((option) => {
+                          const name = `${option?.firstName || ""} ${option?.lastName || ""}`.toLowerCase();
+                          return name.includes(fullName);
+                        });
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Driver / Owner"
+                          placeholder="Search driver name..."
+                          helperText={owners.length === 0 && !ownersLoading ? "No drivers available" : ""}
+                        />
+                      )}
+                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                    />
+                  )}
                 </Grid>
 
                 <Grid item xs={12}>

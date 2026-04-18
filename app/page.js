@@ -372,7 +372,7 @@ function HomePageContent() {
               )}
 
               {/* Scan Receipts */}
-              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DRIVER'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
                     title="Scan Receipts"
