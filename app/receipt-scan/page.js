@@ -656,8 +656,11 @@ export default function ReceiptScanPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
                 onChange={handleInputChange}
+                onError={(e) => {
+                  console.error("❌ File input error event:", e);
+                  setError("Error opening file picker. Please try again.");
+                }}
                 style={{ display: "none" }}
               />
 
@@ -665,7 +668,21 @@ export default function ReceiptScanPage() {
                 <Button
                   variant="contained"
                   startIcon={<PhotoCameraIcon />}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => {
+                    try {
+                      console.log("🖱️ File picker button clicked");
+                      if (fileInputRef.current) {
+                        console.log("📂 Triggering file input click");
+                        fileInputRef.current.click();
+                      } else {
+                        console.error("❌ fileInputRef is not available");
+                        setError("File picker not ready. Please refresh and try again.");
+                      }
+                    } catch (err) {
+                      console.error("❌ Error opening file picker:", err);
+                      setError("Error opening file picker: " + err.message);
+                    }
+                  }}
                   sx={{
                     backgroundColor: "#6699cc",
                     "&:hover": { backgroundColor: "#5588bb" },
