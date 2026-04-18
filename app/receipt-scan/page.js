@@ -73,78 +73,210 @@ export default function ReceiptScanPage() {
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
 
+  // Receipt History & Filters
+  const [receipts, setReceipts] = useState([]);
+  const [receiptsLoading, setReceiptsLoading] = useState(false);
+  const [filters, setFilters] = useState({
+    startDate: "",
+    endDate: "",
+    cabId: "",
+    shiftId: "",
+    ownerId: "",
+    vendorName: "",
+  });
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Fetch receipts on component mount and when filters change
+  useEffect(() => {
+    fetchReceipts();
+  }, []);
+
+  const fetchReceipts = async () => {
+    console.log("🔍 Fetching receipts with filters:", filters);
+    setReceiptsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.startDate) params.append("startDate", filters.startDate);
+      if (filters.endDate) params.append("endDate", filters.endDate);
+      if (filters.cabId) params.append("cabId", filters.cabId);
+      if (filters.shiftId) params.append("shiftId", filters.shiftId);
+      if (filters.ownerId) params.append("ownerId", filters.ownerId);
+      if (filters.vendorName) params.append("vendorName", filters.vendorName);
+
+      const url = `/api/receipts?${params.toString()}`;
+      console.log("🌐 Request URL:", url);
+      const response = await tenantFetch(url);
+
+      console.log("📨 Receipts response:", { status: response.status });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("✅ Receipts fetched:", {
+          count: data.content?.length || 0,
+          totalElements: data.totalElements,
+          totalPages: data.totalPages,
+        });
+        setReceipts(data.content || []);
+      } else {
+        console.error("❌ Failed to fetch receipts:", response.status);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching receipts:", err);
+    } finally {
+      setReceiptsLoading(false);
+    }
+  };
+
+  const handleFilterChange = (field, value) => {
+    setFilters(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleApplyFilters = () => {
+    fetchReceipts();
+  };
+
+  const handleClearFilters = () => {
+    setFilters({
+      startDate: "",
+      endDate: "",
+      cabId: "",
+      shiftId: "",
+      ownerId: "",
+      vendorName: "",
+    });
+    setReceipts([]);
+  };
+
   // Handle file selection
   const handleFileSelect = (file) => {
-    if (!file) return;
+    if (!file) {
+      console.log("❌ No file provided");
+      return;
+    }
+
+    console.log("📁 File selected:", {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      sizeInMB: (file.size / 1024 / 1024).toFixed(2),
+      lastModified: new Date(file.lastModified).toISOString(),
+    });
 
     const fileName = file.name.toLowerCase();
     const mimeType = file.type.toLowerCase();
 
     // Check for HEIC format
     if (fileName.endsWith(".heic") || fileName.endsWith(".heif") || mimeType.includes("heic")) {
+      console.warn("⚠️ HEIC format detected - not supported");
       setError("HEIC format is not supported. Please convert your image to JPEG, PNG, GIF, or WebP. On iPhone: Use Settings > Camera > Formats > Most Compatible or export as JPEG from Photos.");
       return;
     }
 
-    // Validate file is an image (check both MIME type and extension as fallback)
-    const supportedExtensions = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
-    const hasSupportedExtension = supportedExtensions.some(ext => fileName.endsWith(ext));
-    const isImageMime = mimeType.startsWith("image/");
-
-    if (!isImageMime && !hasSupportedExtension) {
-      setError("Please select a valid image file (JPEG, PNG, GIF, or WebP)");
-      return;
-    }
-
+    // More lenient validation - just check file size
+    // Backend will validate the actual format
     if (file.size > 10 * 1024 * 1024) {
+      console.warn("⚠️ File too large:", file.size);
       setError("Image file must be smaller than 10MB");
       return;
     }
 
+    if (file.size === 0) {
+      console.warn("⚠️ File is empty");
+      setError("File is empty. Please select a valid image.");
+      return;
+    }
+
+    console.log("✅ File validation passed");
     setSelectedImage(file);
     setError("");
 
     // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        console.log("📸 Preview generated");
+        setImagePreview(reader.result);
+      };
+      reader.onerror = () => {
+        console.error("❌ FileReader error:", reader.error);
+        setError("Failed to read file. Please try again.");
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("❌ Error reading file:", err);
+      setError("Error reading file: " + err.message);
+    }
   };
 
   // Handle camera/file input change
   const handleInputChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      handleFileSelect(file);
+    console.log("📂 Input change event triggered");
+    try {
+      const file = e.target.files?.[0];
+      console.log("📂 Files array:", {
+        length: e.target.files?.length || 0,
+        file: file ? { name: file.name, type: file.type, size: file.size } : null,
+      });
+
+      if (file) {
+        handleFileSelect(file);
+      } else {
+        console.warn("⚠️ No file selected");
+        setError("No file selected. Please try again.");
+      }
+      // Reset input so user can select the same file again
+      e.target.value = "";
+    } catch (err) {
+      console.error("❌ File selection error:", err);
+      setError("Error selecting file: " + err.message);
     }
   };
 
   // Analyze receipt with Claude
   const handleAnalyzeReceipt = async () => {
     if (!selectedImage) {
+      console.warn("⚠️ No image selected");
       setError("Please select an image first");
       return;
     }
 
+    console.log("🚀 Starting receipt analysis for:", selectedImage.name);
     setLoading(true);
     setError("");
 
     try {
       const formDataObj = new FormData();
       formDataObj.append("image", selectedImage);
+      console.log("📦 FormData prepared with image");
 
+      console.log("🌐 Sending to backend: POST /api/receipts/analyze");
       const response = await tenantFetch("/api/receipts/analyze", {
         method: "POST",
         body: formDataObj,
       });
 
+      console.log("📨 Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers),
+      });
+
       if (!response.ok) {
+        console.error("❌ API error:", response.status);
         const errorData = await response.json();
+        console.error("Error details:", errorData);
         throw new Error(errorData.error || "Failed to analyze receipt");
       }
 
       const data = await response.json();
+      console.log("✅ Analysis successful:", {
+        receiptId: data.receiptId,
+        documentType: data.documentType,
+        vendorName: data.vendorName,
+        totalAmount: data.totalAmount,
+        lineItemsCount: data.lineItems?.length || 0,
+      });
+
       setReceiptData(data);
       setFormData({
         receiptId: data.receiptId,
@@ -159,8 +291,11 @@ export default function ReceiptScanPage() {
 
       setStep(2); // Move to review step
     } catch (err) {
+      console.error("❌ Analysis failed:", {
+        message: err.message,
+        stack: err.stack,
+      });
       setError(err.message || "Failed to analyze receipt. Please try again.");
-      console.error("Analysis error:", err);
     } finally {
       setLoading(false);
     }
@@ -186,10 +321,22 @@ export default function ReceiptScanPage() {
 
   // Confirm and save receipt
   const handleConfirmReceipt = async () => {
+    console.log("💾 Starting receipt confirmation");
+    console.log("📋 Form data:", {
+      receiptId: formData.receiptId,
+      documentType: formData.documentType,
+      vendorName: formData.vendorName,
+      receiptDate: formData.receiptDate,
+      totalAmount: formData.totalAmount,
+      taxAmount: formData.taxAmount,
+      lineItemsCount: formData.lineItems?.length || 0,
+    });
+
     setLoading(true);
     setError("");
 
     try {
+      console.log("🌐 Sending to backend: POST /api/receipts/confirm");
       const response = await tenantFetch("/api/receipts/confirm", {
         method: "POST",
         headers: {
@@ -198,10 +345,20 @@ export default function ReceiptScanPage() {
         body: JSON.stringify(formData),
       });
 
+      console.log("📨 Confirm response received:", {
+        status: response.status,
+        statusText: response.statusText,
+      });
+
       if (!response.ok) {
+        console.error("❌ Confirm failed with status:", response.status);
         const errorData = await response.json();
+        console.error("Error details:", errorData);
         throw new Error(errorData.error || "Failed to save receipt");
       }
+
+      const responseData = await response.json();
+      console.log("✅ Receipt confirmed successfully:", responseData);
 
       setSnackbar({
         open: true,
@@ -329,12 +486,146 @@ export default function ReceiptScanPage() {
           </Typography>
         </Box>
 
-        {/* Title Section */}
-        <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 4 }}>
-          Receipt Scanner - AI-Powered Analysis
-        </Typography>
+        {/* Title & History Toggle */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244' }}>
+            {showHistory ? "Receipt History" : "Receipt Scanner - AI-Powered Analysis"}
+          </Typography>
+          <Button
+            variant={showHistory ? "contained" : "outlined"}
+            onClick={() => setShowHistory(!showHistory)}
+            sx={{
+              backgroundColor: showHistory ? '#667eea' : 'transparent',
+              color: showHistory ? '#fff' : '#667eea',
+              borderColor: '#667eea',
+              '&:hover': {
+                backgroundColor: showHistory ? '#5568d3' : 'rgba(102, 126, 234, 0.04)'
+              }
+            }}
+          >
+            {showHistory ? "Back to Scanner" : "View History"}
+          </Button>
+        </Box>
 
-        {/* Stepper */}
+        {/* Receipt History Section */}
+        {showHistory ? (
+          <Card sx={{ mb: 4 }}>
+            <CardContent>
+              <Typography variant="h6" sx={{ mb: 3, fontWeight: 'bold', color: '#193366' }}>
+                Filter Receipts
+              </Typography>
+
+              <Grid container spacing={2} sx={{ mb: 3 }}>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Start Date"
+                    type="date"
+                    value={filters.startDate}
+                    onChange={(e) => handleFilterChange("startDate", e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="End Date"
+                    type="date"
+                    value={filters.endDate}
+                    onChange={(e) => handleFilterChange("endDate", e.target.value)}
+                    InputLabelProps={{ shrink: true }}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Vendor Name"
+                    value={filters.vendorName}
+                    onChange={(e) => handleFilterChange("vendorName", e.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <TextField
+                    label="Cab ID"
+                    type="number"
+                    value={filters.cabId}
+                    onChange={(e) => handleFilterChange("cabId", e.target.value)}
+                    fullWidth
+                  />
+                </Grid>
+              </Grid>
+
+              <Box sx={{ display: "flex", gap: 2 }}>
+                <Button
+                  variant="contained"
+                  onClick={handleApplyFilters}
+                  sx={{
+                    backgroundColor: '#4caf50',
+                    '&:hover': { backgroundColor: '#388e3c' }
+                  }}
+                >
+                  Apply Filters
+                </Button>
+                <Button
+                  variant="outlined"
+                  onClick={handleClearFilters}
+                  sx={{ color: '#667eea', borderColor: '#667eea' }}
+                >
+                  Clear All
+                </Button>
+              </Box>
+
+              {/* Receipts Table */}
+              {receiptsLoading ? (
+                <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                  <CircularProgress />
+                </Box>
+              ) : receipts.length > 0 ? (
+                <TableContainer component={Paper} sx={{ mt: 3 }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                        <TableCell><strong>ID</strong></TableCell>
+                        <TableCell><strong>Vendor</strong></TableCell>
+                        <TableCell><strong>Date</strong></TableCell>
+                        <TableCell align="right"><strong>Amount</strong></TableCell>
+                        <TableCell><strong>Cab</strong></TableCell>
+                        <TableCell><strong>Driver</strong></TableCell>
+                        <TableCell><strong>Status</strong></TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {receipts.map((receipt) => (
+                        <TableRow key={receipt.id}>
+                          <TableCell>#{receipt.id}</TableCell>
+                          <TableCell>{receipt.vendorName || "-"}</TableCell>
+                          <TableCell>{receipt.receiptDate || "-"}</TableCell>
+                          <TableCell align="right">${receipt.totalAmount || "0.00"}</TableCell>
+                          <TableCell>{receipt.cabNumber || "-"}</TableCell>
+                          <TableCell>{receipt.ownerName || "-"}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={receipt.status}
+                              size="small"
+                              color={receipt.status === "CONFIRMED" ? "success" : "default"}
+                              variant="outlined"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              ) : (
+                <Typography sx={{ mt: 3, color: '#999', textAlign: 'center' }}>
+                  No receipts found. Try adjusting your filters.
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Stepper */}
         <Stepper activeStep={step} sx={{ mb: 4 }}>
           <Step>
             <StepLabel>Capture Receipt</StepLabel>
@@ -365,7 +656,7 @@ export default function ReceiptScanPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
+                accept="image/*"
                 onChange={handleInputChange}
                 style={{ display: "none" }}
               />
@@ -615,6 +906,8 @@ export default function ReceiptScanPage() {
               </Box>
             </CardContent>
           </Card>
+        )}
+          </>
         )}
 
         {/* Success Snackbar */}
