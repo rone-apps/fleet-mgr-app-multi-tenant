@@ -147,8 +147,64 @@ export default function ReceiptScanPage() {
     setReceipts([]);
   };
 
+  // Compress image before sending
+  const compressImage = async (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (e) => {
+        const img = new Image();
+        img.src = e.target.result;
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          let width = img.width;
+          let height = img.height;
+
+          // Limit dimensions to 1920x1440 max
+          const maxWidth = 1920;
+          const maxHeight = 1440;
+          if (width > height) {
+            if (width > maxWidth) {
+              height *= maxWidth / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width *= maxHeight / height;
+              height = maxHeight;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Compress to JPEG with quality 0.7
+          canvas.toBlob(
+            (blob) => {
+              console.log("🗜️ Image compressed:", {
+                originalSize: (file.size / 1024 / 1024).toFixed(2) + " MB",
+                compressedSize: (blob.size / 1024 / 1024).toFixed(2) + " MB",
+                reduction: ((1 - blob.size / file.size) * 100).toFixed(1) + "%",
+              });
+              resolve(new File([blob], file.name, { type: "image/jpeg" }));
+            },
+            "image/jpeg",
+            0.7
+          );
+        };
+        img.onerror = () => {
+          console.warn("⚠️ Could not compress image, using original");
+          resolve(file);
+        };
+      };
+      reader.onerror = () => reject(new Error("Failed to read file"));
+    });
+  };
+
   // Handle file selection
-  const handleFileSelect = (file) => {
+  const handleFileSelect = async (file) => {
     if (!file) {
       console.log("❌ No file provided");
       return;
@@ -162,6 +218,13 @@ export default function ReceiptScanPage() {
       lastModified: new Date(file.lastModified).toISOString(),
     });
 
+    // Compress image if it's large
+    let fileToUse = file;
+    if (file.size > 2 * 1024 * 1024) {
+      console.log("📦 Image is large, compressing...");
+      fileToUse = await compressImage(file);
+    }
+
     const fileName = file.name.toLowerCase();
     const mimeType = file.type.toLowerCase();
 
@@ -174,20 +237,20 @@ export default function ReceiptScanPage() {
 
     // More lenient validation - just check file size
     // Backend will validate the actual format
-    if (file.size > 10 * 1024 * 1024) {
-      console.warn("⚠️ File too large:", file.size);
+    if (fileToUse.size > 10 * 1024 * 1024) {
+      console.warn("⚠️ File too large:", fileToUse.size);
       setError("Image file must be smaller than 10MB");
       return;
     }
 
-    if (file.size === 0) {
+    if (fileToUse.size === 0) {
       console.warn("⚠️ File is empty");
       setError("File is empty. Please select a valid image.");
       return;
     }
 
     console.log("✅ File validation passed");
-    setSelectedImage(file);
+    setSelectedImage(fileToUse);
     setError("");
 
     // Create preview
@@ -201,7 +264,7 @@ export default function ReceiptScanPage() {
         console.error("❌ FileReader error:", reader.error);
         setError("Failed to read file. Please try again.");
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(fileToUse);
     } catch (err) {
       console.error("❌ Error reading file:", err);
       setError("Error reading file: " + err.message);
