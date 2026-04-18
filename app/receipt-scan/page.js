@@ -8,6 +8,7 @@ import {
   Stepper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Typography, Alert, Select, MenuItem, FormControl, InputLabel,
   Snackbar, Alert as SnackAlert, AppBar, Toolbar, IconButton, Chip,
+  Autocomplete, Checkbox,
 } from "@mui/material";
 import {
   CloudUpload as CloudUploadIcon, PhotoCamera as PhotoCameraIcon,
@@ -68,7 +69,19 @@ export default function ReceiptScanPage() {
     totalAmount: 0,
     lineItems: [],
     notes: "",
+    cabId: null,
+    ownerId: null,
+    accountCustomerId: null,
+    shiftType: null,
   });
+
+  // Cabs and Owners/Drivers
+  const [cabs, setCabs] = useState([]);
+  const [owners, setOwners] = useState([]);
+  const [accountCustomers, setAccountCustomers] = useState([]);
+  const [cabsLoading, setCabsLoading] = useState(false);
+  const [ownersLoading, setOwnersLoading] = useState(false);
+  const [accountCustomersLoading, setAccountCustomersLoading] = useState(false);
 
   // Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, message: "", severity: "info" });
@@ -83,8 +96,31 @@ export default function ReceiptScanPage() {
     shiftId: "",
     ownerId: "",
     vendorName: "",
+    documentType: "",
   });
   const [showHistory, setShowHistory] = useState(false);
+
+  // Image viewer
+  const [imageViewerOpen, setImageViewerOpen] = useState(false);
+  const [selectedReceiptImage, setSelectedReceiptImage] = useState(null);
+
+  // Inline editing
+  const [selectedReceipts, setSelectedReceipts] = useState(new Set());
+  const [editingRows, setEditingRows] = useState(new Set());
+  const [rowEditData, setRowEditData] = useState({});
+  const [savingRows, setSavingRows] = useState(new Set());
+
+  const handleOpenImage = (receipt) => {
+    console.log("📸 Opening image for receipt:", receipt.id);
+    setSelectedReceiptImage(receipt);
+    setImageViewerOpen(true);
+  };
+
+  const handleCloseImageViewer = () => {
+    console.log("❌ Closing image viewer");
+    setImageViewerOpen(false);
+    setSelectedReceiptImage(null);
+  };
 
   // Fetch receipts on component mount and when filters change
   useEffect(() => {
@@ -102,6 +138,7 @@ export default function ReceiptScanPage() {
       if (filters.shiftId) params.append("shiftId", filters.shiftId);
       if (filters.ownerId) params.append("ownerId", filters.ownerId);
       if (filters.vendorName) params.append("vendorName", filters.vendorName);
+      if (filters.documentType) params.append("documentType", filters.documentType);
 
       const url = `/api/receipts?${params.toString()}`;
       console.log("🌐 Request URL:", url);
@@ -143,64 +180,454 @@ export default function ReceiptScanPage() {
       shiftId: "",
       ownerId: "",
       vendorName: "",
+      documentType: "",
     });
     setReceipts([]);
   };
 
-  // Compress image before sending
-  const compressImage = async (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (e) => {
-        const img = new Image();
-        img.src = e.target.result;
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          let width = img.width;
-          let height = img.height;
+  const handleToggleReceiptSelection = (receiptId) => {
+    const newSelected = new Set(selectedReceipts);
+    if (newSelected.has(receiptId)) {
+      newSelected.delete(receiptId);
+    } else {
+      newSelected.add(receiptId);
+    }
+    setSelectedReceipts(newSelected);
+  };
 
-          // Limit dimensions to 1920x1440 max
-          const maxWidth = 1920;
-          const maxHeight = 1440;
-          if (width > height) {
-            if (width > maxWidth) {
-              height *= maxWidth / width;
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width *= maxHeight / height;
-              height = maxHeight;
-            }
+  const handleSelectAllReceipts = () => {
+    if (selectedReceipts.size === receipts.length) {
+      setSelectedReceipts(new Set());
+    } else {
+      setSelectedReceipts(new Set(receipts.map(r => r.id)));
+    }
+  };
+
+  const handleBulkEditSelected = async () => {
+    if (selectedReceipts.size === 0) {
+      setSnackbar({ open: true, message: "Please select receipts to edit", severity: "warning" });
+      return;
+    }
+
+    // Load cabs, owners, and account customers if not already loaded
+    if (cabs.length === 0) await fetchCabs();
+    if (owners.length === 0) await fetchOwners();
+    if (accountCustomers.length === 0) await fetchAccountCustomers();
+
+    const newEditingRows = new Set(editingRows);
+    selectedReceipts.forEach(id => {
+      const receipt = receipts.find(r => r.id === id);
+      if (receipt) {
+        newEditingRows.add(id);
+        setRowEditData(prev => ({
+          ...prev,
+          [id]: {
+            documentType: receipt.documentType || "",
+            vendorName: receipt.vendorName || "",
+            accountCustomerId: receipt.accountCustomerId || null,
+            cabId: receipt.cab?.id || null,
+            ownerId: receipt.owner?.id || null,
+            shiftType: receipt.shiftType || "",
+            notes: "",
           }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Compress to JPEG with quality 0.7
-          canvas.toBlob(
-            (blob) => {
-              console.log("🗜️ Image compressed:", {
-                originalSize: (file.size / 1024 / 1024).toFixed(2) + " MB",
-                compressedSize: (blob.size / 1024 / 1024).toFixed(2) + " MB",
-                reduction: ((1 - blob.size / file.size) * 100).toFixed(1) + "%",
-              });
-              resolve(new File([blob], file.name, { type: "image/jpeg" }));
-            },
-            "image/jpeg",
-            0.7
-          );
-        };
-        img.onerror = () => {
-          console.warn("⚠️ Could not compress image, using original");
-          resolve(file);
-        };
-      };
-      reader.onerror = () => reject(new Error("Failed to read file"));
+        }));
+      }
     });
+    setEditingRows(newEditingRows);
+  };
+
+  const handleBulkSaveAll = async () => {
+    const editingIdsArray = Array.from(editingRows);
+    if (editingIdsArray.length === 0) return;
+
+    setSavingRows(new Set(editingIdsArray));
+    let successCount = 0;
+    let failCount = 0;
+
+    try {
+      for (const receiptId of editingIdsArray) {
+        const receipt = receipts.find(r => r.id === receiptId);
+        if (!receipt) continue;
+
+        const editData = rowEditData[receiptId];
+        const updateData = {
+          receiptId,
+          documentType: editData.documentType || receipt.documentType,
+          vendorName: editData.vendorName || receipt.vendorName,
+          accountCustomerId: editData.accountCustomerId || receipt.accountCustomerId,
+          cabId: editData.cabId || null,
+          ownerId: editData.ownerId || null,
+          shiftType: editData.shiftType || receipt.shiftType || null,
+          notes: editData.notes ? `${receipt.notes || ""}\n[Updated] ${editData.notes} - ${user?.name || "User"}` : receipt.notes,
+          receiptDate: receipt.receiptDate,
+          taxAmount: receipt.taxAmount,
+          totalAmount: receipt.totalAmount,
+          lineItems: [],
+        };
+
+        const response = await tenantFetch("/api/receipts/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateData),
+        });
+
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+        }
+      }
+
+      if (successCount > 0) {
+        setSnackbar({
+          open: true,
+          message: `Updated ${successCount} receipt(s)${failCount > 0 ? `, ${failCount} failed` : ""}`,
+          severity: failCount > 0 ? "warning" : "success"
+        });
+      }
+
+      setEditingRows(new Set());
+      setRowEditData({});
+      setSelectedReceipts(new Set());
+      fetchReceipts();
+    } catch (err) {
+      console.error("❌ Bulk save error:", err);
+      setSnackbar({ open: true, message: "Error saving receipts", severity: "error" });
+    } finally {
+      setSavingRows(new Set());
+    }
+  };
+
+  const handleStartEdit = async (receipt) => {
+    // Load cabs, owners, and account customers if not already loaded
+    if (cabs.length === 0) await fetchCabs();
+    if (owners.length === 0) await fetchOwners();
+    if (accountCustomers.length === 0) await fetchAccountCustomers();
+
+    const newEditingRows = new Set(editingRows);
+    newEditingRows.add(receipt.id);
+    setEditingRows(newEditingRows);
+
+    setRowEditData(prev => ({
+      ...prev,
+      [receipt.id]: {
+        documentType: receipt.documentType || "",
+        vendorName: receipt.vendorName || "",
+        accountCustomerId: receipt.accountCustomerId || null,
+        cabId: receipt.cab?.id || null,
+        ownerId: receipt.owner?.id || null,
+        shiftType: receipt.shiftType || "",
+        notes: "",
+      }
+    }));
+  };
+
+  const handleCancelEdit = (receiptId) => {
+    const newEditingRows = new Set(editingRows);
+    newEditingRows.delete(receiptId);
+    setEditingRows(newEditingRows);
+
+    const newData = { ...rowEditData };
+    delete newData[receiptId];
+    setRowEditData(newData);
+  };
+
+  const handleRowEditChange = (receiptId, field, value) => {
+    setRowEditData(prev => ({
+      ...prev,
+      [receiptId]: {
+        ...prev[receiptId],
+        [field]: value
+      }
+    }));
+  };
+
+  const handleSaveRow = async (receiptId) => {
+    const receipt = receipts.find(r => r.id === receiptId);
+    if (!receipt) return;
+
+    const editData = rowEditData[receiptId];
+    setSavingRows(prev => new Set([...prev, receiptId]));
+
+    try {
+      const updateData = {
+        receiptId,
+        documentType: editData.documentType || receipt.documentType,
+        vendorName: editData.vendorName || receipt.vendorName,
+        accountCustomerId: editData.accountCustomerId || receipt.accountCustomerId,
+        cabId: editData.cabId || null,
+        ownerId: editData.ownerId || null,
+        shiftType: editData.shiftType || receipt.shiftType || null,
+        notes: editData.notes ? `${receipt.notes || ""}\n[Updated] ${editData.notes} - ${user?.name || "User"}` : receipt.notes,
+        receiptDate: receipt.receiptDate,
+        taxAmount: receipt.taxAmount,
+        totalAmount: receipt.totalAmount,
+        lineItems: [],
+      };
+
+      const response = await tenantFetch("/api/receipts/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+
+      if (response.ok) {
+        setSnackbar({ open: true, message: "Receipt updated successfully", severity: "success" });
+        handleCancelEdit(receiptId);
+        fetchReceipts();
+      } else {
+        setSnackbar({ open: true, message: "Failed to update receipt", severity: "error" });
+      }
+    } catch (err) {
+      console.error("❌ Save error:", err);
+      setSnackbar({ open: true, message: "Error saving receipt", severity: "error" });
+    } finally {
+      setSavingRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(receiptId);
+        return newSet;
+      });
+    }
+  };
+
+  const fetchCabs = async () => {
+    console.log("🚗 Fetching cabs list");
+    setCabsLoading(true);
+    try {
+      const response = await tenantFetch("/api/cabs");
+      if (response.ok) {
+        const data = await response.json();
+        const cabsList = Array.isArray(data) ? data : data.content || [];
+        console.log("✅ Cabs fetched:", cabsList.length);
+        setCabs(cabsList);
+      } else {
+        console.error("❌ Failed to fetch cabs:", response.status);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching cabs:", err);
+    } finally {
+      setCabsLoading(false);
+    }
+  };
+
+  const fetchOwners = async () => {
+    console.log("👤 Fetching owners list");
+    setOwnersLoading(true);
+    try {
+      const response = await tenantFetch("/api/drivers");
+      if (response.ok) {
+        const data = await response.json();
+        console.log("✅ Owners fetched:", data.length || 0);
+        setOwners(Array.isArray(data) ? data : data.content || []);
+      } else {
+        console.error("❌ Failed to fetch owners:", response.status);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching owners:", err);
+    } finally {
+      setOwnersLoading(false);
+    }
+  };
+
+  const fetchAccountCustomers = async () => {
+    console.log("🏢 Fetching account customers list");
+    setAccountCustomersLoading(true);
+    try {
+      const response = await tenantFetch("/api/account-customers");
+      if (response.ok) {
+        const data = await response.json();
+        console.log("✅ Account customers fetched:", data.length || 0);
+        setAccountCustomers(Array.isArray(data) ? data : data.content || []);
+      } else {
+        console.error("❌ Failed to fetch account customers:", response.status);
+      }
+    } catch (err) {
+      console.error("❌ Error fetching account customers:", err);
+    } finally {
+      setAccountCustomersLoading(false);
+    }
+  };
+
+  // Load cabs, owners, and account customers when component mounts or when step changes to 2
+  useEffect(() => {
+    if (step === 2) {
+      fetchCabs();
+      fetchOwners();
+      fetchAccountCustomers();
+    }
+  }, [step]);
+
+  // Auto-match cab number and driver name when cabs/owners are loaded
+  useEffect(() => {
+    if (cabs.length > 0 && owners.length > 0 && receiptData) {
+      let updatedFormData = { ...formData };
+
+      // Try to match cab number
+      if (receiptData.cabNumber && !formData.cabId) {
+        const matchedCab = cabs.find(
+          (c) => c.cabNumber && c.cabNumber.toString() === receiptData.cabNumber.toString()
+        );
+        if (matchedCab) {
+          console.log("🚗 Auto-matched cab:", receiptData.cabNumber, "to ID:", matchedCab.id);
+          updatedFormData.cabId = matchedCab.id;
+        }
+      }
+
+      // Try to match driver name
+      if (receiptData.driverName && !formData.ownerId) {
+        const driverNameLower = receiptData.driverName.toLowerCase();
+        const matchedOwner = owners.find((o) => {
+          const fullName = `${o.firstName || ""} ${o.lastName || ""}`.toLowerCase();
+          return fullName.includes(driverNameLower) || driverNameLower.includes(fullName);
+        });
+        if (matchedOwner) {
+          console.log("👤 Auto-matched driver:", receiptData.driverName, "to ID:", matchedOwner.id);
+          updatedFormData.ownerId = matchedOwner.id;
+        }
+      }
+
+      // Only update if something changed
+      if (updatedFormData.cabId !== formData.cabId || updatedFormData.ownerId !== formData.ownerId) {
+        setFormData(updatedFormData);
+      }
+    }
+  }, [cabs, owners, receiptData]);
+
+  // Convert HEIC to JPEG and compress image
+  const compressImage = async (file) => {
+    try {
+      // Check if file is HEIC format
+      const isHeic = file.type.includes("heic") || file.type.includes("heif") ||
+                     file.name.toLowerCase().endsWith(".heic") ||
+                     file.name.toLowerCase().endsWith(".heif");
+
+      let fileToProcess = file;
+
+      // If HEIC, convert to JPEG first
+      if (isHeic) {
+        console.log("📱 HEIC format detected, converting to JPEG using heic2any...");
+        try {
+          const heic2any = (await import("heic2any")).default;
+          const jpegBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.85,
+          });
+
+          console.log("✅ HEIC conversion successful");
+          console.log("📊 Converted blob size:", (jpegBlob.size / 1024 / 1024).toFixed(2), "MB");
+
+          // Create a new File from the blob
+          fileToProcess = new File([jpegBlob], file.name.replace(/\.(heic|heif)$/i, ".jpg"), {
+            type: "image/jpeg",
+          });
+        } catch (heicError) {
+          console.error("❌ HEIC conversion failed:", heicError);
+          setError("Failed to convert HEIC image. Please try a JPEG, PNG, or GIF image instead.");
+          return file;
+        }
+      }
+
+      // Now compress/resize the image
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(fileToProcess);
+        reader.onload = (e) => {
+          try {
+            const img = new Image();
+            img.onload = () => {
+              try {
+                console.log("📐 Image dimensions:", { width: img.width, height: img.height });
+
+                const canvas = document.createElement("canvas");
+                let width = img.width;
+                let height = img.height;
+
+                // Limit dimensions to 1920x1440 max
+                const maxWidth = 1920;
+                const maxHeight = 1440;
+                if (width > height) {
+                  if (width > maxWidth) {
+                    height *= maxWidth / width;
+                    width = maxWidth;
+                  }
+                } else {
+                  if (height > maxHeight) {
+                    width *= maxHeight / height;
+                    height = maxHeight;
+                  }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext("2d");
+
+                if (!ctx) {
+                  throw new Error("Could not get canvas context");
+                }
+
+                ctx.drawImage(img, 0, 0, width, height);
+                console.log("✅ Image drawn on canvas");
+
+                // Convert to JPEG with quality 0.85
+                const timeout = setTimeout(() => {
+                  console.error("❌ Blob conversion timeout");
+                  resolve(fileToProcess);
+                }, 5000);
+
+                canvas.toBlob(
+                  (blob) => {
+                    clearTimeout(timeout);
+
+                    if (!blob) {
+                      console.warn("⚠️ Blob is empty, using converted file");
+                      resolve(fileToProcess);
+                      return;
+                    }
+
+                    const originalSize = (fileToProcess.size / 1024 / 1024).toFixed(2);
+                    const compressedSize = (blob.size / 1024 / 1024).toFixed(2);
+                    const reduction = ((1 - blob.size / fileToProcess.size) * 100).toFixed(1);
+
+                    console.log("🗜️ Image processed:", {
+                      originalSize: originalSize + " MB",
+                      compressedSize: compressedSize + " MB",
+                      reduction: reduction + "%",
+                      blobSize: blob.size,
+                    });
+
+                    resolve(new File([blob], fileToProcess.name, { type: "image/jpeg" }));
+                  },
+                  "image/jpeg",
+                  0.85
+                );
+              } catch (err) {
+                console.error("❌ Canvas processing error:", err);
+                resolve(fileToProcess);
+              }
+            };
+
+            img.onerror = () => {
+              console.error("❌ Image load error");
+              resolve(fileToProcess);
+            };
+
+            img.src = e.target.result;
+          } catch (err) {
+            console.error("❌ Image processing error:", err);
+            resolve(fileToProcess);
+          }
+        };
+
+        reader.onerror = () => {
+          console.error("❌ FileReader error:", reader.error);
+          resolve(fileToProcess);
+        };
+      });
+    } catch (err) {
+      console.error("❌ Compression error:", err);
+      return file;
+    }
   };
 
   // Handle file selection
@@ -218,24 +645,24 @@ export default function ReceiptScanPage() {
       lastModified: new Date(file.lastModified).toISOString(),
     });
 
-    // Compress image if it's large
+    // Check if file is HEIC format
+    const isHeic = file.type.includes("heic") || file.type.includes("heif") ||
+                   file.name.toLowerCase().endsWith(".heic") ||
+                   file.name.toLowerCase().endsWith(".heif");
+
+    // Compress image if it's large OR if it's HEIC format
     let fileToUse = file;
-    if (file.size > 2 * 1024 * 1024) {
-      console.log("📦 Image is large, compressing...");
+    if (file.size > 2 * 1024 * 1024 || isHeic) {
+      if (isHeic) {
+        console.log("📱 HEIC file detected - converting to JPEG...");
+      } else {
+        console.log("📦 Image is large, compressing...");
+      }
       fileToUse = await compressImage(file);
     }
 
-    const fileName = file.name.toLowerCase();
-    const mimeType = file.type.toLowerCase();
-
-    // Check for HEIC format
-    if (fileName.endsWith(".heic") || fileName.endsWith(".heif") || mimeType.includes("heic")) {
-      console.warn("⚠️ HEIC format detected - not supported");
-      setError("HEIC format is not supported. Please convert your image to JPEG, PNG, GIF, or WebP. On iPhone: Use Settings > Camera > Formats > Most Compatible or export as JPEG from Photos.");
-      return;
-    }
-
     // More lenient validation - just check file size
+    // HEIC will be automatically converted to JPEG
     // Backend will validate the actual format
     if (fileToUse.size > 10 * 1024 * 1024) {
       console.warn("⚠️ File too large:", fileToUse.size);
@@ -341,6 +768,14 @@ export default function ReceiptScanPage() {
       });
 
       setReceiptData(data);
+
+      // Build notes with account number if extracted
+      let notesText = "";
+      if (data.accountNumber) {
+        notesText = `Account #: ${data.accountNumber}`;
+        console.log("💳 Account number extracted:", data.accountNumber);
+      }
+
       setFormData({
         receiptId: data.receiptId,
         documentType: data.documentType || "OTHER",
@@ -349,7 +784,9 @@ export default function ReceiptScanPage() {
         taxAmount: data.taxAmount || 0,
         totalAmount: data.totalAmount || 0,
         lineItems: data.lineItems || [],
-        notes: "",
+        notes: notesText,
+        cabId: null,
+        ownerId: null,
       });
 
       setStep(2); // Move to review step
@@ -444,6 +881,10 @@ export default function ReceiptScanPage() {
           totalAmount: 0,
           lineItems: [],
           notes: "",
+          cabId: null,
+          ownerId: null,
+          accountCustomerId: null,
+          shiftType: null,
         });
       }, 2000);
     } catch (err) {
@@ -616,6 +1057,26 @@ export default function ReceiptScanPage() {
                     fullWidth
                   />
                 </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>Document Type</InputLabel>
+                    <Select
+                      value={filters.documentType}
+                      onChange={(e) => handleFilterChange("documentType", e.target.value)}
+                      label="Document Type"
+                    >
+                      <MenuItem value="">All Types</MenuItem>
+                      <MenuItem value="GAS_RECEIPT">Gas Receipt</MenuItem>
+                      <MenuItem value="PARKING">Parking</MenuItem>
+                      <MenuItem value="MAINTENANCE">Maintenance</MenuItem>
+                      <MenuItem value="BILL">Bill</MenuItem>
+                      <MenuItem value="ACCOUNT_CHARGE">Account Charge</MenuItem>
+                      <MenuItem value="AIRPORT_FEE">Airport Fee</MenuItem>
+                      <MenuItem value="MEAL">Meal</MenuItem>
+                      <MenuItem value="OTHER">Other</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
               </Grid>
 
               <Box sx={{ display: "flex", gap: 2 }}>
@@ -645,37 +1106,256 @@ export default function ReceiptScanPage() {
                 </Box>
               ) : receipts.length > 0 ? (
                 <TableContainer component={Paper} sx={{ mt: 3 }}>
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-                        <TableCell><strong>ID</strong></TableCell>
-                        <TableCell><strong>Vendor</strong></TableCell>
+                    {(selectedReceipts.size > 0 || editingRows.size > 0) && (
+                      <Box sx={{ p: 2, backgroundColor: '#f9f9f9', borderBottom: '1px solid #eee', display: 'flex', gap: 2, alignItems: 'center' }}>
+                        {selectedReceipts.size > 0 && (
+                          <>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', flex: 1 }}>
+                              {selectedReceipts.size} receipt(s) selected
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={handleBulkEditSelected}
+                              sx={{
+                                backgroundColor: '#667eea',
+                                '&:hover': { backgroundColor: '#5568d3' }
+                              }}
+                            >
+                              Edit Selected
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => setSelectedReceipts(new Set())}
+                              sx={{ color: '#999', borderColor: '#999' }}
+                            >
+                              Clear
+                            </Button>
+                          </>
+                        )}
+                        {editingRows.size > 0 && (
+                          <>
+                            <Typography variant="body2" sx={{ fontWeight: 'bold', flex: 1 }}>
+                              Editing {editingRows.size} row(s)
+                            </Typography>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              onClick={handleBulkSaveAll}
+                              disabled={savingRows.size > 0}
+                              sx={{
+                                backgroundColor: '#4caf50',
+                                '&:hover': { backgroundColor: '#388e3c' }
+                              }}
+                            >
+                              {savingRows.size > 0 ? "Saving..." : "Save All"}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              onClick={() => {
+                                setEditingRows(new Set());
+                                setRowEditData({});
+                              }}
+                              disabled={savingRows.size > 0}
+                              sx={{ color: '#999', borderColor: '#999' }}
+                            >
+                              Cancel All
+                            </Button>
+                          </>
+                        )}
+                      </Box>
+                    )}
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
+                          <TableCell padding="checkbox">
+                            <Checkbox
+                              indeterminate={selectedReceipts.size > 0 && selectedReceipts.size < receipts.length}
+                              checked={selectedReceipts.size === receipts.length && receipts.length > 0}
+                              onChange={handleSelectAllReceipts}
+                            />
+                          </TableCell>
+                          <TableCell><strong>ID</strong></TableCell>
+                        <TableCell><strong>Vendor/Account</strong></TableCell>
+                        <TableCell><strong>Shift</strong></TableCell>
                         <TableCell><strong>Date</strong></TableCell>
                         <TableCell align="right"><strong>Amount</strong></TableCell>
                         <TableCell><strong>Cab</strong></TableCell>
                         <TableCell><strong>Driver</strong></TableCell>
                         <TableCell><strong>Status</strong></TableCell>
+                        <TableCell align="center"><strong>Image</strong></TableCell>
+                        <TableCell align="center"><strong>Actions</strong></TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {receipts.map((receipt) => (
-                        <TableRow key={receipt.id}>
-                          <TableCell>#{receipt.id}</TableCell>
-                          <TableCell>{receipt.vendorName || "-"}</TableCell>
-                          <TableCell>{receipt.receiptDate || "-"}</TableCell>
-                          <TableCell align="right">${receipt.totalAmount || "0.00"}</TableCell>
-                          <TableCell>{receipt.cabNumber || "-"}</TableCell>
-                          <TableCell>{receipt.ownerName || "-"}</TableCell>
-                          <TableCell>
-                            <Chip
-                              label={receipt.status}
-                              size="small"
-                              color={receipt.status === "CONFIRMED" ? "success" : "default"}
-                              variant="outlined"
-                            />
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {receipts.map((receipt) => {
+                        const isEditing = editingRows.has(receipt.id);
+                        const editData = rowEditData[receipt.id] || {};
+                        const isSaving = savingRows.has(receipt.id);
+
+                        return (
+                          <TableRow key={receipt.id} hover sx={{ backgroundColor: isEditing ? '#f9f9f9' : 'inherit' }}>
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                checked={selectedReceipts.has(receipt.id)}
+                                onChange={() => handleToggleReceiptSelection(receipt.id)}
+                                disabled={isEditing}
+                              />
+                            </TableCell>
+                            <TableCell>#{receipt.id}</TableCell>
+                            <TableCell>
+                              {isEditing ? (
+                                editData.documentType === "ACCOUNT_CHARGE" ? (
+                                  <Autocomplete
+                                    size="small"
+                                    options={accountCustomers}
+                                    getOptionLabel={(option) => option.companyName || ""}
+                                    value={accountCustomers.find(a => a.id === editData.accountCustomerId) || null}
+                                    onChange={(e, value) => handleRowEditChange(receipt.id, "accountCustomerId", value?.id || null)}
+                                    renderInput={(params) => <TextField {...params} placeholder="Account" />}
+                                    sx={{ minWidth: 150 }}
+                                  />
+                                ) : (
+                                  <TextField
+                                    size="small"
+                                    value={editData.vendorName || ""}
+                                    onChange={(e) => handleRowEditChange(receipt.id, "vendorName", e.target.value)}
+                                    placeholder="Vendor name"
+                                    fullWidth
+                                  />
+                                )
+                              ) : (
+                                receipt.documentType === "ACCOUNT_CHARGE"
+                                  ? receipt.accountName || "-"
+                                  : receipt.vendorName || "-"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {isEditing ? (
+                                <Select
+                                  size="small"
+                                  value={editData.shiftType || ""}
+                                  onChange={(e) => handleRowEditChange(receipt.id, "shiftType", e.target.value)}
+                                  sx={{ minWidth: 100 }}
+                                >
+                                  <MenuItem value="">None</MenuItem>
+                                  <MenuItem value="Day">Day</MenuItem>
+                                  <MenuItem value="Night">Night</MenuItem>
+                                  <MenuItem value="Single">Single</MenuItem>
+                                </Select>
+                              ) : (
+                                receipt.shiftType ? (
+                                  <Chip
+                                    label={receipt.shiftType}
+                                    size="small"
+                                    variant="outlined"
+                                  />
+                                ) : (
+                                  "-"
+                                )
+                              )}
+                            </TableCell>
+                            <TableCell>{receipt.receiptDate || "-"}</TableCell>
+                            <TableCell align="right">${receipt.totalAmount || "0.00"}</TableCell>
+                            <TableCell>
+                              {isEditing ? (
+                                <Autocomplete
+                                  size="small"
+                                  options={cabs}
+                                  getOptionLabel={(option) => option.cabNumber || ""}
+                                  value={cabs.find(c => c.id === editData.cabId) || null}
+                                  onChange={(e, value) => handleRowEditChange(receipt.id, "cabId", value?.id || null)}
+                                  renderInput={(params) => <TextField {...params} placeholder="Cab" />}
+                                  sx={{ minWidth: 100 }}
+                                />
+                              ) : (
+                                receipt.cabNumber || "-"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {isEditing ? (
+                                <Autocomplete
+                                  size="small"
+                                  options={owners}
+                                  getOptionLabel={(option) => `${option.firstName} ${option.lastName}`}
+                                  value={owners.find(o => o.id === editData.ownerId) || null}
+                                  onChange={(e, value) => handleRowEditChange(receipt.id, "ownerId", value?.id || null)}
+                                  renderInput={(params) => <TextField {...params} placeholder="Driver" />}
+                                  sx={{ minWidth: 120 }}
+                                />
+                              ) : (
+                                receipt.ownerName || "-"
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                label={receipt.status}
+                                size="small"
+                                color={receipt.status === "CONFIRMED" ? "success" : "default"}
+                                variant="outlined"
+                              />
+                            </TableCell>
+                            <TableCell align="center">
+                              {receipt.imageData ? (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => handleOpenImage(receipt)}
+                                  sx={{ color: '#667eea', borderColor: '#667eea' }}
+                                >
+                                  View
+                                </Button>
+                              ) : (
+                                <Typography variant="caption" sx={{ color: '#999' }}>
+                                  No img
+                                </Typography>
+                              )}
+                            </TableCell>
+                            <TableCell align="center">
+                              {isEditing ? (
+                                <Box sx={{ display: 'flex', gap: 1 }}>
+                                  <Button
+                                    size="small"
+                                    variant="contained"
+                                    onClick={() => handleSaveRow(receipt.id)}
+                                    disabled={isSaving}
+                                    sx={{
+                                      backgroundColor: '#4caf50',
+                                      '&:hover': { backgroundColor: '#388e3c' }
+                                    }}
+                                  >
+                                    {isSaving ? "..." : "Save"}
+                                  </Button>
+                                  <Button
+                                    size="small"
+                                    variant="outlined"
+                                    onClick={() => handleCancelEdit(receipt.id)}
+                                    disabled={isSaving}
+                                    sx={{ color: '#999', borderColor: '#999' }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </Box>
+                              ) : (
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => handleStartEdit(receipt)}
+                                  sx={{
+                                    color: '#667eea',
+                                    borderColor: '#667eea',
+                                    '&:hover': { backgroundColor: '#f0f0f0' }
+                                  }}
+                                >
+                                  Edit
+                                </Button>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -845,13 +1525,66 @@ export default function ReceiptScanPage() {
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Vendor Name"
-                    value={formData.vendorName}
-                    onChange={(e) => handleFormChange("vendorName", e.target.value)}
-                  />
+                  <FormControl fullWidth>
+                    <InputLabel>Shift Type</InputLabel>
+                    <Select
+                      value={formData.shiftType || ""}
+                      onChange={(e) => handleFormChange("shiftType", e.target.value || null)}
+                      label="Shift Type"
+                    >
+                      <MenuItem value="">
+                        <em>Select shift type...</em>
+                      </MenuItem>
+                      <MenuItem value="DAY">Day</MenuItem>
+                      <MenuItem value="NIGHT">Night</MenuItem>
+                      <MenuItem value="SINGLE">Single</MenuItem>
+                    </Select>
+                  </FormControl>
                 </Grid>
+
+                {formData.documentType === "ACCOUNT_CHARGE" ? (
+                  <Grid item xs={12} sm={6}>
+                    <Autocomplete
+                      options={accountCustomers}
+                      getOptionLabel={(option) => option?.companyName || ""}
+                      getOptionKey={(option) => `acct-${option?.id}`}
+                      value={accountCustomers.find((ac) => ac.id === formData.accountCustomerId) || null}
+                      onChange={(e, newValue) => {
+                        console.log("🏢 Account name selected:", newValue?.companyName);
+                        handleFormChange("accountCustomerId", newValue?.id || null);
+                      }}
+                      loading={accountCustomersLoading}
+                      noOptionsText="No accounts found"
+                      loadingText="Loading accounts..."
+                      openOnFocus
+                      clearOnBlur
+                      selectOnFocus
+                      filterOptions={(options, state) => {
+                        if (!state.inputValue) return options;
+                        return options.filter((option) =>
+                          option?.companyName?.toLowerCase().includes(state.inputValue.toLowerCase())
+                        );
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Account Name"
+                          placeholder="Search account..."
+                        />
+                      )}
+                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                    />
+                  </Grid>
+                ) : (
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Vendor Name"
+                      value={formData.vendorName}
+                      onChange={(e) => handleFormChange("vendorName", e.target.value)}
+                    />
+                  </Grid>
+                )}
 
                 <Grid item xs={12} sm={6}>
                   <TextField
@@ -887,13 +1620,84 @@ export default function ReceiptScanPage() {
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
+                  <Autocomplete
+                    options={cabs}
+                    getOptionLabel={(option) => option?.cabNumber || ""}
+                    getOptionKey={(option) => `cab-${option?.id}`}
+                    value={cabs.find((c) => c.id === formData.cabId) || null}
+                    onChange={(e, newValue) => {
+                      console.log("🚗 Cab selected:", newValue?.cabNumber);
+                      handleFormChange("cabId", newValue?.id || null);
+                    }}
+                    loading={cabsLoading}
+                    noOptionsText="No cabs found"
+                    loadingText="Loading cabs..."
+                    openOnFocus
+                    clearOnBlur
+                    selectOnFocus
+                    filterOptions={(options, state) => {
+                      if (!state.inputValue) return options;
+                      return options.filter((option) =>
+                        option?.cabNumber?.toString().toLowerCase().includes(state.inputValue.toLowerCase())
+                      );
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Cab"
+                        placeholder="Search cab number..."
+                        helperText={cabs.length === 0 && !cabsLoading ? "No cabs available" : ""}
+                      />
+                    )}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                  />
+                </Grid>
+
+                <Grid item xs={12} sm={6}>
+                  <Autocomplete
+                    options={owners}
+                    getOptionLabel={(option) => `${option?.firstName || ""} ${option?.lastName || ""}`.trim()}
+                    getOptionKey={(option) => `owner-${option?.id}`}
+                    value={owners.find((o) => o.id === formData.ownerId) || null}
+                    onChange={(e, newValue) => {
+                      console.log("👤 Driver selected:", newValue?.firstName, newValue?.lastName);
+                      handleFormChange("ownerId", newValue?.id || null);
+                    }}
+                    loading={ownersLoading}
+                    noOptionsText="No drivers found"
+                    loadingText="Loading drivers..."
+                    openOnFocus
+                    clearOnBlur
+                    selectOnFocus
+                    filterOptions={(options, state) => {
+                      if (!state.inputValue) return options;
+                      const fullName = `${state.inputValue}`.toLowerCase();
+                      return options.filter((option) => {
+                        const name = `${option?.firstName || ""} ${option?.lastName || ""}`.toLowerCase();
+                        return name.includes(fullName);
+                      });
+                    }}
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Driver / Owner"
+                        placeholder="Search driver name..."
+                        helperText={owners.length === 0 && !ownersLoading ? "No drivers available" : ""}
+                      />
+                    )}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                  />
+                </Grid>
+
+                <Grid item xs={12}>
                   <TextField
                     fullWidth
                     label="Notes"
                     value={formData.notes}
                     onChange={(e) => handleFormChange("notes", e.target.value)}
                     multiline
-                    rows={2}
+                    rows={3}
+                    placeholder="Add any additional notes about this receipt..."
                   />
                 </Grid>
               </Grid>
@@ -1046,6 +1850,67 @@ export default function ReceiptScanPage() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Image Viewer Dialog */}
+      <Dialog
+        open={imageViewerOpen}
+        onClose={handleCloseImageViewer}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            backgroundColor: '#f5f5f5'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
+          📸 Receipt Image
+        </DialogTitle>
+        <DialogContent sx={{ textAlign: 'center', py: 2 }}>
+          {selectedReceiptImage && selectedReceiptImage.imageData ? (
+            <>
+              <Box
+                component="img"
+                src={selectedReceiptImage.imageData}
+                sx={{
+                  maxWidth: '100%',
+                  maxHeight: '600px',
+                  borderRadius: 1,
+                  border: '1px solid #ddd',
+                  mb: 2
+                }}
+              />
+              <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid #ddd' }}>
+                <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                  <strong>Receipt ID:</strong> #{selectedReceiptImage.id}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                  <strong>Vendor:</strong> {selectedReceiptImage.vendorName || "-"}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666' }}>
+                  <strong>Date:</strong> {selectedReceiptImage.receiptDate || "-"}
+                </Typography>
+              </Box>
+            </>
+          ) : (
+            <Typography sx={{ color: '#999' }}>No image available</Typography>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            onClick={handleCloseImageViewer}
+            variant="contained"
+            sx={{
+              backgroundColor: '#667eea',
+              '&:hover': { backgroundColor: '#5568d3' }
+            }}
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
     </Box>
   );
 }
