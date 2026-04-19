@@ -39,6 +39,7 @@ const theme = createTheme({
 const KNOWN_COMPANIES = [
   { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'fareflow' },
   { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'fareflow_bonny' },
+  { id: 'demo', name: 'Demo Tenant', schema: 'fareflow_demo' },
 ];
 
 export default function SignInPage() {

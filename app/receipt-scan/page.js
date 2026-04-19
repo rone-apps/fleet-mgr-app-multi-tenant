@@ -24,6 +24,9 @@ export default function ReceiptScanPage() {
   const [user, setUser] = useState(null);
   const [tenantName, setTenantName] = useState(null);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [unlocked, setUnlocked] = useState(false);
+  const [password, setPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     const checkAuth = () => {
@@ -44,6 +47,15 @@ export default function ReceiptScanPage() {
   const handleConfirmLogout = () => {
     setLogoutDialogOpen(false);
     logout();
+  };
+
+  const handleUnlockScanReceipts = () => {
+    if (password === "Scan-It") {
+      setUnlocked(true);
+      setPasswordError("");
+    } else {
+      setPasswordError("Incorrect password");
+    }
   };
 
   const [step, setStep] = useState(0);
@@ -1034,6 +1046,55 @@ export default function ReceiptScanPage() {
 
   if (!user) {
     return null;
+  }
+
+  // Show password dialog if not unlocked
+  if (!unlocked) {
+    return (
+      <Box sx={{ minHeight: "100vh", backgroundColor: "#f6f9fc", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Dialog open={true} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ textAlign: "center", pt: 4 }}>
+            <Box sx={{ fontSize: 48, mb: 1 }}>🔒</Box>
+            <Box component="span" sx={{ display: "block", typography: "h6", fontWeight: 700 }}>
+              Scan Receipts
+            </Box>
+          </DialogTitle>
+          <DialogContent>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              This is a premium feature. Please enter the access password to continue.
+            </Alert>
+            {passwordError && <Alert severity="error" sx={{ mb: 2 }}>{passwordError}</Alert>}
+            <TextField
+              fullWidth
+              size="small"
+              label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setPasswordError(""); }}
+              onKeyDown={(e) => { if (e.key === "Enter") handleUnlockScanReceipts(); }}
+              autoFocus
+            />
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => router.push("/")}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              fullWidth
+              onClick={handleUnlockScanReceipts}
+              sx={{ backgroundColor: "#ec4899", "&:hover": { backgroundColor: "#db2777" } }}
+            >
+              Unlock
+            </Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    );
   }
 
   return (
