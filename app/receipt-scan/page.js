@@ -62,6 +62,7 @@ export default function ReceiptScanPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [aiModel, setAiModel] = useState("claude");
   const fileInputRef = useRef(null);
 
   // Step 1 - Capture
@@ -75,16 +76,9 @@ export default function ReceiptScanPage() {
   const [formData, setFormData] = useState({
     receiptId: null,
     documentType: "OTHER",
-    vendorName: "",
-    receiptDate: "",
-    taxAmount: 0,
-    totalAmount: 0,
-    lineItems: [],
-    notes: "",
     cabId: null,
     ownerId: null,
     accountCustomerId: null,
-    shiftType: null,
   });
 
   // Cabs and Owners/Drivers
@@ -115,6 +109,9 @@ export default function ReceiptScanPage() {
   // Image viewer
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [selectedReceiptImage, setSelectedReceiptImage] = useState(null);
+
+  // JSON Viewer
+  const [showJSONViewer, setShowJSONViewer] = useState(false);
 
   // Inline editing
   const [selectedReceipts, setSelectedReceipts] = useState(new Set());
@@ -873,8 +870,8 @@ export default function ReceiptScanPage() {
       formDataObj.append("image", selectedImage);
       console.log("📦 FormData prepared with image");
 
-      console.log("🌐 Sending to backend: POST /api/receipts/analyze");
-      const response = await tenantFetch("/api/receipts/analyze", {
+      console.log(`🌐 Sending to backend: POST /api/receipts/analyze?model=${aiModel}`);
+      const response = await tenantFetch(`/api/receipts/analyze?model=${aiModel}`, {
         method: "POST",
         body: formDataObj,
       });
@@ -895,32 +892,18 @@ export default function ReceiptScanPage() {
       const data = await response.json();
       console.log("✅ Analysis successful:", {
         receiptId: data.receiptId,
-        documentType: data.documentType,
-        vendorName: data.vendorName,
-        totalAmount: data.totalAmount,
-        lineItemsCount: data.lineItems?.length || 0,
+        classifiedType: data.classifiedType,
+        itemsCount: data.rawJsonData?.items?.length || 0,
       });
 
       setReceiptData(data);
 
-      // Build notes with account number if extracted
-      let notesText = "";
-      if (data.accountNumber) {
-        notesText = `Account #: ${data.accountNumber}`;
-        console.log("💳 Account number extracted:", data.accountNumber);
-      }
-
       setFormData({
         receiptId: data.receiptId,
-        documentType: data.documentType || "OTHER",
-        vendorName: data.vendorName || "",
-        receiptDate: data.receiptDate || "",
-        taxAmount: data.taxAmount || 0,
-        totalAmount: data.totalAmount || 0,
-        lineItems: data.lineItems || [],
-        notes: notesText,
+        documentType: data.classifiedType || data.documentType || "OTHER",
         cabId: null,
         ownerId: null,
+        accountCustomerId: null,
       });
 
       setStep(2); // Move to review step
@@ -951,27 +934,15 @@ export default function ReceiptScanPage() {
     });
   };
 
-  // Handle line item change
-  const handleLineItemChange = (index, field, value) => {
-    const updatedItems = [...formData.lineItems];
-    updatedItems[index] = {
-      ...updatedItems[index],
-      [field]: value,
-    };
-    handleFormChange("lineItems", updatedItems);
-  };
-
   // Confirm and save receipt
   const handleConfirmReceipt = async () => {
     console.log("💾 Starting receipt confirmation");
     console.log("📋 Form data:", {
       receiptId: formData.receiptId,
       documentType: formData.documentType,
-      vendorName: formData.vendorName,
-      receiptDate: formData.receiptDate,
-      totalAmount: formData.totalAmount,
-      taxAmount: formData.taxAmount,
-      lineItemsCount: formData.lineItems?.length || 0,
+      cabId: formData.cabId,
+      ownerId: formData.ownerId,
+      accountCustomerId: formData.accountCustomerId,
     });
 
     setLoading(true);
@@ -1004,7 +975,9 @@ export default function ReceiptScanPage() {
 
       setSnackbar({
         open: true,
-        message: "Receipt saved successfully!",
+        message: responseData.accountChargeId
+          ? `Receipt saved! Account charge #${responseData.accountChargeId} created.`
+          : "Receipt saved successfully!",
         severity: "success",
       });
 
@@ -1027,6 +1000,12 @@ export default function ReceiptScanPage() {
           ownerId: null,
           accountCustomerId: null,
           shiftType: null,
+          fareAmount: 0,
+          tipAmount: 0,
+          pickupAddress: "",
+          dropoffAddress: "",
+          passengerName: "",
+          startTime: "",
         });
       }, 2000);
     } catch (err) {
@@ -1606,6 +1585,42 @@ export default function ReceiptScanPage() {
                 Take or Upload a Receipt Photo
               </Typography>
 
+              <Box sx={{ mb: 4, p: 2, backgroundColor: "#f5f5f5", borderRadius: 1 }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, color: "#333" }}>
+                  📊 Select AI Model for Analysis:
+                </Typography>
+                <Box sx={{ display: "flex", gap: 3, justifyContent: "center", flexWrap: "wrap" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <input
+                      type="radio"
+                      id="claude-model"
+                      name="model"
+                      value="claude"
+                      checked={aiModel === "claude"}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <label htmlFor="claude-model" style={{ cursor: "pointer", margin: 0 }}>
+                      ✓ Claude (Recommended)
+                    </label>
+                  </Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1, opacity: 0.7 }}>
+                    <input
+                      type="radio"
+                      id="gemini-model"
+                      name="model"
+                      value="gemini"
+                      checked={aiModel === "gemini"}
+                      onChange={(e) => setAiModel(e.target.value)}
+                      style={{ cursor: "pointer" }}
+                    />
+                    <label htmlFor="gemini-model" style={{ cursor: "pointer", margin: 0 }}>
+                      Gemini (Has rate limits)
+                    </label>
+                  </Box>
+                </Box>
+              </Box>
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1713,6 +1728,163 @@ export default function ReceiptScanPage() {
                 Receipt Detected
               </Typography>
 
+              {/* Display Header Summary */}
+              {receiptData?.rawJsonData?.header && Object.keys(receiptData.rawJsonData.header).length > 0 && (
+                <Box sx={{ mb: 4, p: 2, backgroundColor: "#f0f7ff", borderRadius: 1, border: "1px solid #90caf9" }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, color: "#1976d2", fontWeight: "bold" }}>
+                    📄 Document Header
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {Object.entries(receiptData.rawJsonData.header).map(([key, value]) => (
+                      <Grid item xs={12} sm={6} key={key}>
+                        <Box sx={{ p: 1.5, backgroundColor: "#fff", borderRadius: 0.5, border: "1px solid #e3f2fd" }}>
+                          <Typography variant="caption" sx={{ color: "#666", display: "block", fontWeight: "bold" }}>
+                            {key.replace(/_/g, " ").toUpperCase()}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: "#333", fontWeight: "500", mt: 0.5 }}>
+                            {value === null ? "—" : String(value)}
+                          </Typography>
+                        </Box>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+              )}
+
+              {/* Display Items Table */}
+              {receiptData?.rawJsonData?.items && receiptData.rawJsonData.items.length > 0 && (
+                <Box sx={{ mb: 4, p: 2, backgroundColor: "#f5f5f5", borderRadius: 1, border: "1px solid #ddd" }}>
+                  <Typography variant="subtitle2" sx={{ mb: 2, color: "#333", fontWeight: "bold" }}>
+                    📋 Line Items ({receiptData.rawJsonData.items.length} rows)
+                  </Typography>
+                  <TableContainer sx={{ borderRadius: 1, border: "1px solid #ddd" }}>
+                    <Table size="small" sx={{ backgroundColor: "#fff" }}>
+                      <TableHead>
+                        <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                          {receiptData.rawJsonData.items.length > 0 &&
+                            Object.keys(receiptData.rawJsonData.items[0]).map((key) => (
+                              <TableCell key={key} sx={{ fontWeight: "bold", color: "#1976d2", fontSize: "12px" }}>
+                                {key.replace(/_/g, " ")}
+                              </TableCell>
+                            ))
+                          }
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {receiptData.rawJsonData.items.map((item, idx) => (
+                          <TableRow key={idx} sx={{ "&:nth-of-type(odd)": { backgroundColor: "#fafafa" } }}>
+                            {Object.entries(item).map(([key, value]) => (
+                              <TableCell key={key} sx={{ fontSize: "12px", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {value === null ? "—" : String(value)}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </Box>
+              )}
+
+              {/* JSON Viewer Panel */}
+              {receiptData?.rawJsonData && (
+              <Box sx={{ mb: 4, backgroundColor: "#f5f5f5", borderRadius: 1, border: "1px solid #ddd", overflow: "hidden" }}>
+                <Box
+                  sx={{
+                    p: 2,
+                    backgroundColor: "#2d2d2d",
+                    color: "#fff",
+                    cursor: "pointer",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 1,
+                    "&:hover": { backgroundColor: "#1a1a1a" }
+                  }}
+                  onClick={() => setShowJSONViewer(!showJSONViewer)}
+                >
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                    <span style={{ fontSize: "18px" }}>{ "{}" }</span>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: "bold" }}>
+                        Raw JSON Output
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#aaa" }}>
+                        {receiptData?.rawJsonData?.items?.length || 0} items • {Object.keys(receiptData?.rawJsonData?.header || {}).length} header fields
+                      </Typography>
+                    </Box>
+                    {receiptData?.classifiedType && (
+                      <Chip
+                        label={`Type: ${receiptData.classifiedType}`}
+                        size="small"
+                        color={receiptData.classifiedType === "UNMATCHED" ? "warning" : "success"}
+                        sx={{ ml: "auto" }}
+                      />
+                    )}
+                  </Box>
+                  <Box sx={{ display: "flex", gap: 1 }}>
+                    <Button
+                      size="small"
+                      sx={{ color: "#fff", textTransform: "none", minWidth: "auto", fontSize: "12px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const jsonStr = JSON.stringify(receiptData.rawJsonData, null, 2);
+                        navigator.clipboard.writeText(jsonStr);
+                        setSnackbar({ open: true, message: "✓ JSON copied to clipboard", severity: "success" });
+                      }}
+                    >
+                      📋 Copy
+                    </Button>
+                    <Button
+                      size="small"
+                      sx={{ color: "#fff", textTransform: "none", minWidth: "auto", fontSize: "12px" }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const jsonStr = JSON.stringify(receiptData.rawJsonData, null, 2);
+                        const blob = new Blob([jsonStr], { type: "application/json" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `receipt-${formData.receiptId || "new"}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      ⬇️ Download
+                    </Button>
+                  </Box>
+                </Box>
+                {showJSONViewer && (
+                  <Box
+                    sx={{
+                      p: 2,
+                      backgroundColor: "#1e1e1e",
+                      maxHeight: "600px",
+                      overflowY: "auto",
+                      fontFamily: "'Monaco', 'Menlo', 'Ubuntu Mono', monospace",
+                      fontSize: "11px",
+                      lineHeight: "1.5",
+                      color: "#d4d4d4",
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      border: "1px solid #444"
+                    }}
+                  >
+                    <code style={{ color: "#d4d4d4" }}>
+                      {JSON.stringify(receiptData.rawJsonData, null, 2)}
+                    </code>
+                  </Box>
+                )}
+              </Box>
+              )}
+
+              {formData.documentType === "UNMATCHED" && (
+                <Alert severity="warning" sx={{ mb: 3 }}>
+                  Could not identify receipt type. Please select the correct type below before saving.
+                </Alert>
+              )}
+
               <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth>
@@ -1730,103 +1902,9 @@ export default function ReceiptScanPage() {
                       <MenuItem value="AIRPORT_FEE">Airport Fee</MenuItem>
                       <MenuItem value="MEAL">Meal</MenuItem>
                       <MenuItem value="OTHER">Other</MenuItem>
+                      <MenuItem value="UNMATCHED">⚠ Unmatched (please select type)</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Shift Type</InputLabel>
-                    <Select
-                      value={formData.shiftType || ""}
-                      onChange={(e) => handleFormChange("shiftType", e.target.value || null)}
-                      label="Shift Type"
-                    >
-                      <MenuItem value="">
-                        <em>Select shift type...</em>
-                      </MenuItem>
-                      <MenuItem value="DAY">Day</MenuItem>
-                      <MenuItem value="NIGHT">Night</MenuItem>
-                      <MenuItem value="SINGLE">Single</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-
-                {formData.documentType === "ACCOUNT_CHARGE" ? (
-                  <Grid item xs={12} sm={6}>
-                    <Autocomplete
-                      options={accountCustomers}
-                      getOptionLabel={(option) => option?.companyName || ""}
-                      getOptionKey={(option) => `acct-${option?.id}`}
-                      value={accountCustomers.find((ac) => ac.id === formData.accountCustomerId) || null}
-                      onChange={(e, newValue) => {
-                        console.log("🏢 Account name selected:", newValue?.companyName);
-                        handleFormChange("accountCustomerId", newValue?.id || null);
-                      }}
-                      loading={accountCustomersLoading}
-                      noOptionsText="No accounts found"
-                      loadingText="Loading accounts..."
-                      openOnFocus
-                      clearOnBlur
-                      selectOnFocus
-                      filterOptions={(options, state) => {
-                        if (!state.inputValue) return options;
-                        return options.filter((option) =>
-                          option?.companyName?.toLowerCase().includes(state.inputValue.toLowerCase())
-                        );
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Account Name"
-                          placeholder="Search account..."
-                        />
-                      )}
-                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                    />
-                  </Grid>
-                ) : (
-                  <Grid item xs={12} sm={6}>
-                    <TextField
-                      fullWidth
-                      label="Vendor Name"
-                      value={formData.vendorName}
-                      onChange={(e) => handleFormChange("vendorName", e.target.value)}
-                    />
-                  </Grid>
-                )}
-
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Receipt Date"
-                    type="date"
-                    value={formData.receiptDate}
-                    onChange={(e) => handleFormChange("receiptDate", e.target.value)}
-                    InputLabelProps={{ shrink: true }}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Total Amount"
-                    type="number"
-                    value={formData.totalAmount}
-                    onChange={(e) => handleFormChange("totalAmount", parseFloat(e.target.value) || 0)}
-                    inputProps={{ step: "0.01" }}
-                  />
-                </Grid>
-
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Tax Amount"
-                    type="number"
-                    value={formData.taxAmount}
-                    onChange={(e) => handleFormChange("taxAmount", parseFloat(e.target.value) || 0)}
-                    inputProps={{ step: "0.01" }}
-                  />
                 </Grid>
 
                 <Grid item xs={12} sm={6}>
@@ -1909,82 +1987,41 @@ export default function ReceiptScanPage() {
                   )}
                 </Grid>
 
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Notes"
-                    value={formData.notes}
-                    onChange={(e) => handleFormChange("notes", e.target.value)}
-                    multiline
-                    rows={3}
-                    placeholder="Add any additional notes about this receipt..."
-                  />
-                </Grid>
+                {formData.documentType === "ACCOUNT_CHARGE" && (
+                  <Grid item xs={12} sm={6}>
+                    <Autocomplete
+                      options={accountCustomers}
+                      getOptionLabel={(option) => option?.companyName || ""}
+                      getOptionKey={(option) => `acct-${option?.id}`}
+                      value={accountCustomers.find((ac) => ac.id === formData.accountCustomerId) || null}
+                      onChange={(e, newValue) => {
+                        console.log("🏢 Account name selected:", newValue?.companyName);
+                        handleFormChange("accountCustomerId", newValue?.id || null);
+                      }}
+                      loading={accountCustomersLoading}
+                      noOptionsText="No accounts found"
+                      loadingText="Loading accounts..."
+                      openOnFocus
+                      clearOnBlur
+                      selectOnFocus
+                      filterOptions={(options, state) => {
+                        if (!state.inputValue) return options;
+                        return options.filter((option) =>
+                          option?.companyName?.toLowerCase().includes(state.inputValue.toLowerCase())
+                        );
+                      }}
+                      renderInput={(params) => (
+                        <TextField
+                          {...params}
+                          label="Account Name"
+                          placeholder="Search account..."
+                        />
+                      )}
+                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                    />
+                  </Grid>
+                )}
               </Grid>
-
-              {/* Line Items Table */}
-              {formData.lineItems && formData.lineItems.length > 0 && (
-                <Box sx={{ mb: 4 }}>
-                  <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: "bold", color: "#193366" }}>
-                    Line Items
-                  </Typography>
-                  <TableContainer component={Paper} variant="outlined">
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow sx={{ backgroundColor: "#f5f5f5" }}>
-                          <TableCell>Description</TableCell>
-                          <TableCell align="right">Qty</TableCell>
-                          <TableCell align="right">Unit Price</TableCell>
-                          <TableCell align="right">Total</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {formData.lineItems.map((item, idx) => (
-                          <TableRow key={idx}>
-                            <TableCell>
-                              <TextField
-                                size="small"
-                                value={item.description || ""}
-                                onChange={(e) => handleLineItemChange(idx, "description", e.target.value)}
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={item.quantity || 0}
-                                onChange={(e) => handleLineItemChange(idx, "quantity", parseFloat(e.target.value) || 0)}
-                                inputProps={{ step: "0.01" }}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={item.unitPrice || 0}
-                                onChange={(e) => handleLineItemChange(idx, "unitPrice", parseFloat(e.target.value) || 0)}
-                                inputProps={{ step: "0.01" }}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                            <TableCell align="right">
-                              <TextField
-                                size="small"
-                                type="number"
-                                value={item.total || 0}
-                                onChange={(e) => handleLineItemChange(idx, "total", parseFloat(e.target.value) || 0)}
-                                inputProps={{ step: "0.01" }}
-                                sx={{ width: 80 }}
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              )}
 
               {/* Action Buttons */}
               <Box sx={{ display: "flex", gap: 2, justifyContent: "space-between" }}>
