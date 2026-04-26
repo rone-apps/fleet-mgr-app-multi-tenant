@@ -78,7 +78,7 @@ export default function ReceiptScanPage() {
     documentType: "OTHER",
     cabId: null,
     ownerId: null,
-    accountCustomerId: null,
+    shiftType: null,
   });
 
   // Cabs and Owners/Drivers
@@ -99,9 +99,7 @@ export default function ReceiptScanPage() {
     startDate: "",
     endDate: "",
     cabId: "",
-    shiftId: "",
     ownerId: "",
-    vendorName: "",
     documentType: "",
   });
   const [showHistory, setShowHistory] = useState(false);
@@ -109,6 +107,11 @@ export default function ReceiptScanPage() {
   // Image viewer
   const [imageViewerOpen, setImageViewerOpen] = useState(false);
   const [selectedReceiptImage, setSelectedReceiptImage] = useState(null);
+
+  // Email dialog
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailData, setEmailData] = useState({ recipientEmail: "", subject: "Receipt", message: "" });
+  const [emailSending, setEmailSending] = useState(false);
 
   // JSON Viewer
   const [showJSONViewer, setShowJSONViewer] = useState(false);
@@ -129,6 +132,48 @@ export default function ReceiptScanPage() {
     console.log("❌ Closing image viewer");
     setImageViewerOpen(false);
     setSelectedReceiptImage(null);
+  };
+
+  const handleSendEmail = async () => {
+    if (!emailData.recipientEmail || !selectedReceiptImage) {
+      setSnackbar({ open: true, message: "Please enter a recipient email", severity: "error" });
+      return;
+    }
+
+    setEmailSending(true);
+    try {
+      const payload = {
+        recipientEmail: emailData.recipientEmail,
+        subject: emailData.subject || "Receipt",
+        message: emailData.message,
+        receiptId: selectedReceiptImage.id,
+        imageData: selectedReceiptImage.imageData,
+      };
+
+      const response = await tenantFetch("/api/receipts/send-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        setSnackbar({ open: true, message: "Email sent successfully!", severity: "success" });
+        setEmailDialogOpen(false);
+        setEmailData({ recipientEmail: "", subject: "Receipt", message: "" });
+      } else {
+        try {
+          const errorData = await response.json();
+          setSnackbar({ open: true, message: errorData.error || "Failed to send email", severity: "error" });
+        } catch (e) {
+          setSnackbar({ open: true, message: "Failed to send email", severity: "error" });
+        }
+      }
+    } catch (err) {
+      console.error("❌ Email error:", err);
+      setSnackbar({ open: true, message: "Error sending email", severity: "error" });
+    } finally {
+      setEmailSending(false);
+    }
   };
 
   // Fetch receipts on component mount, when filters change, or when history view is toggled
@@ -373,17 +418,10 @@ export default function ReceiptScanPage() {
     try {
       const updateData = {
         receiptId,
-        documentType: editData.documentType || receipt.documentType,
-        vendorName: editData.vendorName || receipt.vendorName,
-        accountCustomerId: editData.accountCustomerId || receipt.accountCustomerId,
-        cabId: editData.cabId || null,
-        ownerId: editData.ownerId || null,
-        shiftType: editData.shiftType || receipt.shiftType || null,
-        notes: editData.notes ? `${receipt.notes || ""}\n[Updated] ${editData.notes} - ${user?.name || "User"}` : receipt.notes,
-        receiptDate: receipt.receiptDate,
-        taxAmount: receipt.taxAmount,
-        totalAmount: receipt.totalAmount,
-        lineItems: [],
+        documentType: editData.receiptType || receipt.receiptType || "OTHER",
+        cabId: editData.cabId !== undefined ? editData.cabId : receipt.cabId,
+        ownerId: editData.ownerId !== undefined ? editData.ownerId : receipt.ownerId,
+        shiftType: editData.shiftType !== undefined ? editData.shiftType : receipt.shiftType,
       };
 
       const response = await tenantFetch("/api/receipts/confirm", {
@@ -903,7 +941,7 @@ export default function ReceiptScanPage() {
         documentType: data.classifiedType || data.documentType || "OTHER",
         cabId: null,
         ownerId: null,
-        accountCustomerId: null,
+        shiftType: null,
       });
 
       setStep(2); // Move to review step
@@ -942,7 +980,7 @@ export default function ReceiptScanPage() {
       documentType: formData.documentType,
       cabId: formData.cabId,
       ownerId: formData.ownerId,
-      accountCustomerId: formData.accountCustomerId,
+      shiftType: formData.shiftType,
     });
 
     setLoading(true);
@@ -1218,11 +1256,26 @@ export default function ReceiptScanPage() {
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
-                  <TextField
-                    label="Vendor Name"
-                    value={filters.vendorName}
-                    onChange={(e) => handleFilterChange("vendorName", e.target.value)}
-                    fullWidth
+                  <Autocomplete
+                    options={owners}
+                    getOptionLabel={(option) => `${option.firstName} ${option.lastName}`}
+                    getOptionKey={(option) => `owner-${option.id}`}
+                    value={owners.find(o => o.id === parseInt(filters.ownerId)) || null}
+                    onChange={(e, value) => handleFilterChange("ownerId", value?.id || "")}
+                    loading={ownersLoading}
+                    noOptionsText="No drivers found"
+                    loadingText="Loading drivers..."
+                    openOnFocus
+                    clearOnBlur
+                    selectOnFocus
+                    renderInput={(params) => (
+                      <TextField
+                        {...params}
+                        label="Driver Name"
+                        placeholder="Search driver..."
+                      />
+                    )}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={3}>
@@ -1359,17 +1412,17 @@ export default function ReceiptScanPage() {
                             </TableCell>
                           )}
                           <TableCell><strong>ID</strong></TableCell>
-                        <TableCell><strong>Vendor/Account</strong></TableCell>
-                        <TableCell><strong>Shift</strong></TableCell>
-                        <TableCell><strong>Date</strong></TableCell>
-                        <TableCell align="right"><strong>Amount</strong></TableCell>
-                        <TableCell><strong>Cab</strong></TableCell>
-                        <TableCell><strong>Driver</strong></TableCell>
-                        <TableCell><strong>Status</strong></TableCell>
-                        <TableCell align="center"><strong>Image</strong></TableCell>
-                        <TableCell align="center"><strong>Actions</strong></TableCell>
-                      </TableRow>
-                    </TableHead>
+                          <TableCell><strong>Receipt Type</strong></TableCell>
+                          <TableCell><strong>Cab</strong></TableCell>
+                          <TableCell><strong>Driver</strong></TableCell>
+                          <TableCell><strong>Shift</strong></TableCell>
+                          <TableCell><strong>Created At</strong></TableCell>
+                          <TableCell><strong>Updated At</strong></TableCell>
+                          <TableCell><strong>Updated By</strong></TableCell>
+                          <TableCell align="center"><strong>Image</strong></TableCell>
+                          <TableCell align="center"><strong>Actions</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
                     <TableBody>
                       {receipts.map((receipt) => {
                         const isEditing = editingRows.has(receipt.id);
@@ -1391,67 +1444,41 @@ export default function ReceiptScanPage() {
                             <TableCell>#{receipt.id}</TableCell>
                             <TableCell>
                               {isEditing ? (
-                                editData.documentType === "ACCOUNT_CHARGE" ? (
-                                  <Autocomplete
-                                    size="small"
-                                    options={accountCustomers}
-                                    getOptionLabel={(option) => option.companyName || ""}
-                                    value={accountCustomers.find(a => a.id === editData.accountCustomerId) || null}
-                                    onChange={(e, value) => handleRowEditChange(receipt.id, "accountCustomerId", value?.id || null)}
-                                    renderInput={(params) => <TextField {...params} placeholder="Account" />}
-                                    sx={{ minWidth: 150 }}
-                                  />
-                                ) : (
-                                  <TextField
-                                    size="small"
-                                    value={editData.vendorName || ""}
-                                    onChange={(e) => handleRowEditChange(receipt.id, "vendorName", e.target.value)}
-                                    placeholder="Vendor name"
-                                    fullWidth
-                                  />
-                                )
+                                <FormControl size="small" sx={{ minWidth: 120 }}>
+                                  <Select
+                                    value={editData.receiptType || receipt.receiptType || "OTHER"}
+                                    onChange={(e) => handleRowEditChange(receipt.id, "receiptType", e.target.value)}
+                                  >
+                                    <MenuItem value="GAS_RECEIPT">Gas Receipt</MenuItem>
+                                    <MenuItem value="PARKING">Parking</MenuItem>
+                                    <MenuItem value="MAINTENANCE">Maintenance</MenuItem>
+                                    <MenuItem value="BILL">Bill</MenuItem>
+                                    <MenuItem value="ACCOUNT_CHARGE">Account Charge</MenuItem>
+                                    <MenuItem value="AIRPORT_FEE">Airport Fee</MenuItem>
+                                    <MenuItem value="MEAL">Meal</MenuItem>
+                                    <MenuItem value="OTHER">Other</MenuItem>
+                                    <MenuItem value="UNMATCHED">Unmatched</MenuItem>
+                                  </Select>
+                                </FormControl>
                               ) : (
-                                receipt.documentType === "ACCOUNT_CHARGE"
-                                  ? receipt.accountName || "-"
-                                  : receipt.vendorName || "-"
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {isEditing ? (
-                                <Select
+                                <Chip
+                                  label={receipt.receiptType || "OTHER"}
                                   size="small"
-                                  value={editData.shiftType || ""}
-                                  onChange={(e) => handleRowEditChange(receipt.id, "shiftType", e.target.value)}
-                                  sx={{ minWidth: 100 }}
-                                >
-                                  <MenuItem value="">None</MenuItem>
-                                  <MenuItem value="Day">Day</MenuItem>
-                                  <MenuItem value="Night">Night</MenuItem>
-                                  <MenuItem value="Single">Single</MenuItem>
-                                </Select>
-                              ) : (
-                                receipt.shiftType ? (
-                                  <Chip
-                                    label={receipt.shiftType}
-                                    size="small"
-                                    variant="outlined"
-                                  />
-                                ) : (
-                                  "-"
-                                )
+                                  variant="outlined"
+                                />
                               )}
                             </TableCell>
-                            <TableCell>{receipt.receiptDate || "-"}</TableCell>
-                            <TableCell align="right">${receipt.totalAmount || "0.00"}</TableCell>
                             <TableCell>
                               {isEditing ? (
                                 <Autocomplete
                                   size="small"
                                   options={cabs}
                                   getOptionLabel={(option) => option.cabNumber || ""}
-                                  value={cabs.find(c => c.id === editData.cabId) || null}
+                                  getOptionKey={(option) => `cab-${option.id}`}
+                                  value={cabs.find(c => c.id === (editData.cabId !== undefined ? editData.cabId : receipt.cabId)) || null}
                                   onChange={(e, value) => handleRowEditChange(receipt.id, "cabId", value?.id || null)}
                                   renderInput={(params) => <TextField {...params} placeholder="Cab" />}
+                                  isOptionEqualToValue={(option, value) => option?.id === value?.id}
                                   sx={{ minWidth: 100 }}
                                 />
                               ) : (
@@ -1464,9 +1491,11 @@ export default function ReceiptScanPage() {
                                   size="small"
                                   options={owners}
                                   getOptionLabel={(option) => `${option.firstName} ${option.lastName}`}
-                                  value={owners.find(o => o.id === editData.ownerId) || null}
+                                  getOptionKey={(option) => `owner-${option.id}`}
+                                  value={owners.find(o => o.id === (editData.ownerId !== undefined ? editData.ownerId : receipt.ownerId)) || null}
                                   onChange={(e, value) => handleRowEditChange(receipt.id, "ownerId", value?.id || null)}
                                   renderInput={(params) => <TextField {...params} placeholder="Driver" />}
+                                  isOptionEqualToValue={(option, value) => option?.id === value?.id}
                                   sx={{ minWidth: 120 }}
                                 />
                               ) : (
@@ -1474,12 +1503,34 @@ export default function ReceiptScanPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <Chip
-                                label={receipt.status}
-                                size="small"
-                                color={receipt.status === "CONFIRMED" ? "success" : "default"}
-                                variant="outlined"
-                              />
+                              {isEditing ? (
+                                <FormControl size="small" sx={{ minWidth: 90 }}>
+                                  <Select
+                                    value={editData.shiftType !== undefined ? editData.shiftType : (receipt.shiftType || "")}
+                                    onChange={(e) => handleRowEditChange(receipt.id, "shiftType", e.target.value || null)}
+                                  >
+                                    <MenuItem value="">None</MenuItem>
+                                    <MenuItem value="DAY">Day</MenuItem>
+                                    <MenuItem value="NIGHT">Night</MenuItem>
+                                    <MenuItem value="SINGLE">Single</MenuItem>
+                                  </Select>
+                                </FormControl>
+                              ) : (
+                                receipt.shiftType ? (
+                                  <Chip label={receipt.shiftType} size="small" variant="outlined" />
+                                ) : (
+                                  "-"
+                                )
+                              )}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: "0.85rem" }}>
+                              {receipt.createdAt ? new Date(receipt.createdAt).toLocaleDateString() + " " + new Date(receipt.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: "0.85rem" }}>
+                              {receipt.updatedAt ? new Date(receipt.updatedAt).toLocaleDateString() + " " + new Date(receipt.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "-"}
+                            </TableCell>
+                            <TableCell sx={{ fontSize: "0.85rem" }}>
+                              {receipt.updatedBy || "-"}
                             </TableCell>
                             <TableCell align="center">
                               {receipt.imageData ? (
@@ -1888,11 +1939,11 @@ export default function ReceiptScanPage() {
               <Grid container spacing={3} sx={{ mb: 4 }}>
                 <Grid item xs={12} sm={6}>
                   <FormControl fullWidth>
-                    <InputLabel>Document Type</InputLabel>
+                    <InputLabel>Receipt Type</InputLabel>
                     <Select
                       value={formData.documentType}
                       onChange={(e) => handleFormChange("documentType", e.target.value)}
-                      label="Document Type"
+                      label="Receipt Type"
                     >
                       <MenuItem value="GAS_RECEIPT">Gas Receipt</MenuItem>
                       <MenuItem value="PARKING">Parking</MenuItem>
@@ -1946,7 +1997,7 @@ export default function ReceiptScanPage() {
                     <TextField
                       disabled
                       fullWidth
-                      label="Driver / Owner"
+                      label="Driver"
                       value={`${user.firstName} ${user.lastName}`}
                       helperText="Logged in as this driver"
                     />
@@ -1977,7 +2028,7 @@ export default function ReceiptScanPage() {
                       renderInput={(params) => (
                         <TextField
                           {...params}
-                          label="Driver / Owner"
+                          label="Driver"
                           placeholder="Search driver name..."
                           helperText={owners.length === 0 && !ownersLoading ? "No drivers available" : ""}
                         />
@@ -1987,40 +2038,23 @@ export default function ReceiptScanPage() {
                   )}
                 </Grid>
 
-                {formData.documentType === "ACCOUNT_CHARGE" && (
-                  <Grid item xs={12} sm={6}>
-                    <Autocomplete
-                      options={accountCustomers}
-                      getOptionLabel={(option) => option?.companyName || ""}
-                      getOptionKey={(option) => `acct-${option?.id}`}
-                      value={accountCustomers.find((ac) => ac.id === formData.accountCustomerId) || null}
-                      onChange={(e, newValue) => {
-                        console.log("🏢 Account name selected:", newValue?.companyName);
-                        handleFormChange("accountCustomerId", newValue?.id || null);
-                      }}
-                      loading={accountCustomersLoading}
-                      noOptionsText="No accounts found"
-                      loadingText="Loading accounts..."
-                      openOnFocus
-                      clearOnBlur
-                      selectOnFocus
-                      filterOptions={(options, state) => {
-                        if (!state.inputValue) return options;
-                        return options.filter((option) =>
-                          option?.companyName?.toLowerCase().includes(state.inputValue.toLowerCase())
-                        );
-                      }}
-                      renderInput={(params) => (
-                        <TextField
-                          {...params}
-                          label="Account Name"
-                          placeholder="Search account..."
-                        />
-                      )}
-                      isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                    />
-                  </Grid>
-                )}
+                <Grid item xs={12} sm={6}>
+                  <FormControl fullWidth>
+                    <InputLabel>Shift</InputLabel>
+                    <Select
+                      value={formData.shiftType || ""}
+                      onChange={(e) => handleFormChange("shiftType", e.target.value || null)}
+                      label="Shift"
+                    >
+                      <MenuItem value="">
+                        <em>Select shift type...</em>
+                      </MenuItem>
+                      <MenuItem value="DAY">Day</MenuItem>
+                      <MenuItem value="NIGHT">Night</MenuItem>
+                      <MenuItem value="SINGLE">Single</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
               </Grid>
 
               {/* Action Buttons */}
@@ -2108,6 +2142,76 @@ export default function ReceiptScanPage() {
         </DialogActions>
       </Dialog>
 
+      {/* Email Dialog */}
+      <Dialog
+        open={emailDialogOpen}
+        onClose={() => !emailSending && setEmailDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            backgroundColor: '#f5f5f5'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, pb: 1 }}>
+          📧 Send Receipt via Email
+        </DialogTitle>
+        <DialogContent sx={{ py: 3 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <TextField
+              autoFocus
+              label="Recipient Email"
+              type="email"
+              value={emailData.recipientEmail}
+              onChange={(e) => setEmailData({ ...emailData, recipientEmail: e.target.value })}
+              fullWidth
+              placeholder="recipient@example.com"
+              disabled={emailSending}
+            />
+            <TextField
+              label="Subject"
+              value={emailData.subject}
+              onChange={(e) => setEmailData({ ...emailData, subject: e.target.value })}
+              fullWidth
+              placeholder="Receipt"
+              disabled={emailSending}
+            />
+            <TextField
+              label="Message / Note"
+              value={emailData.message}
+              onChange={(e) => setEmailData({ ...emailData, message: e.target.value })}
+              fullWidth
+              multiline
+              rows={4}
+              placeholder="Add a note (optional)..."
+              disabled={emailSending}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 2, gap: 1 }}>
+          <Button
+            onClick={() => setEmailDialogOpen(false)}
+            disabled={emailSending}
+            sx={{ color: '#999' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSendEmail}
+            disabled={emailSending || !emailData.recipientEmail}
+            variant="contained"
+            sx={{
+              backgroundColor: '#2196f3',
+              '&:hover': { backgroundColor: '#1976d2' }
+            }}
+          >
+            {emailSending ? "Sending..." : "Send Email"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Image Viewer Dialog */}
       <Dialog
         open={imageViewerOpen}
@@ -2154,7 +2258,36 @@ export default function ReceiptScanPage() {
             <Typography sx={{ color: '#999' }}>No image available</Typography>
           )}
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
+        <DialogActions sx={{ p: 2, display: 'flex', gap: 1 }}>
+          <Button
+            onClick={() => {
+              if (selectedReceiptImage && selectedReceiptImage.imageData) {
+                const link = document.createElement('a');
+                link.href = selectedReceiptImage.imageData;
+                link.download = `receipt-${selectedReceiptImage.id}.jpg`;
+                link.click();
+              }
+            }}
+            variant="outlined"
+            sx={{
+              color: '#4caf50',
+              borderColor: '#4caf50',
+              '&:hover': { backgroundColor: '#f0f7f0' }
+            }}
+          >
+            ⬇️ Download
+          </Button>
+          <Button
+            onClick={() => setEmailDialogOpen(true)}
+            variant="outlined"
+            sx={{
+              color: '#2196f3',
+              borderColor: '#2196f3',
+              '&:hover': { backgroundColor: '#f0f7ff' }
+            }}
+          >
+            📧 Email
+          </Button>
           <Button
             onClick={handleCloseImageViewer}
             variant="contained"
