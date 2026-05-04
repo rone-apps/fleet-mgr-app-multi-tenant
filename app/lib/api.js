@@ -16,6 +16,9 @@ export const REPORT_TIMEOUT = 900000; // 15 minutes (900 seconds)
 // Extended timeout for comprehensive reports with all details
 export const COMPREHENSIVE_REPORT_TIMEOUT = 1200000; // 20 minutes (1200 seconds)
 
+// Extended timeout for PDF processing (receipt scanning and multi-page analysis)
+export const PDF_PROCESSING_TIMEOUT = 900000; // 15 minutes (900 seconds) - allows Claude API time for multi-page PDFs
+
 /**
  * Get current tenant ID (display ID) from localStorage
  */

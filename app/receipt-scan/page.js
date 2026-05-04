@@ -17,7 +17,7 @@ import {
   CommuteOutlined, AutoAwesome, Business,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
-import { tenantFetch, getCurrentUser, getTenantName, logout, isAuthenticated } from "../lib/api";
+import { tenantFetch, getCurrentUser, getTenantName, logout, isAuthenticated, PDF_PROCESSING_TIMEOUT } from "../lib/api";
 
 export default function ReceiptScanPage() {
   const router = useRouter();
@@ -335,7 +335,7 @@ export default function ReceiptScanPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(updateData),
-        });
+        }, PDF_PROCESSING_TIMEOUT);
 
         if (response.ok) {
           successCount++;
@@ -428,7 +428,7 @@ export default function ReceiptScanPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updateData),
-      });
+      }, PDF_PROCESSING_TIMEOUT);
 
       if (response.ok) {
         setSnackbar({ open: true, message: "Receipt updated successfully", severity: "success" });
@@ -814,14 +814,17 @@ export default function ReceiptScanPage() {
       lastModified: new Date(file.lastModified).toISOString(),
     });
 
+    // Check if file is PDF
+    const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
     // Check if file is HEIC format
     const isHeic = file.type.includes("heic") || file.type.includes("heif") ||
                    file.name.toLowerCase().endsWith(".heic") ||
                    file.name.toLowerCase().endsWith(".heif");
 
-    // Compress image if it's large OR if it's HEIC format
+    // Compress image if it's large OR if it's HEIC format (but skip for PDF)
     let fileToUse = file;
-    if (file.size > 2 * 1024 * 1024 || isHeic) {
+    if (!isPdf && (file.size > 2 * 1024 * 1024 || isHeic)) {
       if (isHeic) {
         console.log("📱 HEIC file detected - converting to JPEG...");
       } else {
@@ -830,18 +833,18 @@ export default function ReceiptScanPage() {
       fileToUse = await compressImage(file);
     }
 
-    // More lenient validation - just check file size
-    // HEIC will be automatically converted to JPEG
-    // Backend will validate the actual format
-    if (fileToUse.size > 10 * 1024 * 1024) {
+    // File size validation (30MB for PDF, 10MB for images)
+    const maxSize = isPdf ? 30 * 1024 * 1024 : 10 * 1024 * 1024;
+    if (fileToUse.size > maxSize) {
       console.warn("⚠️ File too large:", fileToUse.size);
-      setError("Image file must be smaller than 10MB");
+      const limitLabel = isPdf ? "30MB" : "10MB";
+      setError(`File must be smaller than ${limitLabel}`);
       return;
     }
 
     if (fileToUse.size === 0) {
       console.warn("⚠️ File is empty");
-      setError("File is empty. Please select a valid image.");
+      setError("File is empty. Please select a valid file.");
       return;
     }
 
@@ -849,18 +852,23 @@ export default function ReceiptScanPage() {
     setSelectedImage(fileToUse);
     setError("");
 
-    // Create preview
+    // Create preview (skip for PDFs)
     try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        console.log("📸 Preview generated");
-        setImagePreview(reader.result);
-      };
-      reader.onerror = () => {
-        console.error("❌ FileReader error:", reader.error);
-        setError("Failed to read file. Please try again.");
-      };
-      reader.readAsDataURL(fileToUse);
+      if (isPdf) {
+        console.log("📄 PDF file selected - skipping preview");
+        setImagePreview(null);
+      } else {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          console.log("📸 Preview generated");
+          setImagePreview(reader.result);
+        };
+        reader.onerror = () => {
+          console.error("❌ FileReader error:", reader.error);
+          setError("Failed to read file. Please try again.");
+        };
+        reader.readAsDataURL(fileToUse);
+      }
     } catch (err) {
       console.error("❌ Error reading file:", err);
       setError("Error reading file: " + err.message);
@@ -912,7 +920,7 @@ export default function ReceiptScanPage() {
       const response = await tenantFetch(`/api/receipts/analyze?model=${aiModel}`, {
         method: "POST",
         body: formDataObj,
-      });
+      }, PDF_PROCESSING_TIMEOUT);
 
       console.log("📨 Response received:", {
         status: response.status,
@@ -994,7 +1002,7 @@ export default function ReceiptScanPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(formData),
-      });
+      }, PDF_PROCESSING_TIMEOUT);
 
       console.log("📨 Confirm response received:", {
         status: response.status,
@@ -1003,21 +1011,44 @@ export default function ReceiptScanPage() {
 
       if (!response.ok) {
         console.error("❌ Confirm failed with status:", response.status);
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({}));
         console.error("Error details:", errorData);
+        if (errorData.errors && Array.isArray(errorData.errors)) {
+          throw new Error(errorData.errors.join(" | "));
+        }
         throw new Error(errorData.error || "Failed to save receipt");
       }
 
       const responseData = await response.json();
       console.log("✅ Receipt confirmed successfully:", responseData);
 
-      setSnackbar({
-        open: true,
-        message: responseData.accountChargeId
-          ? `Receipt saved! Account charge #${responseData.accountChargeId} created.`
-          : "Receipt saved successfully!",
-        severity: "success",
-      });
+      const cd = responseData.conversionDetails;
+      if (cd) {
+        if (cd.status === "DUPLICATE_SUMMARY") {
+          setSnackbar({
+            open: true,
+            message: cd.summary?.reason || "Duplicate WCB entry — delete the existing record and re-upload.",
+            severity: "warning",
+          });
+        } else {
+          const linesSaved = cd.lineItems?.saved ?? 0;
+          const total = cd.totalAmount ? ` · Total: $${parseFloat(cd.totalAmount).toFixed(2)}` : "";
+          const warning = cd.totalMismatchWarning ? ` ⚠️ ${cd.totalMismatchWarning}` : "";
+          setSnackbar({
+            open: true,
+            message: `WCB saved: ${linesSaved} line item${linesSaved !== 1 ? "s" : ""}, Payee: ${cd.payeeName || "—"}${total}${warning}`,
+            severity: cd.totalMismatchWarning ? "warning" : "success",
+          });
+        }
+      } else {
+        setSnackbar({
+          open: true,
+          message: responseData.accountChargeId
+            ? `Receipt saved! Account charge #${responseData.accountChargeId} created.`
+            : "Receipt saved successfully!",
+          severity: "success",
+        });
+      }
 
       // Reset form
       setTimeout(() => {
@@ -1675,6 +1706,7 @@ export default function ReceiptScanPage() {
               <input
                 ref={fileInputRef}
                 type="file"
+                accept="image/*,application/pdf"
                 onChange={handleInputChange}
                 onError={(e) => {
                   console.error("❌ File input error event:", e);
@@ -1711,22 +1743,34 @@ export default function ReceiptScanPage() {
                 </Button>
               </Box>
 
-              {imagePreview && (
+              {selectedImage && (
                 <Box sx={{ mt: 4 }}>
                   <Typography variant="subtitle2" sx={{ mb: 2, color: "#555" }}>
-                    Selected Image:
+                    Selected File:
                   </Typography>
-                  <Box
-                    component="img"
-                    src={imagePreview}
-                    sx={{
-                      maxWidth: "100%",
-                      maxHeight: 400,
-                      borderRadius: 1,
-                      mb: 3,
-                      border: "1px solid #ddd",
-                    }}
-                  />
+                  {imagePreview ? (
+                    <Box
+                      component="img"
+                      src={imagePreview}
+                      sx={{
+                        maxWidth: "100%",
+                        maxHeight: 400,
+                        borderRadius: 1,
+                        mb: 3,
+                        border: "1px solid #ddd",
+                      }}
+                    />
+                  ) : (
+                    <Box sx={{ p: 3, border: "1px dashed #ccc", borderRadius: 1, backgroundColor: "#f9f9f9", textAlign: "center", mb: 3 }}>
+                      <Typography sx={{ fontSize: 48, mb: 1 }}>📄</Typography>
+                      <Typography variant="body2" sx={{ color: "#555" }}>
+                        {selectedImage.name}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "#aaa" }}>
+                        {(selectedImage.size / 1024 / 1024).toFixed(2)} MB
+                      </Typography>
+                    </Box>
+                  )}
 
                   <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
                     <Button
@@ -1945,6 +1989,7 @@ export default function ReceiptScanPage() {
                       onChange={(e) => handleFormChange("documentType", e.target.value)}
                       label="Receipt Type"
                     >
+                      <MenuItem value="WCB_REMITTANCE">WCB Remittance</MenuItem>
                       <MenuItem value="GAS_RECEIPT">Gas Receipt</MenuItem>
                       <MenuItem value="PARKING">Parking</MenuItem>
                       <MenuItem value="MAINTENANCE">Maintenance</MenuItem>

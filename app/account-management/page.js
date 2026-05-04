@@ -16,6 +16,7 @@ import {
   Receipt as ReceiptIcon,
   Assignment as AllChargesIcon,
   Description as InvoiceIcon,
+  ReceiptLong as ReceiptLongIcon,
   Close as CloseIcon,
   ExpandMore as ExpandMoreIcon,
 } from "@mui/icons-material";
@@ -27,6 +28,7 @@ import {
   TripChargesTab,
   AllChargesTab,
   InvoicesTab,
+  WcbPaymentsTab,
   CustomerDialog,
   ChargeDialog,
   BulkEditConfirmDialog,
@@ -41,6 +43,7 @@ const accountCards = [
   { key: "tripCharges", label: "Trip Charges", description: "View and manage trip charges by customer", icon: ReceiptIcon, color: "#c62828" },
   { key: "allCharges", label: "All Charges", description: "Search and filter across all charge records", icon: AllChargesIcon, color: "#e65100" },
   { key: "invoices", label: "Invoices", description: "Generate, send, and manage customer invoices", icon: InvoiceIcon, color: "#2e7d32" },
+  { key: "wcb", label: "WCB Payments", description: "WCB remittance entries", icon: ReceiptLongIcon, color: "#6a1b9a" },
 ];
 
 export default function AccountManagementPage() {
@@ -433,6 +436,10 @@ export default function AccountManagementPage() {
                 handleOpenCancelInvoiceDialog={handleOpenCancelInvoiceDialog}
                 handleOpenRecordPaymentDialog={handleOpenRecordPaymentDialog}
               />
+            )}
+
+            {currentTab === "wcb" && (
+              <WcbPaymentsTab />
             )}
           </Paper>
         )}
