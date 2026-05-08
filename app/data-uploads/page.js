@@ -14,6 +14,7 @@ import {
   TableChart as ViewIcon,
   SwapHoriz as MapperIcon,
   Storage as DbMigrateIcon,
+  FileDownload as ExportIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser } from "../lib/api";
@@ -21,6 +22,7 @@ import UploadDataSection from "./components/UploadDataSection";
 import ViewDataSection from "./components/ViewDataSection";
 import DataMapperSection from "./components/DataMapperSection";
 import DbMigrationSection from "./components/DbMigrationSection";
+import DbExportSection from "./components/DbExportSection";
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -63,10 +65,10 @@ export default function DataUploadsPage() {
 
       <Box sx={{ p: 3 }}>
         <Typography variant="h4" sx={{ mb: 1, fontWeight: 700, color: "#1a1a2e" }}>
-          Data Management
+          Data Import/Export
         </Typography>
         <Typography variant="body1" sx={{ color: "#697386", mb: 3 }}>
-          Upload and manage credit card transactions, mileage records, and airport trip data.
+          Import & export data: CSV files, Excel, external databases, and third-party integrations.
         </Typography>
 
         {globalError && (
@@ -113,9 +115,16 @@ export default function DataUploadsPage() {
             <Tab
               icon={<DbMigrateIcon sx={{ fontSize: 20 }} />}
               iconPosition="start"
-              label="DB Migration"
+              label="DB Import"
               id="main-tab-3"
               aria-controls="main-tabpanel-3"
+            />
+            <Tab
+              icon={<ExportIcon sx={{ fontSize: 20 }} />}
+              iconPosition="start"
+              label="DB Export"
+              id="main-tab-4"
+              aria-controls="main-tabpanel-4"
             />
           </Tabs>
         </Paper>
@@ -132,6 +141,9 @@ export default function DataUploadsPage() {
         </TabPanel>
         <TabPanel value={mainTab} index={3}>
           <DbMigrationSection />
+        </TabPanel>
+        <TabPanel value={mainTab} index={4}>
+          <DbExportSection />
         </TabPanel>
       </Box>
     </Box>

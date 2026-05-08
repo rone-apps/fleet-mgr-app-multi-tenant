@@ -860,8 +860,8 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             accent: '#CE93D8'
           },
           {
-            title: 'Data Import',
-            description: 'Batch upload CSV, Excel & external data sources',
+            title: 'Data Import/Export',
+            description: 'Import & export data: CSV, Excel, external databases',
             icon: UploadFile,
             path: '/data-uploads',
             roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],

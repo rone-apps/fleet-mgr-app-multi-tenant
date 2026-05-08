@@ -124,6 +124,12 @@ export default function ReceiptScanPage() {
 
   const handleOpenImage = (receipt) => {
     console.log("📸 Opening image for receipt:", receipt.id);
+    console.log("📊 Receipt data:", {
+      id: receipt.id,
+      hasImageData: !!receipt.imageData,
+      imageDataLength: receipt.imageData ? receipt.imageData.length : 0,
+      imageDataPrefix: receipt.imageData ? receipt.imageData.substring(0, 50) : "null",
+    });
     setSelectedReceiptImage(receipt);
     setImageViewerOpen(true);
   };
@@ -2279,6 +2285,13 @@ export default function ReceiptScanPage() {
               <Box
                 component="img"
                 src={selectedReceiptImage.imageData}
+                alt={`Receipt ${selectedReceiptImage.id}`}
+                onError={(e) => {
+                  console.error("❌ Image failed to load:", e);
+                  console.log("Image src:", selectedReceiptImage.imageData?.substring(0, 100));
+                  e.target.style.display = 'none';
+                  e.target.parentElement.innerHTML = '<div style="padding: 40px; color: #e74c3c; background: #ffe5e5; border-radius: 8px; margin: 20px;">⚠️ Failed to load image. The image data may be corrupted or in an unsupported format.</div>';
+                }}
                 sx={{
                   maxWidth: '100%',
                   maxHeight: '600px',
@@ -2292,15 +2305,20 @@ export default function ReceiptScanPage() {
                   <strong>Receipt ID:</strong> #{selectedReceiptImage.id}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
-                  <strong>Vendor:</strong> {selectedReceiptImage.vendorName || "-"}
+                  <strong>Type:</strong> {selectedReceiptImage.receiptType || "-"}
+                </Typography>
+                <Typography variant="body2" sx={{ color: '#666', mb: 1 }}>
+                  <strong>Cab:</strong> {selectedReceiptImage.cabNumber || "-"}
                 </Typography>
                 <Typography variant="body2" sx={{ color: '#666' }}>
-                  <strong>Date:</strong> {selectedReceiptImage.receiptDate || "-"}
+                  <strong>Driver:</strong> {selectedReceiptImage.ownerName || "-"}
                 </Typography>
               </Box>
             </>
           ) : (
-            <Typography sx={{ color: '#999' }}>No image available</Typography>
+            <Alert severity="warning" sx={{ m: 2 }}>
+              No image data available for this receipt. The image may not have been saved properly during upload.
+            </Alert>
           )}
         </DialogContent>
         <DialogActions sx={{ p: 2, display: 'flex', gap: 1 }}>
