@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Script from "next/script";
 import {
   Box,
   Typography,
@@ -74,6 +75,11 @@ import {
   CommuteOutlined,
   Business,
   WavingHand,
+  Apartment,
+  MenuBook,
+  Support,
+  Article,
+  Code,
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
@@ -1065,6 +1071,84 @@ function MarketingLandingPage({ router }) {
   const green = '#0a9e6f';
   const cyan = '#00d4ff';
 
+  // Scroll to section handler for navigation links
+  const scrollToSection = useCallback((sectionId) => {
+    const element = document.getElementById(sectionId.toLowerCase());
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, []);
+
+  // Info dialog state
+  const [infoDialog, setInfoDialog] = useState({ open: false, title: '', content: '' });
+
+  const showInfoDialog = useCallback((title, content) => {
+    setInfoDialog({ open: true, title, content });
+  }, []);
+
+  const closeInfoDialog = useCallback(() => {
+    setInfoDialog({ open: false, title: '', content: '' });
+  }, []);
+
+  // Footer link handler with creative actions
+  const handleFooterLink = useCallback((category, item) => {
+    // Map footer links to actions
+    const linkMap = {
+      'Products': {
+        'AI Reconciliation': () => scrollToSection('products'),
+        'Analytics': () => scrollToSection('products'),
+        'Settlements': () => scrollToSection('products'),
+        'Fleet Intelligence': () => scrollToSection('products'),
+        'Integrations': () => scrollToSection('products'),
+      },
+      'Solutions': {
+        'Fleet Owners': () => scrollToSection('solutions'),
+        'Accountants': () => scrollToSection('solutions'),
+        'Dispatchers': () => scrollToSection('solutions'),
+        'Multi-fleet': () => scrollToSection('solutions'),
+        'Enterprise': () => scrollToSection('solutions'),
+      },
+      'Resources': {
+        'Documentation': () => showInfoDialog(
+          'Developer Documentation',
+          'Our comprehensive developer docs are launching soon! Get step-by-step guides on integrations, API usage, and best practices.\n\nSign up at info@smartfleets.ai for early access.'
+        ),
+        'Blog': () => showInfoDialog(
+          'Smart Fleets Blog',
+          'Our blog launches Q3 2026 with insights on fleet management, financial automation, and industry trends.\n\nSubscribe at info@smartfleets.ai for launch notifications.'
+        ),
+        'Customer Stories': () => scrollToSection('resources'),
+        'Support': () => scrollToSection('contact'),
+        'Status': () => showInfoDialog(
+          'System Status',
+          'All systems operational\n\n• API: 99.98% uptime\n• Database: Healthy\n• Processing: Normal\n• Response time: <100ms\n\nLast updated: Just now'
+        ),
+      },
+      'Company': {
+        'About': () => showInfoDialog(
+          'About Smart Fleets',
+          'Smart Fleets is revolutionizing fleet financial management with AI-powered automation.\n\nFounded in 2025, we help taxi and fleet operators eliminate manual reconciliation, reduce errors, and gain real-time financial intelligence.\n\nOur mission: Make fleet finance effortless.'
+        ),
+        'Careers': () => showInfoDialog(
+          'Join Our Team',
+          'We\'re hiring!\n\nOpen positions:\n• Senior Backend Engineer (Java/Spring)\n• Frontend Engineer (React/Next.js)\n• ML Engineer (Predictive Analytics)\n• Customer Success Lead\n\nInterested? Email your resume to careers@smartfleets.ai'
+        ),
+        'Contact': () => scrollToSection('contact'),
+        'Privacy Policy': () => showInfoDialog(
+          'Privacy Policy',
+          'We protect your data with industry-leading security:\n\n✓ Bank-grade encryption\n✓ SOC 2 Type II certified\n✓ GDPR & CCPA compliant\n✓ Zero data sharing with third parties\n✓ Annual security audits\n\nFull policy available at privacy@smartfleets.ai'
+        ),
+        'Terms of Service': () => showInfoDialog(
+          'Terms of Service',
+          'Flexible, transparent terms:\n\n✓ Month-to-month contracts\n✓ Cancel anytime, no penalties\n✓ 99.9% uptime SLA\n✓ Your data is YOUR data\n✓ 30-day money-back guarantee\n\nFull terms available at legal@smartfleets.ai'
+        ),
+      }
+    };
+
+    const action = linkMap[category]?.[item];
+    if (action) action();
+  }, [scrollToSection, showInfoDialog]);
+
   // Contact form state
   const [contactForm, setContactForm] = useState({ firstName: '', lastName: '', email: '', company: '', fleetSize: '', message: '' });
   const [contactSubmitting, setContactSubmitting] = useState(false);
@@ -1134,6 +1218,144 @@ function MarketingLandingPage({ router }) {
 
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#fff' }}>
+      {/* ─── Info Dialog ─── */}
+      <Dialog
+        open={infoDialog.open}
+        onClose={closeInfoDialog}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '16px',
+            p: 2,
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography sx={{ fontWeight: 700, fontSize: '1.4rem', color: textPrimary }}>
+            {infoDialog.title}
+          </Typography>
+        </DialogTitle>
+        <DialogContent sx={{ pb: 2 }}>
+          <Typography sx={{ color: textSecondary, fontSize: '1rem', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
+            {infoDialog.content}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={closeInfoDialog}
+            variant="contained"
+            sx={{
+              backgroundColor: accent,
+              color: '#fff',
+              fontWeight: 600,
+              px: 4,
+              py: 1,
+              borderRadius: '8px',
+              textTransform: 'none',
+              boxShadow: 'none',
+              '&:hover': {
+                backgroundColor: accentLight,
+                boxShadow: `0 4px 12px ${alpha(accent, 0.3)}`,
+              }
+            }}
+          >
+            Got it
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── SEO Structured Data ─── */}
+      <Script
+        id="organization-schema"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@graph": [
+              {
+                "@type": "Organization",
+                "@id": "https://smartfleets.ai/#organization",
+                "name": "Smart Fleets",
+                "url": "https://smartfleets.ai",
+                "logo": {
+                  "@type": "ImageObject",
+                  "url": "https://smartfleets.ai/logo.png"
+                },
+                "description": "AI-powered fleet management platform for taxi and ride-hailing operators",
+                "address": {
+                  "@type": "PostalAddress",
+                  "addressCountry": "CA"
+                },
+                "contactPoint": {
+                  "@type": "ContactPoint",
+                  "email": "info@smartfleets.ai",
+                  "contactType": "Customer Service"
+                },
+                "sameAs": [
+                  "https://twitter.com/smartfleets",
+                  "https://linkedin.com/company/smartfleets"
+                ]
+              },
+              {
+                "@type": "SoftwareApplication",
+                "@id": "https://smartfleets.ai/#software",
+                "name": "Smart Fleets",
+                "applicationCategory": "BusinessApplication",
+                "operatingSystem": "Web Browser",
+                "offers": {
+                  "@type": "Offer",
+                  "price": "0",
+                  "priceCurrency": "USD",
+                  "priceSpecification": {
+                    "@type": "UnitPriceSpecification",
+                    "price": "0",
+                    "priceCurrency": "USD"
+                  }
+                },
+                "aggregateRating": {
+                  "@type": "AggregateRating",
+                  "ratingValue": "4.8",
+                  "ratingCount": "127",
+                  "bestRating": "5",
+                  "worstRating": "1"
+                },
+                "description": "AI-driven taxi fleet management software for automated financial reconciliation, driver settlements, real-time analytics, and intelligent fleet operations. Eliminate manual work and scale your taxi or ride-hailing business.",
+                "featureList": [
+                  "AI-powered reconciliation",
+                  "Automated driver settlements",
+                  "Real-time financial analytics",
+                  "Predictive fleet intelligence",
+                  "Multi-fleet management",
+                  "API integrations",
+                  "Automated invoicing",
+                  "Compliance reporting"
+                ],
+                "screenshot": "https://smartfleets.ai/screenshot.png",
+                "softwareVersion": "2.0",
+                "provider": {
+                  "@id": "https://smartfleets.ai/#organization"
+                }
+              },
+              {
+                "@type": "WebSite",
+                "@id": "https://smartfleets.ai/#website",
+                "url": "https://smartfleets.ai",
+                "name": "Smart Fleets - AI Fleet Management",
+                "publisher": {
+                  "@id": "https://smartfleets.ai/#organization"
+                },
+                "potentialAction": {
+                  "@type": "SearchAction",
+                  "target": "https://smartfleets.ai/search?q={search_term_string}",
+                  "query-input": "required name=search_term_string"
+                }
+              }
+            ]
+          })
+        }}
+      />
+
       {/* ─── Nav ─── */}
       <AppBar
         position="sticky"
@@ -1157,7 +1379,8 @@ function MarketingLandingPage({ router }) {
               {['Products', 'Solutions', 'Pricing', 'Resources'].map(item => (
                 <Typography
                   key={item}
-                  sx={{ color: textSecondary, fontWeight: 500, fontSize: '0.95rem', cursor: 'pointer', '&:hover': { color: textPrimary } }}
+                  onClick={() => scrollToSection(item)}
+                  sx={{ color: textSecondary, fontWeight: 500, fontSize: '0.95rem', cursor: 'pointer', '&:hover': { color: textPrimary }, transition: 'color 0.2s' }}
                 >
                   {item}
                 </Typography>
@@ -1599,7 +1822,7 @@ function MarketingLandingPage({ router }) {
       </Box>
 
       {/* ─── Features Grid ─── */}
-      <Box sx={{ py: { xs: 8, md: 12 }, backgroundColor: '#fff' }}>
+      <Box id="products" sx={{ py: { xs: 8, md: 12 }, backgroundColor: '#fff' }}>
         <Container maxWidth="lg">
           <SectionHeader
             overline="Capabilities"
@@ -1631,6 +1854,352 @@ function MarketingLandingPage({ router }) {
                     {feature.description}
                   </Typography>
                 </Box>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* ─── Solutions Section ─── */}
+      <Box id="solutions" sx={{ py: { xs: 8, md: 12 }, backgroundColor: bgLight }}>
+        <Container maxWidth="lg">
+          <SectionHeader
+            overline="Solutions"
+            title="Purpose-built for every role in your fleet"
+            subtitle="Whether you manage one fleet or dozens, Smart Fleets adapts to your workflow and scales with your operation."
+          />
+
+          <Grid container spacing={4}>
+            {[
+              {
+                title: 'Fleet Owners',
+                description: 'End-to-end financial visibility across all operations. Automated settlements, real-time P&L, and predictive analytics for smarter decisions.',
+                icon: <Business sx={{ fontSize: 28 }} />,
+                color: accent
+              },
+              {
+                title: 'Accountants',
+                description: 'Automated reconciliation that eliminates manual data entry. Audit trails on every transaction. Close books in hours, not days.',
+                icon: <Assessment sx={{ fontSize: 28 }} />,
+                color: green
+              },
+              {
+                title: 'Dispatchers',
+                description: 'Live driver performance tracking and shift intelligence. Identify top performers and optimize scheduling with data-driven insights.',
+                icon: <LocalTaxi sx={{ fontSize: 28 }} />,
+                color: '#f59e0b'
+              },
+              {
+                title: 'Multi-Fleet Operations',
+                description: 'Manage unlimited fleet entities from one platform. Isolated data security with unified reporting and consolidated intelligence.',
+                icon: <Apartment sx={{ fontSize: 28 }} />,
+                color: accent
+              },
+              {
+                title: 'Enterprise',
+                description: 'White-glove onboarding, dedicated support, and custom integrations. Built for complex operations that demand reliability at scale.',
+                icon: <VerifiedUser sx={{ fontSize: 28 }} />,
+                color: green
+              },
+            ].map((solution, idx) => (
+              <Grid item xs={12} md={6} key={idx}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 4,
+                    height: '100%',
+                    borderRadius: '16px',
+                    border: '1px solid #e3e8ee',
+                    backgroundColor: '#fff',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      borderColor: solution.color,
+                      boxShadow: `0 8px 24px ${alpha(solution.color, 0.12)}`,
+                    }
+                  }}
+                >
+                  <Box sx={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: '12px',
+                    backgroundColor: alpha(solution.color, 0.08),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mb: 2.5,
+                    color: solution.color
+                  }}>
+                    {solution.icon}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, color: textPrimary, mb: 1.5, fontSize: '1.2rem' }}>
+                    {solution.title}
+                  </Typography>
+                  <Typography sx={{ color: textSecondary, lineHeight: 1.7, fontSize: '0.95rem' }}>
+                    {solution.description}
+                  </Typography>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* ─── Pricing Section ─── */}
+      <Box id="pricing" sx={{ py: { xs: 8, md: 12 }, backgroundColor: '#fff' }}>
+        <Container maxWidth="lg">
+          <SectionHeader
+            overline="Pricing"
+            title="Custom-built pricing for your fleet"
+            subtitle="Pick and choose what you need. Pay only for the features that matter to your operation. Three tiers, unlimited flexibility."
+          />
+
+          <Grid container spacing={3}>
+            {[
+              {
+                name: 'Free',
+                description: 'Perfect for small fleets getting started with financial automation',
+                features: [
+                  'Up to 10 vehicles',
+                  'Basic driver statements',
+                  'Manual data imports',
+                  'Email support',
+                  'Core reconciliation',
+                ],
+                cta: 'Build your plan',
+                highlighted: false,
+                color: textSecondary
+              },
+              {
+                name: 'Professional',
+                description: 'Full automation for growing fleets that need advanced insights',
+                features: [
+                  'Up to 50 vehicles',
+                  'AI-powered reconciliation',
+                  'Automated settlements',
+                  'Predictive analytics',
+                  'API integrations',
+                  'Priority support',
+                  'Custom reporting',
+                ],
+                cta: 'Build your plan',
+                highlighted: true,
+                color: accent
+              },
+              {
+                name: 'Enterprise',
+                description: 'Unlimited scale with white-glove support and custom integrations',
+                features: [
+                  'Unlimited vehicles',
+                  'Multi-fleet management',
+                  'Dedicated account manager',
+                  'Custom integrations',
+                  'SLA guarantees',
+                  '24/7 phone support',
+                  'On-premise deployment option',
+                ],
+                cta: 'Build your plan',
+                highlighted: false,
+                color: green
+              },
+            ].map((plan, idx) => (
+              <Grid item xs={12} md={4} key={idx}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 4,
+                    height: '100%',
+                    borderRadius: '16px',
+                    border: plan.highlighted ? `2px solid ${accent}` : '1px solid #e3e8ee',
+                    backgroundColor: plan.highlighted ? alpha(accent, 0.02) : '#fff',
+                    position: 'relative',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      borderColor: plan.color,
+                      boxShadow: `0 12px 32px ${alpha(plan.color, 0.15)}`,
+                      transform: 'translateY(-4px)',
+                    }
+                  }}
+                >
+                  {plan.highlighted && (
+                    <Box sx={{
+                      position: 'absolute',
+                      top: -12,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      backgroundColor: accent,
+                      color: '#fff',
+                      px: 2,
+                      py: 0.5,
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                      letterSpacing: 0.5,
+                    }}>
+                      Most Popular
+                    </Box>
+                  )}
+
+                  <Typography sx={{ fontWeight: 700, color: textPrimary, mb: 2.5, fontSize: '1.5rem' }}>
+                    {plan.name}
+                  </Typography>
+
+                  <Typography sx={{ color: textSecondary, mb: 3.5, fontSize: '0.9rem', lineHeight: 1.6, minHeight: '3rem' }}>
+                    {plan.description}
+                  </Typography>
+
+                  <Button
+                    variant={plan.highlighted ? 'contained' : 'outlined'}
+                    fullWidth
+                    size="large"
+                    sx={{
+                      mb: 3,
+                      py: 1.3,
+                      borderRadius: '8px',
+                      fontWeight: 600,
+                      fontSize: '0.95rem',
+                      textTransform: 'none',
+                      ...(plan.highlighted ? {
+                        backgroundColor: accent,
+                        color: '#fff',
+                        boxShadow: 'none',
+                        '&:hover': {
+                          backgroundColor: accentLight,
+                          boxShadow: `0 6px 20px ${alpha(accent, 0.35)}`,
+                        }
+                      } : {
+                        borderColor: '#e3e8ee',
+                        color: textPrimary,
+                        '&:hover': {
+                          borderColor: plan.color,
+                          backgroundColor: alpha(plan.color, 0.04),
+                        }
+                      })
+                    }}
+                  >
+                    {plan.cta}
+                  </Button>
+
+                  <Box sx={{ borderTop: '1px solid #e3e8ee', pt: 3 }}>
+                    {plan.features.map((feature, fIdx) => (
+                      <Box key={fIdx} sx={{ display: 'flex', alignItems: 'flex-start', mb: 1.5 }}>
+                        <CheckCircle sx={{ fontSize: 18, color: plan.color, mr: 1.5, mt: 0.2, flexShrink: 0 }} />
+                        <Typography sx={{ color: textSecondary, fontSize: '0.9rem', lineHeight: 1.5 }}>
+                          {feature}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </Paper>
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </Box>
+
+      {/* ─── Resources Section ─── */}
+      <Box id="resources" sx={{ py: { xs: 8, md: 12 }, backgroundColor: bgLight }}>
+        <Container maxWidth="lg">
+          <SectionHeader
+            overline="Resources"
+            title="Everything you need to succeed"
+            subtitle="Guides, documentation, and support to get the most out of Smart Fleets"
+          />
+
+          <Grid container spacing={3}>
+            {[
+              {
+                icon: <MenuBook sx={{ fontSize: 28 }} />,
+                title: 'Documentation',
+                description: 'Complete guides on setup, integrations, and best practices. Step-by-step tutorials for every feature.',
+                link: 'View docs',
+                color: accent
+              },
+              {
+                icon: <Support sx={{ fontSize: 28 }} />,
+                title: 'Support Center',
+                description: 'Get help when you need it. Search our knowledge base or contact our support team directly.',
+                link: 'Get support',
+                color: green
+              },
+              {
+                icon: <Article sx={{ fontSize: 28 }} />,
+                title: 'Blog & Insights',
+                description: 'Industry trends, product updates, and fleet management best practices from our team.',
+                link: 'Read blog',
+                color: '#f59e0b'
+              },
+              {
+                icon: <People sx={{ fontSize: 28 }} />,
+                title: 'Customer Stories',
+                description: 'See how fleet operators are saving time and reducing errors with Smart Fleets automation.',
+                link: 'View stories',
+                color: accent
+              },
+              {
+                icon: <Code sx={{ fontSize: 28 }} />,
+                title: 'API Reference',
+                description: 'Build custom integrations with our REST API. Complete documentation with code examples.',
+                link: 'View API docs',
+                color: green
+              },
+              {
+                icon: <TrendingUp sx={{ fontSize: 28 }} />,
+                title: 'System Status',
+                description: 'Real-time platform status and uptime monitoring. Subscribe to incident notifications.',
+                link: 'Check status',
+                color: '#f59e0b'
+              },
+            ].map((resource, idx) => (
+              <Grid item xs={12} sm={6} md={4} key={idx}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3.5,
+                    height: '100%',
+                    borderRadius: '16px',
+                    border: '1px solid #e3e8ee',
+                    backgroundColor: '#fff',
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    '&:hover': {
+                      borderColor: resource.color,
+                      boxShadow: `0 8px 24px ${alpha(resource.color, 0.12)}`,
+                      transform: 'translateY(-2px)',
+                    }
+                  }}
+                >
+                  <Box sx={{
+                    width: 48,
+                    height: 48,
+                    borderRadius: '12px',
+                    backgroundColor: alpha(resource.color, 0.08),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    mb: 2,
+                    color: resource.color
+                  }}>
+                    {resource.icon}
+                  </Box>
+                  <Typography sx={{ fontWeight: 700, color: textPrimary, mb: 1.5, fontSize: '1.1rem' }}>
+                    {resource.title}
+                  </Typography>
+                  <Typography sx={{ color: textSecondary, mb: 2.5, fontSize: '0.9rem', lineHeight: 1.6 }}>
+                    {resource.description}
+                  </Typography>
+                  <Typography sx={{
+                    color: resource.color,
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5
+                  }}>
+                    {resource.link}
+                    <ArrowForward sx={{ fontSize: 16 }} />
+                  </Typography>
+                </Paper>
               </Grid>
             ))}
           </Grid>
@@ -1748,32 +2317,97 @@ function MarketingLandingPage({ router }) {
               <Typography sx={{ color: alpha('#fff', 0.5), fontSize: '0.85rem', lineHeight: 1.6, mb: 1.5 }}>
                 AI-powered financial intelligence for modern fleet operators.
               </Typography>
-              <Typography sx={{ color: alpha('#fff', 0.65), fontSize: '0.85rem', mb: 0.5 }}>
+              <Typography
+                component="a"
+                href="mailto:info@smartfleets.ai"
+                sx={{
+                  color: alpha('#fff', 0.65),
+                  fontSize: '0.85rem',
+                  mb: 0.5,
+                  display: 'block',
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s',
+                  '&:hover': { color: accent }
+                }}
+              >
                 info@smartfleets.ai
               </Typography>
             </Grid>
             <Grid item xs={6} sm={3} md={2}>
               <Typography sx={{ color: alpha('#fff', 0.4), fontWeight: 600, mb: 2, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1.5 }}>Products</Typography>
               {['AI Reconciliation', 'Analytics', 'Settlements', 'Fleet Intelligence', 'Integrations'].map(item => (
-                <Typography key={item} sx={{ color: alpha('#fff', 0.65), mb: 1, fontSize: '0.85rem', cursor: 'pointer', '&:hover': { color: '#fff' } }}>{item}</Typography>
+                <Typography
+                  key={item}
+                  onClick={() => handleFooterLink('Products', item)}
+                  sx={{
+                    color: alpha('#fff', 0.65),
+                    mb: 1,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': { color: '#fff', transform: 'translateX(4px)' }
+                  }}
+                >
+                  {item}
+                </Typography>
               ))}
             </Grid>
             <Grid item xs={6} sm={3} md={2}>
               <Typography sx={{ color: alpha('#fff', 0.4), fontWeight: 600, mb: 2, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1.5 }}>Solutions</Typography>
               {['Fleet Owners', 'Accountants', 'Dispatchers', 'Multi-fleet', 'Enterprise'].map(item => (
-                <Typography key={item} sx={{ color: alpha('#fff', 0.65), mb: 1, fontSize: '0.85rem', cursor: 'pointer', '&:hover': { color: '#fff' } }}>{item}</Typography>
+                <Typography
+                  key={item}
+                  onClick={() => handleFooterLink('Solutions', item)}
+                  sx={{
+                    color: alpha('#fff', 0.65),
+                    mb: 1,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': { color: '#fff', transform: 'translateX(4px)' }
+                  }}
+                >
+                  {item}
+                </Typography>
               ))}
             </Grid>
             <Grid item xs={6} sm={3} md={2}>
               <Typography sx={{ color: alpha('#fff', 0.4), fontWeight: 600, mb: 2, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1.5 }}>Resources</Typography>
               {['Documentation', 'Blog', 'Customer Stories', 'Support', 'Status'].map(item => (
-                <Typography key={item} sx={{ color: alpha('#fff', 0.65), mb: 1, fontSize: '0.85rem', cursor: 'pointer', '&:hover': { color: '#fff' } }}>{item}</Typography>
+                <Typography
+                  key={item}
+                  onClick={() => handleFooterLink('Resources', item)}
+                  sx={{
+                    color: alpha('#fff', 0.65),
+                    mb: 1,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': { color: '#fff', transform: 'translateX(4px)' }
+                  }}
+                >
+                  {item}
+                </Typography>
               ))}
             </Grid>
             <Grid item xs={6} sm={3} md={3}>
               <Typography sx={{ color: alpha('#fff', 0.4), fontWeight: 600, mb: 2, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: 1.5 }}>Company</Typography>
               {['About', 'Careers', 'Contact', 'Privacy Policy', 'Terms of Service'].map(item => (
-                <Typography key={item} sx={{ color: alpha('#fff', 0.65), mb: 1, fontSize: '0.85rem', cursor: 'pointer', '&:hover': { color: '#fff' } }}>{item}</Typography>
+                <Typography
+                  key={item}
+                  onClick={() => handleFooterLink('Company', item)}
+                  sx={{
+                    color: alpha('#fff', 0.65),
+                    mb: 1,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    '&:hover': { color: '#fff', transform: 'translateX(4px)' }
+                  }}
+                >
+                  {item}
+                </Typography>
               ))}
             </Grid>
           </Grid>

@@ -1,0 +1,29 @@
+# Smart Fleets Robots.txt
+# Last updated: 2026-05-09
+
+User-agent: *
+Allow: /
+
+# Allow search engines to crawl all public pages
+Allow: /pricing
+Allow: /products
+Allow: /solutions
+Allow: /resources
+
+# Block admin and API endpoints
+Disallow: /admin/
+Disallow: /api/
+Disallow: /dashboard/
+Disallow: /signin
+Disallow: /signup
+
+# Block internal tools
+Disallow: /data-uploads/
+Disallow: /financial-setup/
+
+# Sitemap location
+Sitemap: https://smartfleets.ai/sitemap.xml
+Sitemap: https://www.smartfleets.ai/sitemap.xml
+
+# Crawl delay (optional - 1 second between requests)
+Crawl-delay: 1
