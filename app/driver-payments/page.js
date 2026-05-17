@@ -39,6 +39,7 @@ import AuditHistoryDialog from "./components/dialogs/AuditHistoryDialog";
 import GenerateEftDialog from "./components/dialogs/GenerateEftDialog";
 import EftConfigTab from "../financial-setup/tabs/EftConfigTab";
 import { formatCurrency, formatDate, getStatusColor } from "./utils/helpers";
+import * as amplitude from "@amplitude/unified";
 
 export default function DriverPaymentsPage() {
   const router = useRouter();
@@ -118,6 +119,11 @@ export default function DriverPaymentsPage() {
   const handleCreateBatch = async (batchData) => {
     try {
       const newBatch = await createBatch(batchData);
+      amplitude.track("Payment Batch Created", {
+        batch_id: newBatch?.id,
+        period_start: batchData?.periodStart,
+        period_end: batchData?.periodEnd,
+      });
       await selectBatch(newBatch);
       setShowBatchList(false);
     } catch (error) {
@@ -128,6 +134,10 @@ export default function DriverPaymentsPage() {
   const handlePostBatch = async (batch) => {
     try {
       await postBatch(batch.id);
+      amplitude.track("Payment Batch Posted", {
+        batch_id: batch.id,
+        batch_number: batch.batchNumber,
+      });
       await selectBatch({
         ...batch,
         status: "POSTED",
@@ -141,6 +151,12 @@ export default function DriverPaymentsPage() {
     setCompleteBatchDialog(false);
     try {
       await completeBatch(batch.id);
+      amplitude.track("Payment Batch Completed", {
+        batch_id: batch.id,
+        batch_number: batch.batchNumber,
+        total_amount: batchRows.reduce((sum, row) => sum + (row.payAmount || 0), 0),
+        statement_count: batchRows.length,
+      });
       setShowBatchList(true);
       clearSelection();
     } catch (error) {

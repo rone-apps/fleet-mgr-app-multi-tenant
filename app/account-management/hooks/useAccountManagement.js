@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getCurrentUser, isAuthenticated, API_BASE_URL } from "../../lib/api";
+import * as amplitude from "@amplitude/unified";
 import { useRouter } from "next/navigation";
 
 // Initial form data states
@@ -845,6 +846,13 @@ export function useAccountManagement() {
 
       if (response.ok) {
         const invoice = await response.json();
+        amplitude.track("Invoice Generated", {
+          invoice_id: invoice.id,
+          invoice_number: invoice.invoiceNumber,
+          customer_id: generateInvoiceFormData.customerId,
+          period_start: generateInvoiceFormData.periodStart,
+          period_end: generateInvoiceFormData.periodEnd,
+        });
         setSuccess(`Invoice ${invoice.invoiceNumber} generated successfully!`);
         setOpenGenerateInvoiceDialog(false);
         loadInvoices();
@@ -1035,6 +1043,12 @@ export function useAccountManagement() {
       if (response.ok) {
         const paymentResponse = await response.json();
         console.log("Payment recorded successfully:", paymentResponse);
+        amplitude.track("Payment Recorded", {
+          invoice_id: selectedInvoice.id,
+          invoice_number: selectedInvoice.invoiceNumber,
+          amount: paymentFormData.amount,
+          payment_date: paymentFormData.paymentDate,
+        });
         setSuccess("Payment recorded successfully!");
         setError(""); // Clear any previous errors
 

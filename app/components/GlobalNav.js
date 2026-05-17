@@ -5,6 +5,7 @@ import { CommuteOutlined, Home, Logout, Business } from "@mui/icons-material";
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getTenantName, logout as apiLogout } from "../lib/api";
+import * as amplitude from "@amplitude/unified";
 import BreadcrumbNav from "./BreadcrumbNav";
 
 
@@ -26,6 +27,7 @@ export default function GlobalNav({ currentUser, title = "Smart Fleets" }) {
 
   const handleConfirmLogout = () => {
     setLogoutDialogOpen(false);
+    amplitude.track("User Signed Out");
     apiLogout();
   };
 

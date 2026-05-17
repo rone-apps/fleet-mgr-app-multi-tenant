@@ -42,6 +42,7 @@ import {
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../../lib/api";
 import { useRouter } from "next/navigation";
+import * as amplitude from "@amplitude/unified";
 
 const steps = ["Upload CSV File", "Review Data", "Import Results"];
 
@@ -105,6 +106,13 @@ export default function MileageUploadTab() {
       setEditedData(data.mileagePreviewData || []);
       setSessionId(data.sessionId); // Store sessionId for import
       setActiveStep(1);
+      amplitude.track("Mileage CSV Uploaded", {
+        total_rows: data.totalRows,
+        valid_rows: data.statistics?.validRows,
+        cab_matches: data.statistics?.cabMatches,
+        driver_matches: data.statistics?.driverMatches,
+        file_name: selectedFile.name,
+      });
       setSuccess(`File uploaded! Found ${data.totalRows} records.`);
     } catch (err) {
       console.error("Upload error:", err);

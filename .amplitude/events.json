@@ -1,0 +1,78 @@
+[
+  {
+    "name": "User Signed In",
+    "description": "Fires when a user successfully authenticates with company ID and credentials."
+  },
+  {
+    "name": "User Sign In Failed",
+    "description": "Fires when a login attempt fails due to invalid credentials or server error."
+  },
+  {
+    "name": "User Signed Out",
+    "description": "Fires when a user explicitly logs out or is redirected due to token expiry."
+  },
+  {
+    "name": "Payment Batch Created",
+    "description": "Fires when an accountant creates a new driver payment batch."
+  },
+  {
+    "name": "Payment Batch Posted",
+    "description": "Fires when a payment batch is posted and locked for processing."
+  },
+  {
+    "name": "Payment Batch Completed",
+    "description": "Fires when a payment batch is marked complete and statements are set to PAID."
+  },
+  {
+    "name": "EFT File Generated",
+    "description": "Fires when an EFT (CPA 005) file is generated from a posted batch."
+  },
+  {
+    "name": "Credit Card CSV Uploaded",
+    "description": "Fires when a credit card transaction CSV file is successfully parsed and previewed."
+  },
+  {
+    "name": "Credit Card Transactions Imported",
+    "description": "Fires when parsed credit card transactions are confirmed and imported into the system."
+  },
+  {
+    "name": "Airport Trips CSV Uploaded",
+    "description": "Fires when an airport trips CSV file is uploaded and ready for import."
+  },
+  {
+    "name": "Mileage CSV Uploaded",
+    "description": "Fires when a mileage data CSV file is uploaded and ready for import."
+  },
+  {
+    "name": "Financial Statement Generated",
+    "description": "Fires when a driver or owner financial statement is successfully generated."
+  },
+  {
+    "name": "Invoice Generated",
+    "description": "Fires when an invoice is generated for an account customer."
+  },
+  {
+    "name": "Payment Recorded",
+    "description": "Fires when a payment is recorded against a customer account."
+  },
+  {
+    "name": "Driver Created",
+    "description": "Fires when a new driver is added to the fleet."
+  },
+  {
+    "name": "Driver Updated",
+    "description": "Fires when an existing driver's profile is modified."
+  },
+  {
+    "name": "Statement Recalled",
+    "description": "Fires when a driver statement is recalled from a payment batch."
+  },
+  {
+    "name": "Data Export Downloaded",
+    "description": "Fires when a user exports driver or financial data to CSV or PDF."
+  },
+  {
+    "name": "Error Encountered",
+    "description": "Fires when a critical operation fails with an unrecoverable error."
+  }
+]

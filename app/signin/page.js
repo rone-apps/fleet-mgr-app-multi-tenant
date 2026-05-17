@@ -23,6 +23,8 @@ import {
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useRouter } from "next/navigation";
 import { API_BASE_URL } from '../lib/api';
+import * as amplitude from "@amplitude/unified";
+import { Identify } from "@amplitude/unified";
 
 const theme = createTheme({
   palette: {
@@ -120,17 +122,41 @@ export default function SignInPage() {
         document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
         document.cookie = `tenantId=${schemaName}; path=/; max-age=86400; SameSite=Strict`;
 
+        // Identify the user in Amplitude so all future events are linked
+        amplitude.setUserId(data.username);
+        const identifyObj = new Identify();
+        identifyObj.set("role", data.role);
+        identifyObj.set("tenant_id", tenantId);
+        identifyObj.set("tenant_schema", schemaName);
+        amplitude.identify(identifyObj);
+
+        amplitude.track("User Signed In", {
+          role: data.role,
+          tenant_id: tenantId,
+          tenant_schema: schemaName,
+        });
+
         // Redirect to the page they were trying to access, or home
         const params = new URLSearchParams(window.location.search);
         const redirectTo = params.get("redirect") || "/";
         window.location.replace(redirectTo);
       } else {
         const errorData = await response.json().catch(() => ({}));
-        setError(errorData.message || "Invalid company, username or password");
+        const errorMsg = errorData.message || "Invalid company, username or password";
+        setError(errorMsg);
+        amplitude.track("User Sign In Failed", {
+          tenant_id: companyId,
+          error_message: errorMsg,
+        });
       }
     } catch (err) {
       console.error("Login error:", err);
-      setError("Unable to connect to server. Please try again.");
+      const errorMsg = "Unable to connect to server. Please try again.";
+      setError(errorMsg);
+      amplitude.track("User Sign In Failed", {
+        tenant_id: companyId,
+        error_message: errorMsg,
+      });
     } finally {
       setLoading(false);
     }

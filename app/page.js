@@ -667,6 +667,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Trip Mgmt',
             gradient: 'linear-gradient(135deg, #6a1b9a 0%, #ab47bc 100%)',
             accent: '#6a1b9a'
+          },
+          {
+            title: 'Legacy Customer Management',
+            description: 'Manage legacy customer accounts & historical charges',
+            icon: MenuBook,
+            path: '/legacy-customer-management',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Migration Tool',
+            gradient: 'linear-gradient(135deg, #f57c00 0%, #ff6f00 100%)',
+            accent: '#f57c00'
           }
         ];
 

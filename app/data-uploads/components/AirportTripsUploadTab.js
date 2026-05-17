@@ -42,6 +42,7 @@ import {
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../../lib/api";
 import { useRouter } from "next/navigation";
+import * as amplitude from "@amplitude/unified";
 
 const steps = ["Upload CSV File", "Review Data", "Import Results"];
 
@@ -106,7 +107,12 @@ export default function AirportTripsUploadTab() {
       setEditedData(data.airportTripPreviewData || []);
       setSessionId(data.sessionId); // Store sessionId for import
       setActiveStep(1);
-      
+      amplitude.track("Airport Trips CSV Uploaded", {
+        total_rows: data.totalRows,
+        split_rows: data.statistics?.splitRows,
+        valid_rows: data.statistics?.validRows,
+        file_name: selectedFile.name,
+      });
       const originalRows = data.statistics?.originalRows || data.totalRows;
       const splitRows = data.statistics?.splitRows || data.airportTripPreviewData?.length || 0;
       if (splitRows > originalRows) {

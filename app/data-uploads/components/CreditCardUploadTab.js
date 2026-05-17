@@ -21,6 +21,7 @@ import {
   CheckCircle as CheckIcon,
 } from "@mui/icons-material";
 import { API_BASE_URL, tenantFetch } from "../../lib/api";
+import * as amplitude from "@amplitude/unified";
 import FileUploadStep from "./FileUploadStep";
 import DataPreviewStep from "./DataPreviewStep";
 import ImportResultsStep from "./ImportResultsStep";
@@ -90,6 +91,13 @@ export default function CreditCardUploadTab() {
       setEditedData(data.previewData || []);
       setSessionId(data.sessionId); // Store sessionId for import
       setActiveStep(1);
+      amplitude.track("Credit Card CSV Uploaded", {
+        total_rows: data.totalRows,
+        valid_rows: data.statistics?.validRows,
+        cab_matches: data.statistics?.cabMatches,
+        driver_matches: data.statistics?.driverMatches,
+        file_name: selectedFile.name,
+      });
       setSuccess(`File uploaded successfully! Found ${data.totalRows} transactions.`);
     } catch (err) {
       console.error("Upload error:", err);
@@ -130,7 +138,11 @@ export default function CreditCardUploadTab() {
       const result = await response.json();
       setImportResults(result);
       setActiveStep(2);
-
+      amplitude.track("Credit Card Transactions Imported", {
+        success_count: result.successCount,
+        error_count: result.errorCount,
+        file_name: selectedFile.name,
+      });
       if (result.errorCount === 0) {
         setSuccess(`Successfully imported ${result.successCount} transactions!`);
       } else {

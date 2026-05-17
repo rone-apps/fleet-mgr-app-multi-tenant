@@ -35,6 +35,7 @@ import {
 } from "@mui/material";
 import { Block, CheckCircle, Star, Edit as EditIcon, Add as AddIcon, Download as DownloadIcon } from "@mui/icons-material";
 import { getCurrentUser, isAuthenticated, API_BASE_URL, getTenantSchema, tenantFetch } from "../lib/api";
+import * as amplitude from "@amplitude/unified";
 import { downloadCSV, downloadPDF, formatDriversForExport } from "../lib/exportUtils";
 
 export default function DriversPage() {
@@ -374,6 +375,19 @@ export default function DriversPage() {
 
       if (response.ok) {
         const data = await response.json();
+        if (dialogMode === "create") {
+          amplitude.track("Driver Created", {
+            driver_id: data.id,
+            driver_number: data.driverNumber,
+            is_owner: formData.isOwner,
+          });
+        } else {
+          amplitude.track("Driver Updated", {
+            driver_id: editingDriver.id,
+            driver_number: editingDriver.driverNumber,
+            is_owner: formData.isOwner,
+          });
+        }
         setSuccess(`Driver ${dialogMode === "create" ? "created" : "updated"} successfully!`);
         handleCloseDialog();
         loadDrivers();
@@ -403,6 +417,7 @@ export default function DriversPage() {
     const dataToExport = formatDriversForExport(filteredDrivers.length > 0 ? filteredDrivers : drivers);
     const fileName = `drivers_${new Date().toISOString().split("T")[0]}.csv`;
     downloadCSV(dataToExport, fileName);
+    amplitude.track("Data Export Downloaded", { export_type: "csv", data_type: "drivers", record_count: dataToExport.length });
     handleDownloadMenuClose();
   };
 
@@ -410,6 +425,7 @@ export default function DriversPage() {
     const dataToExport = formatDriversForExport(filteredDrivers.length > 0 ? filteredDrivers : drivers);
     const fileName = `drivers_${new Date().toISOString().split("T")[0]}.pdf`;
     await downloadPDF(dataToExport, fileName, "Driver List");
+    amplitude.track("Data Export Downloaded", { export_type: "pdf", data_type: "drivers", record_count: dataToExport.length });
     handleDownloadMenuClose();
   };
 

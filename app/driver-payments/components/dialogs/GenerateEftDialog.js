@@ -30,6 +30,7 @@ import {
   History as HistoryIcon,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../../../lib/api";
+import * as amplitude from "@amplitude/unified";
 import { formatCurrency, formatDate } from "../../utils/helpers";
 
 export default function GenerateEftDialog({ open, onClose, batch, rows }) {
@@ -104,6 +105,11 @@ export default function GenerateEftDialog({ open, onClose, batch, rows }) {
 
       const data = await response.json();
       setResult(data);
+      amplitude.track("EFT File Generated", {
+        batch_id: batch?.id,
+        batch_number: batch?.batchNumber,
+        file_name: data?.fileName,
+      });
       loadHistory();
     } catch (e) {
       setError(e.message);
