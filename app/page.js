@@ -75,6 +75,7 @@ import {
   CommuteOutlined,
   Business,
   WavingHand,
+  SwapHoriz,
   Apartment,
   MenuBook,
   Support,
@@ -785,6 +786,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Smart Analysis',
             gradient: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
             accent: '#f5576c'
+          },
+          {
+            title: 'Balance Transfers',
+            description: 'Transfer statement balances between drivers and owners',
+            icon: SwapHoriz,
+            path: '/admin/statement-transfers',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Transfers',
+            gradient: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
+            accent: '#fa709a'
           },
           {
             title: 'Help & Guide',

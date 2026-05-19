@@ -53,10 +53,20 @@ export default function ReportsPage() {
     return reportData.oneTimeExpenses.filter((exp) => exp.applicationType === "LEASE_RENT");
   };
 
-  // Helper function to filter non-lease, non-airport one-time expenses
+  // Helper function to filter non-lease, non-airport, non-transfer one-time expenses
   const getOtherOneTimeExpenses = () => {
     if (!reportData?.oneTimeExpenses) return [];
-    return reportData.oneTimeExpenses.filter((exp) => exp.applicationType !== "LEASE_RENT" && exp.categoryCode !== "AIRPORT_TRIP");
+    return reportData.oneTimeExpenses.filter((exp) =>
+      exp.applicationType !== "LEASE_RENT" &&
+      exp.categoryCode !== "AIRPORT_TRIP" &&
+      exp.categoryCode !== "BALANCE_TRANSFER_OUT"
+    );
+  };
+
+  // Helper function to filter balance transfer expenses
+  const getBalanceTransferExpenses = () => {
+    if (!reportData?.oneTimeExpenses) return [];
+    return reportData.oneTimeExpenses.filter((exp) => exp.categoryCode === "BALANCE_TRANSFER_OUT");
   };
 
   // Helper function to filter airport trip expenses from one-time expenses
@@ -84,6 +94,11 @@ export default function ReportsPage() {
   const getOtherRevenues = () => {
     if (!reportData?.revenues) return [];
     return reportData.revenues.filter((rev) => rev.revenueSubType === "OTHER_REVENUE");
+  };
+
+  const getBalanceTransferRevenues = () => {
+    if (!reportData?.revenues) return [];
+    return reportData.revenues.filter((rev) => rev.revenueSubType === "BALANCE_TRANSFER");
   };
 
   // Helper function to calculate subtotals for revenue/expense sections
@@ -313,6 +328,9 @@ export default function ReportsPage() {
         setReportData(data);
         setPaidAmount(data.paidAmount ? data.paidAmount.toString() : "0");
         console.log("Report generated:", data);
+        console.log("Person Type:", data.personType, "Is Owner:", data.personType === "OWNER");
+        console.log("Holding Revenues:", data.holdingRevenues);
+        console.log("Total Holding Revenues:", data.totalHoldingRevenues);
       } else {
         const errorText = await response.text();
         setError(errorText || "Failed to generate report");
@@ -458,7 +476,7 @@ Per-Unit Expenses: $${parseFloat(reportData.totalPerUnitExpenses || 0).toFixed(2
 Mileage Expenses: $${reportData?.mileageExpenses?.reduce((sum, exp) => sum + parseFloat(exp.totalLeaseAmount || 0), 0).toFixed(2) || '0.00'}
 Insurance Mileage Expenses: $${parseFloat(reportData.totalInsuranceMileageExpenses || 0).toFixed(2)}
 Taxes: $${parseFloat(reportData.totalTaxExpenses || 0).toFixed(2)}
-Commissions: $${parseFloat(reportData.totalCommissionExpenses || 0).toFixed(2)}
+Merchant Fees: $${parseFloat(reportData.totalCommissionExpenses || 0).toFixed(2)}
 Total Expenses: $${parseFloat(reportData.totalExpenses || 0).toFixed(2)}
 Previous Due: $${parseFloat(reportData.previousBalance || 0).toFixed(2)}
 Paid Amount: $${parseFloat(paidAmount || 0).toFixed(2)}
@@ -718,7 +736,18 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     helperText={startDate && endDate && new Date(startDate) > new Date(endDate) ? "End date must be after start date" : ""}
                   />
                 </Grid>
-                <Grid item xs={12} sm={12} md={4}>
+                <Grid item xs={12} sm={6} md={2}>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    onClick={() => router.push('/admin/statement-transfers')}
+                    sx={{ height: "56px" }}
+                    title="Set up balance transfers before generating statements"
+                  >
+                    Manage Transfers
+                  </Button>
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
                   <Button
                     variant="contained"
                     fullWidth
@@ -1037,8 +1066,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Card Type</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
                                   <TableCell align="right"><strong>Amount</strong></TableCell>
-                                  <TableCell align="right"><strong>Commission</strong></TableCell>
-                                  <TableCell align="right"><strong>Net Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Merchant Fee</strong></TableCell>
+                                  <TableCell align="right"><strong>Amount Paid</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
@@ -1937,6 +1966,100 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     )}
                   </Paper>
                 )}
+
+                {/* Revenue Holding Details - For Owners Only */}
+                {reportData?.holdingRevenues && reportData.holdingRevenues.length > 0 && (
+                  <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #1976d2", borderRadius: 2 }}>
+                    <Box sx={{ bgcolor: "#1976d2", px: 2, py: 2 }}>
+                      <Typography variant="subtitle2" sx={{ color: "#fff", fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", fontSize: "0.75rem" }}>
+                        Revenue Holding Details (Current Month)
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.9)", display: "block", mt: 0.5 }}>
+                        Revenues earned in current month, held by company for next month's statement
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                      <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#1976d2" }}>
+                        Held Revenues Summary
+                      </Typography>
+                      <Grid container spacing={2} sx={{ mb: 3 }}>
+                        <Grid item xs={6}>
+                          <Card sx={{ bgcolor: "#e3f2fd", border: "1px solid #1976d2" }}>
+                            <CardContent>
+                              <Typography variant="caption" color="text.secondary">Credit Card Revenue</Typography>
+                              <Typography variant="h6" sx={{ color: "#1976d2", fontWeight: "bold" }}>
+                                ${calculateSubtotal(reportData.holdingRevenues.filter(r => r.revenueSubType === "CARD_REVENUE")).toFixed(2)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {reportData.holdingRevenues.filter(r => r.revenueSubType === "CARD_REVENUE").length} transactions
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Card sx={{ bgcolor: "#e3f2fd", border: "1px solid #1976d2" }}>
+                            <CardContent>
+                              <Typography variant="caption" color="text.secondary">Account Charges</Typography>
+                              <Typography variant="h6" sx={{ color: "#1976d2", fontWeight: "bold" }}>
+                                ${calculateSubtotal(reportData.holdingRevenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE")).toFixed(2)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {reportData.holdingRevenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE").length} transactions
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                      </Grid>
+
+                      <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#1976d2" }}>
+                        All Holding Revenue Transactions
+                      </Typography>
+                      <TableContainer sx={{ overflowX: 'auto' }}>
+                        <Table size="small">
+                          <TableHead>
+                            <TableRow sx={{ backgroundColor: "#e3f2fd" }}>
+                              <TableCell><strong>Date</strong></TableCell>
+                              <TableCell><strong>Type</strong></TableCell>
+                              <TableCell><strong>Cab #</strong></TableCell>
+                              <TableCell><strong>Description</strong></TableCell>
+                              <TableCell align="right"><strong>Amount</strong></TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {[...reportData.holdingRevenues].sort((a, b) => (a.revenueDate || "").localeCompare(b.revenueDate || "")).map((rev, idx) => (
+                              <TableRow key={idx} hover>
+                                <TableCell>{rev.revenueDate || "-"}</TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={rev.revenueSubType === "CARD_REVENUE" ? "Credit Card" : "Account Charge"}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: rev.revenueSubType === "CARD_REVENUE" ? "#bbdefb" : "#c5cae9",
+                                      color: "#1976d2",
+                                      fontWeight: 600
+                                    }}
+                                  />
+                                </TableCell>
+                                <TableCell><strong>{rev.cabNumber || "-"}</strong></TableCell>
+                                <TableCell>{rev.description || rev.accountName || "-"}</TableCell>
+                                <TableCell align="right" sx={{ color: "#1976d2", fontWeight: "bold" }}>
+                                  ${parseFloat(rev.amount || 0).toFixed(2)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            <TableRow sx={{ backgroundColor: "#e3f2fd", fontWeight: "bold" }}>
+                              <TableCell colSpan={4} align="right"><strong>Total Holding Revenue:</strong></TableCell>
+                              <TableCell align="right" sx={{ color: "#1976d2" }}>
+                                <strong>${parseFloat(reportData.totalHoldingRevenues || 0).toFixed(2)}</strong>
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </Box>
+                  </Paper>
+                )}
               </>
             )}
 
@@ -2094,15 +2217,93 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   </Box>
                 )}
                 {getOtherRevenues().length > 0 && (
-                  <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
-                    <Typography variant="body2" color="textSecondary">Other Revenues</Typography>
-                    <Typography variant="body2">${calculateSubtotal(getOtherRevenues()).toFixed(2)}</Typography>
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Other Revenues</Typography>
+                      <Typography variant="body2" fontWeight="bold">${calculateSubtotal(getOtherRevenues()).toFixed(2)}</Typography>
+                    </Box>
+                    {getOtherRevenues().map((rev, idx) => (
+                      <Box key={idx} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          {rev.categoryName || "Other"} - {rev.description || "No description"}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">${parseFloat(rev.amount || 0).toFixed(2)}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+                {getBalanceTransferRevenues().length > 0 && (
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Balance Transfers In</Typography>
+                      <Typography variant="body2" fontWeight="bold">${calculateSubtotal(getBalanceTransferRevenues()).toFixed(2)}</Typography>
+                    </Box>
+                    {getBalanceTransferRevenues().map((transfer, idx) => (
+                      <Box key={idx} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
+                        <Typography variant="caption" color="text.secondary">{transfer.description}</Typography>
+                        <Typography variant="caption" color="text.secondary">${parseFloat(transfer.amount || 0).toFixed(2)}</Typography>
+                      </Box>
+                    ))}
                   </Box>
                 )}
                 <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.5, mt: 0.5 }}>
                   <Typography variant="body2" fontWeight="bold" sx={{ color: "#388e3c" }}>Total Revenues</Typography>
                   <Typography variant="body2" fontWeight="bold" sx={{ color: "#388e3c" }}>${parseFloat(reportData.totalRevenues || 0).toFixed(2)}</Typography>
                 </Box>
+
+                {/* DEBUG: Show holding revenues status */}
+                {reportData.personType === "OWNER" && (
+                  <Box sx={{ mt: 1, p: 1, bgcolor: "#fff3cd", borderRadius: 1 }}>
+                    <Typography variant="caption" color="text.secondary">
+                      DEBUG: Person Type: {reportData.personType} |
+                      Holding Revenues Count: {reportData.holdingRevenues?.length || 0} |
+                      Total: ${reportData.totalHoldingRevenues?.toFixed(2) || '0.00'}
+                    </Typography>
+                  </Box>
+                )}
+
+                {/* Revenue Holding Section (for owners only) */}
+                {reportData.holdingRevenues && reportData.holdingRevenues.length > 0 && (
+                  <Box sx={{ mt: 2 }}>
+                    {/* Divider */}
+                    <Box sx={{ borderTop: "1px solid #e0e0e0", my: 1 }} />
+
+                    <Typography variant="caption" fontWeight="bold" sx={{ color: "#1976d2", borderBottom: "1px solid #1976d2", display: "block", pb: 0.5, mb: 0.5 }}>
+                      REVENUE HOLDING (Current Month)
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 1, mb: 1, fontStyle: "italic" }}>
+                      Revenues earned in current month, held by company for next month's statement
+                    </Typography>
+
+                    {(() => {
+                      const creditCards = reportData.holdingRevenues.filter((rev) => rev.revenueSubType === "CARD_REVENUE");
+                      const accountCharges = reportData.holdingRevenues.filter((rev) => rev.revenueSubType === "ACCOUNT_REVENUE");
+
+                      return (
+                        <>
+                          {creditCards.length > 0 && (
+                            <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                              <Typography variant="body2" color="textSecondary">Credit Card Revenue</Typography>
+                              <Typography variant="body2">${calculateSubtotal(creditCards).toFixed(2)}</Typography>
+                            </Box>
+                          )}
+                          {accountCharges.length > 0 && (
+                            <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                              <Typography variant="body2" color="textSecondary">Account Charges</Typography>
+                              <Typography variant="body2">${calculateSubtotal(accountCharges).toFixed(2)}</Typography>
+                            </Box>
+                          )}
+                          <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.5, mt: 0.5 }}>
+                            <Typography variant="body2" fontWeight="bold" sx={{ color: "#1976d2" }}>Total Holding</Typography>
+                            <Typography variant="body2" fontWeight="bold" sx={{ color: "#1976d2" }}>
+                              ${parseFloat(reportData.totalHoldingRevenues || 0).toFixed(2)}
+                            </Typography>
+                          </Box>
+                        </>
+                      );
+                    })()}
+                  </Box>
+                )}
 
                 {/* Divider */}
                 <Box sx={{ borderTop: "1px solid #e0e0e0", my: 1 }} />
@@ -2202,13 +2403,27 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 {reportData.commissionExpenses && reportData.commissionExpenses.length > 0 && (
                   <Box>
                     <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
-                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Commissions</Typography>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Merchant Fees</Typography>
                       <Typography variant="body2" fontWeight="bold">${reportData.commissionExpenses.reduce((s, c) => s + parseFloat(c.amount || 0), 0).toFixed(2)}</Typography>
                     </Box>
                     {reportData.commissionExpenses.map((c, i) => (
                       <Box key={i} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
                         <Typography variant="caption" color="text.secondary">{c.commissionTypeName} on {c.revenueCategoryName} ({c.commissionRate}%)</Typography>
                         <Typography variant="caption" color="text.secondary">${parseFloat(c.amount).toFixed(2)}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                )}
+                {getBalanceTransferExpenses().length > 0 && (
+                  <Box>
+                    <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
+                      <Typography variant="body2" color="textSecondary" fontWeight="bold">Balance Transfers Out</Typography>
+                      <Typography variant="body2" fontWeight="bold">${calculateSubtotal(getBalanceTransferExpenses()).toFixed(2)}</Typography>
+                    </Box>
+                    {getBalanceTransferExpenses().map((transfer, idx) => (
+                      <Box key={idx} sx={{ display: "flex", justifyContent: "space-between", px: 1, pl: 3, py: 0.15 }}>
+                        <Typography variant="caption" color="text.secondary">{transfer.description}</Typography>
+                        <Typography variant="caption" color="text.secondary">${parseFloat(transfer.amount || 0).toFixed(2)}</Typography>
                       </Box>
                     ))}
                   </Box>
@@ -2222,7 +2437,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 <Box sx={{ borderTop: "1px solid #e0e0e0", my: 1 }} />
 
                 {/* Balance Summary */}
-                {(reportData.previousBalance && reportData.previousBalance !== 0) && (
+                {reportData.previousBalance != null && reportData.previousBalance !== 0 && (
                   <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3 }}>
                     <Typography variant="body2" fontWeight="bold">Previous Due</Typography>
                     <Typography variant="body2" fontWeight="bold">${parseFloat(reportData.previousBalance || 0).toFixed(2)}</Typography>
@@ -2240,7 +2455,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                     {reportData.netDue > 0 ? '$' : '-$'}{parseFloat(Math.abs(reportData.netDue) || 0).toFixed(2)}
                   </Typography>
                 </Box>
-                {(reportData.paidAmount && reportData.paidAmount !== 0) && (
+                {reportData.paidAmount != null && reportData.paidAmount !== 0 && (
                   <Box sx={{ display: "flex", justifyContent: "space-between", px: 1, py: 0.3, mt: 0.5 }}>
                     <Typography variant="body2" fontWeight="bold">Amount Paid</Typography>
                     <Typography variant="body2" fontWeight="bold">${parseFloat(reportData.paidAmount || 0).toFixed(2)}</Typography>
@@ -2385,8 +2600,8 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           <TableCell>Cab #</TableCell>
                           <TableCell>Description</TableCell>
                           <TableCell align="right">Amount</TableCell>
-                          <TableCell align="right">Commission</TableCell>
-                          <TableCell align="right">Net Amount</TableCell>
+                          <TableCell align="right">Merchant Fee</TableCell>
+                          <TableCell align="right">Amount Paid</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2404,13 +2619,13 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         {(() => {
                           const items = getCreditCardRevenues();
                           const totalAmt = items.reduce((s, r) => s + parseFloat(r.amount || 0), 0);
-                          const totalComm = items.reduce((s, r) => s + parseFloat(r.commissionAmount || 0), 0);
+                          const totalFee = items.reduce((s, r) => s + parseFloat(r.commissionAmount || 0), 0);
                           const totalNet = items.reduce((s, r) => s + parseFloat(r.netAmount != null ? r.netAmount : (r.amount || 0)), 0);
                           return (
                             <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
                               <TableCell colSpan={4} align="right"><strong>Credit Card Revenue Subtotal:</strong></TableCell>
                               <TableCell align="right"><strong>${totalAmt.toFixed(2)}</strong></TableCell>
-                              <TableCell align="right" sx={{ color: "#d32f2f" }}><strong>-${totalComm.toFixed(2)}</strong></TableCell>
+                              <TableCell align="right" sx={{ color: "#d32f2f" }}><strong>-${totalFee.toFixed(2)}</strong></TableCell>
                               <TableCell align="right" sx={{ color: "#388e3c" }}><strong>${totalNet.toFixed(2)}</strong></TableCell>
                             </TableRow>
                           );
@@ -2845,21 +3060,21 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               )}
 
-              {/* Commission Expenses Section */}
+              {/* Merchant Fee Expenses Section */}
               {reportData.commissionExpenses && reportData.commissionExpenses.length > 0 && (
                 <Box sx={{ mb: 3 }}>
                   <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#00695c" }}>
-                    Commission Charges
+                    Merchant Fees
                   </Typography>
                   <TableContainer>
                     <Table size="small">
                       <TableHead>
                         <TableRow>
-                          <TableCell>Commission</TableCell>
+                          <TableCell>Type</TableCell>
                           <TableCell>On Revenue</TableCell>
                           <TableCell align="right">Base Amount</TableCell>
                           <TableCell align="right">Rate</TableCell>
-                          <TableCell align="right">Commission Amount</TableCell>
+                          <TableCell align="right">Fee Amount</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -2873,7 +3088,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                           </TableRow>
                         ))}
                         <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={4} align="right"><strong>Commission Subtotal:</strong></TableCell>
+                          <TableCell colSpan={4} align="right"><strong>Merchant Fee Subtotal:</strong></TableCell>
                           <TableCell align="right"><strong>${reportData.commissionExpenses.reduce((s, c) => s + parseFloat(c.amount || 0), 0).toFixed(2)}</strong></TableCell>
                         </TableRow>
                       </TableBody>

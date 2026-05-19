@@ -79,7 +79,8 @@ export const pageMetadata = {
   '/statement-builder': { name: 'Statement Builder', category: 'reports' },
   '/shift-data': { name: 'Driver Shift Data', category: 'reports' },
   '/tax-returns': { name: 'Do Your Own Taxes', category: 'taxes' },
-  '/merchant-mappings': { name: 'Merchant Mappings', category: 'operations' }
+  '/merchant-mappings': { name: 'Merchant Mappings', category: 'operations' },
+  '/admin/statement-transfers': { name: 'Balance Transfers', category: 'financials' }
 };
 
 // Get metadata for a page

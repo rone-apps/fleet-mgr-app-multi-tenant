@@ -40,16 +40,26 @@ import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, apiRequest } from "../lib/api";
 
 const legacyCards = [
+  { key: "enter", label: "Enter Charges", description: "Add new legacy charges", icon: Receipt, color: "#8b5cf6" },
   { key: "customers", label: "Legacy Customers", description: "View legacy customer accounts", icon: People, color: "#f57c00" },
   { key: "charges", label: "Legacy Charges", description: "View historical charge records", icon: Receipt, color: "#ff6f00" },
 ];
 
 export default function LegacyCustomerManagementPage() {
   const [currentUser, setCurrentUser] = useState(null);
-  const [currentTab, setCurrentTab] = useState("customers");
+  const [currentTab, setCurrentTab] = useState("enter");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+
+  // Enter Charges form state
+  const [chargeDate, setChargeDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+  const [selectedDriver, setSelectedDriver] = useState(null);
+  const [chargeAmount, setChargeAmount] = useState('');
+  const [chargeTip, setChargeTip] = useState('0');
+  const [chargeNotes, setChargeNotes] = useState('');
+  const [recentCharges, setRecentCharges] = useState([]);
 
   // Legacy Customers
   const [legacyCustomers, setLegacyCustomers] = useState([]);
@@ -79,7 +89,8 @@ export default function LegacyCustomerManagementPage() {
 
   // Autocomplete options
   const [drivers, setDrivers] = useState([]);
-  const [customers, setCustomers] = useState([]);
+  const [customers, setCustomers] = useState([]); // For charge filters
+  const [allCustomers, setAllCustomers] = useState([]); // For charge entry
 
   // Pagination
   const [page, setPage] = useState(0);
@@ -95,14 +106,11 @@ export default function LegacyCustomerManagementPage() {
       fetchLegacyCustomers();
       fetchDrivers();
       fetchCustomersForFilter();
+      fetchAllCustomers();
     }
   }, []);
 
-  useEffect(() => {
-    if (currentTab === 'charges' && currentUser) {
-      fetchAllCharges();
-    }
-  }, [currentTab]);
+  // Removed automatic charge loading - user must click "Apply" to search
 
   const fetchDrivers = async () => {
     try {
@@ -125,6 +133,18 @@ export default function LegacyCustomerManagementPage() {
       }
     } catch (err) {
       console.error('Error fetching customers:', err);
+    }
+  };
+
+  const fetchAllCustomers = async () => {
+    try {
+      const response = await apiRequest('/legacy-customers/customers-list');
+      if (response.ok) {
+        const data = await response.json();
+        setAllCustomers(data);
+      }
+    } catch (err) {
+      console.error('Error fetching all customers:', err);
     }
   };
 
@@ -221,8 +241,12 @@ export default function LegacyCustomerManagementPage() {
     setFilterDriver(null);
     setFilterStartDate(defaults.start);
     setFilterEndDate(defaults.end);
-    // Fetch with cleared filters
-    setTimeout(() => fetchAllCharges(0, rowsPerPage), 100);
+    // Clear displayed charges - user must click Apply to search again
+    setAllCharges([]);
+    setTotalCharges(0);
+    setTotalAmount(0);
+    setTotalPaid(0);
+    setPage(0);
   };
 
   const handleCustomerExpand = (customerId) => {
@@ -232,6 +256,91 @@ export default function LegacyCustomerManagementPage() {
       setExpandedCustomer(customerId);
       fetchLegacyCharges(customerId);
     }
+  };
+
+  const handleCreateCharge = async (e) => {
+    e?.preventDefault();
+
+    // Validation
+    if (!chargeDate) {
+      setError('Date is required');
+      return;
+    }
+    if (!selectedAccount) {
+      setError('Account is required');
+      return;
+    }
+    if (!selectedDriver) {
+      setError('Driver is required');
+      return;
+    }
+    if (!chargeAmount || parseFloat(chargeAmount) <= 0) {
+      setError('Amount must be greater than 0');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        date: chargeDate,
+        customerDbId: selectedAccount.dbId,
+        driverNumber: selectedDriver.driverNumber,
+        amount: parseFloat(chargeAmount),
+        tip: parseFloat(chargeTip) || 0,
+        notes: chargeNotes || null
+      };
+
+      const response = await apiRequest('/legacy-customers/charges', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to create charge');
+        } else {
+          throw new Error('Failed to create charge');
+        }
+      }
+
+      const newCharge = await response.json();
+
+      // Add to recent charges at the top
+      setRecentCharges(prev => [newCharge, ...prev]);
+
+      // Clear form (keep date and reset others)
+      setSelectedAccount(null);
+      setSelectedDriver(null);
+      setChargeAmount('');
+      setChargeTip('0');
+      setChargeNotes('');
+
+      setSuccess('Charge created successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+
+    } catch (err) {
+      setError(err.message);
+      console.error('Error creating charge:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFormKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleCreateCharge();
+    }
+  };
+
+  const calculateTotal = () => {
+    const amount = parseFloat(chargeAmount) || 0;
+    const tip = parseFloat(chargeTip) || 0;
+    return (amount + tip).toFixed(2);
   };
 
   const renderCustomersTab = () => (
@@ -368,10 +477,10 @@ export default function LegacyCustomerManagementPage() {
     <Box>
       <Alert severity="info" sx={{ mb: 3 }}>
         <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-          Legacy Charges - Last 30 Days (Default)
+          Legacy Charges Search
         </Typography>
         <Typography variant="body2">
-          Showing charges from the last 30 days by default. Use filters below to adjust date range or filter by driver/customer.
+          Define your search criteria below (driver, customer, date range) and click "Apply" to load charges.
         </Typography>
       </Alert>
 
@@ -428,7 +537,7 @@ export default function LegacyCustomerManagementPage() {
             <Button
               fullWidth
               variant="contained"
-              onClick={fetchAllCharges}
+              onClick={() => fetchAllCharges(0, rowsPerPage)}
               sx={{ backgroundColor: '#f57c00', '&:hover': { backgroundColor: '#e65100' } }}
             >
               Apply
@@ -566,11 +675,192 @@ export default function LegacyCustomerManagementPage() {
         <Paper sx={{ p: 6, textAlign: 'center', border: '1px solid #e5e7eb', mt: 3 }} elevation={0}>
           <Receipt sx={{ fontSize: 64, color: '#cbd5e1', mb: 2 }} />
           <Typography variant="h6" sx={{ color: '#64748b', mb: 1 }}>
-            No Legacy Charges Found
+            {totalCharges === 0 && page === 0 ? 'No Charges Loaded' : 'No Legacy Charges Found'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Legacy charge data will appear here once migrated from your old system.
+            {totalCharges === 0 && page === 0
+              ? 'Select your search criteria above and click "Apply" to load legacy charges.'
+              : 'No charges found matching the selected criteria.'}
           </Typography>
+        </Paper>
+      )}
+    </Box>
+  );
+
+  const renderEnterChargesTab = () => (
+    <Box>
+      <Alert severity="info" sx={{ mb: 3 }}>
+        <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+          Quick Charge Entry
+        </Typography>
+        <Typography variant="body2">
+          Enter charge details and press Enter or click Add to save. The form will reset for quick consecutive entries.
+        </Typography>
+      </Alert>
+
+      {/* Entry Form */}
+      <Paper sx={{ p: 3, mb: 3, border: '1px solid #e5e7eb' }} elevation={0}>
+        <Typography variant="h6" sx={{ mb: 3, fontWeight: 600 }}>
+          New Charge Entry
+        </Typography>
+        <form onSubmit={handleCreateCharge}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={2}>
+              <TextField
+                fullWidth
+                size="small"
+                type="date"
+                label="Date"
+                value={chargeDate}
+                onChange={(e) => setChargeDate(e.target.value)}
+                onKeyPress={handleFormKeyPress}
+                InputLabelProps={{ shrink: true }}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={2.5}>
+              <Autocomplete
+                size="small"
+                options={allCustomers}
+                getOptionLabel={(option) => `${option.customerId} - ${option.name}`}
+                value={selectedAccount}
+                onChange={(event, newValue) => setSelectedAccount(newValue)}
+                isOptionEqualToValue={(option, value) => option.dbId === value.dbId}
+                renderInput={(params) => (
+                  <TextField {...params} label="Account *" placeholder="Select account" required />
+                )}
+                onKeyPress={handleFormKeyPress}
+              />
+            </Grid>
+            <Grid item xs={12} sm={2}>
+              <Autocomplete
+                size="small"
+                options={drivers}
+                getOptionLabel={(option) => `${option.driverNumber} - ${option.driverName}`}
+                value={selectedDriver}
+                onChange={(event, newValue) => setSelectedDriver(newValue)}
+                isOptionEqualToValue={(option, value) => option.driverNumber === value.driverNumber}
+                renderInput={(params) => (
+                  <TextField {...params} label="Driver *" placeholder="Select driver" required />
+                )}
+                onKeyPress={handleFormKeyPress}
+              />
+            </Grid>
+            <Grid item xs={12} sm={1.5}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Amount *"
+                value={chargeAmount}
+                onChange={(e) => setChargeAmount(e.target.value)}
+                onKeyPress={handleFormKeyPress}
+                inputProps={{ step: '0.01', min: '0' }}
+                required
+              />
+            </Grid>
+            <Grid item xs={12} sm={1.5}>
+              <TextField
+                fullWidth
+                size="small"
+                type="number"
+                label="Tip"
+                value={chargeTip}
+                onChange={(e) => setChargeTip(e.target.value)}
+                onKeyPress={handleFormKeyPress}
+                inputProps={{ step: '0.01', min: '0' }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={1.5}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Total"
+                value={calculateTotal()}
+                InputProps={{ readOnly: true }}
+                sx={{ '& input': { fontWeight: 600, color: '#059669' } }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={1}>
+              <Button
+                fullWidth
+                variant="contained"
+                type="submit"
+                disabled={loading}
+                sx={{
+                  backgroundColor: '#8b5cf6',
+                  '&:hover': { backgroundColor: '#7c3aed' },
+                  height: '40px'
+                }}
+              >
+                {loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Add'}
+              </Button>
+            </Grid>
+          </Grid>
+          <Grid container spacing={2} sx={{ mt: 1 }}>
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                size="small"
+                multiline
+                rows={2}
+                label="Notes (Optional)"
+                value={chargeNotes}
+                onChange={(e) => setChargeNotes(e.target.value)}
+                placeholder="Add any additional notes..."
+              />
+            </Grid>
+          </Grid>
+        </form>
+      </Paper>
+
+      {/* Recent Charges */}
+      {recentCharges.length > 0 && (
+        <Paper sx={{ border: '1px solid #e5e7eb' }} elevation={0}>
+          <Box sx={{ p: 2, borderBottom: '1px solid #e5e7eb', backgroundColor: '#f8fafc' }}>
+            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+              Recently Added ({recentCharges.length})
+            </Typography>
+          </Box>
+          <TableContainer>
+            <Table>
+              <TableHead sx={{ backgroundColor: '#f8fafc' }}>
+                <TableRow>
+                  <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Date</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Account</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Driver</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Amount</TableCell>
+                  <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Notes</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {recentCharges.map((charge, index) => (
+                  <TableRow key={charge.id || index} hover>
+                    <TableCell>{charge.date || '-'}</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>
+                      {charge.customerName || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {charge.driverNumber || '-'}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {charge.driverName || ''}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 600, color: '#059669' }}>
+                      ${Number(charge.amount || 0).toFixed(2)}
+                    </TableCell>
+                    <TableCell sx={{ maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {charge.notes || '-'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         </Paper>
       )}
     </Box>
@@ -609,7 +899,15 @@ export default function LegacyCustomerManagementPage() {
             <Button
               variant="outlined"
               startIcon={<Refresh />}
-              onClick={() => currentTab === 'customers' ? fetchLegacyCustomers() : fetchAllCharges()}
+              onClick={() => {
+                if (currentTab === 'customers') fetchLegacyCustomers();
+                else if (currentTab === 'charges' && totalCharges > 0) fetchAllCharges(page, rowsPerPage);
+                else if (currentTab === 'enter') {
+                  fetchDrivers();
+                  fetchAllCustomers();
+                }
+              }}
+              disabled={currentTab === 'charges' && totalCharges === 0}
               sx={{ borderColor: '#f57c00', color: '#f57c00' }}
             >
               Refresh
@@ -632,7 +930,7 @@ export default function LegacyCustomerManagementPage() {
         {/* Category Cards */}
         <Grid container spacing={2} sx={{ mb: 4 }}>
           {legacyCards.map((card) => (
-            <Grid item xs={12} sm={6} md={6} key={card.key}>
+            <Grid item xs={12} sm={4} md={4} key={card.key}>
               <Card
                 sx={{
                   cursor: 'pointer',
@@ -678,6 +976,7 @@ export default function LegacyCustomerManagementPage() {
         </Grid>
 
         {/* Tab Content */}
+        {currentTab === 'enter' && renderEnterChargesTab()}
         {currentTab === 'customers' && renderCustomersTab()}
         {currentTab === 'charges' && renderChargesTab()}
       </Box>
