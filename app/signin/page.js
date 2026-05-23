@@ -39,7 +39,7 @@ const theme = createTheme({
 
 // Known companies - maps company ID to display name and database schema
 const KNOWN_COMPANIES = [
-  { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'fareflow' },
+  { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'mac-cabs' },  // Backend maps to fareflow_maclures
   { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'fareflow_bonny' },
   { id: 'demo', name: 'Demo Tenant', schema: 'fareflow_demo' },
   { id: 'yellow-cabs', name: 'Yellow Cabs', schema: 'fareflow_yellow' },
@@ -87,6 +87,12 @@ export default function SignInPage() {
       const displayName = matchedCompany ? matchedCompany.name : companyId;
       const tenantId = matchedCompany ? matchedCompany.id : companyId;
 
+      console.log('=== LOGIN DEBUG ===');
+      console.log('Entered companyId:', companyId);
+      console.log('Matched company:', matchedCompany);
+      console.log('Will set cookie tenantId to:', schemaName);
+      console.log('==================');
+
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: "POST",
         headers: {
@@ -121,6 +127,11 @@ export default function SignInPage() {
 
         document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
         document.cookie = `tenantId=${schemaName}; path=/; max-age=86400; SameSite=Strict`;
+
+        console.log('=== COOKIES SET ===');
+        console.log('Set tenantId cookie to:', schemaName);
+        console.log('All cookies now:', document.cookie);
+        console.log('==================');
 
         // Identify the user in Amplitude so all future events are linked
         amplitude.setUserId(data.username);

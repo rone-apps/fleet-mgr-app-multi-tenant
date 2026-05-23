@@ -81,6 +81,7 @@ import {
   Support,
   Article,
   Code,
+  Extension,
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
@@ -895,6 +896,16 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             badge: 'Bulk',
             gradient: 'linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)',
             accent: '#E5C02E'
+          },
+          {
+            title: 'Plugin Management',
+            description: 'Configure third-party integrations & scheduled imports',
+            icon: Extension,
+            path: '/plugins',
+            roles: ['ADMIN'],
+            badge: 'Integrations',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#764ba2'
           }
         ];
 
