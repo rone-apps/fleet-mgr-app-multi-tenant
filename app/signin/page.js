@@ -37,12 +37,14 @@ const theme = createTheme({
   },
 });
 
-// Known companies - maps company ID to display name and database schema
+// Known companies - maps company ID to display name and TENANT ID (not schema name!)
+// The 'schema' field is actually the tenant ID sent to backend via X-Tenant-ID header
+// Backend's TenantSchemaMapper then maps tenant ID -> actual database schema name
 const KNOWN_COMPANIES = [
-  { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'mac-cabs' },  // Backend maps to fareflow_maclures
-  { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'fareflow_bonny' },
-  { id: 'demo', name: 'Demo Tenant', schema: 'fareflow_demo' },
-  { id: 'yellow-cabs', name: 'Yellow Cabs', schema: 'fareflow_yellow' },
+  { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'mac-cabs' },      // Backend maps to fareflow_maclures
+  { id: 'yellow-cabs', name: 'Yellow Cabs', schema: 'yellow-cabs' },  // Backend maps to fareflow_yellow
+  { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'bonny-taxi' },     // Backend maps to fareflow_bonny
+  { id: 'demo', name: 'Demo Tenant', schema: 'demo' },                // Backend maps to fareflow_demo
 ];
 
 export default function SignInPage() {
