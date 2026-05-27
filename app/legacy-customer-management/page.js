@@ -34,6 +34,7 @@ import {
   Refresh,
   Warning,
   Info,
+  Edit,
 } from "@mui/icons-material";
 import { Autocomplete, TablePagination, CircularProgress, Backdrop } from "@mui/material";
 import GlobalNav from "../components/GlobalNav";
@@ -98,6 +99,18 @@ export default function LegacyCustomerManagementPage() {
   const [totalCharges, setTotalCharges] = useState(0);
   const [totalAmount, setTotalAmount] = useState(0);
   const [totalPaid, setTotalPaid] = useState(0);
+
+  // Edit charge state
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingCharge, setEditingCharge] = useState(null);
+  const [editDate, setEditDate] = useState('');
+  const [editCustomer, setEditCustomer] = useState(null);
+  const [editDriver, setEditDriver] = useState(null);
+  const [editAmount, setEditAmount] = useState('');
+  const [editPayment, setEditPayment] = useState('');
+  const [editCabId, setEditCabId] = useState('');
+  const [editType, setEditType] = useState('');
+  const [editNotes, setEditNotes] = useState('');
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -341,6 +354,119 @@ export default function LegacyCustomerManagementPage() {
     const amount = parseFloat(chargeAmount) || 0;
     const tip = parseFloat(chargeTip) || 0;
     return (amount + tip).toFixed(2);
+  };
+
+  const handleEditCharge = (charge) => {
+    setEditingCharge(charge);
+    setEditDate(charge.date || '');
+    setEditAmount(charge.amount ? charge.amount.toString() : '');
+    setEditPayment(charge.payment ? charge.payment.toString() : '0');
+    setEditCabId(charge.cabId ? charge.cabId.toString() : '');
+    setEditType(charge.type || 'CHARGE');
+    setEditNotes(charge.notes || '');
+
+    // Find and set customer from customers list
+    const customer = customers.find(c => c.dbId === charge.customerDbId);
+    setEditCustomer(customer || null);
+
+    // Find and set driver from drivers list
+    const driver = drivers.find(d => d.driverNumber === charge.driverNumber);
+    setEditDriver(driver || null);
+
+    setEditDialogOpen(true);
+  };
+
+  const handleCloseEditDialog = () => {
+    setEditDialogOpen(false);
+    setEditingCharge(null);
+    setEditDate('');
+    setEditCustomer(null);
+    setEditDriver(null);
+    setEditAmount('');
+    setEditPayment('');
+    setEditCabId('');
+    setEditType('');
+    setEditNotes('');
+  };
+
+  const handleSaveEdit = async () => {
+    // Validation
+    if (!editDate) {
+      setError('Date is required');
+      return;
+    }
+    if (!editCustomer) {
+      setError('Customer is required');
+      return;
+    }
+    if (!editDriver) {
+      setError('Driver is required');
+      return;
+    }
+    if (!editAmount || parseFloat(editAmount) < 0) {
+      setError('Amount must be 0 or greater');
+      return;
+    }
+    if (editPayment && parseFloat(editPayment) < 0) {
+      setError('Payment must be 0 or greater');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const payload = {
+        date: editDate,
+        customerDbId: editCustomer.dbId,
+        driverNumber: editDriver.driverNumber,
+        amount: parseFloat(editAmount),
+        payment: parseFloat(editPayment) || 0,
+        cabId: editCabId ? parseInt(editCabId) : null,
+        type: editType || 'CHARGE',
+        notes: editNotes || null
+      };
+
+      const response = await apiRequest(`/legacy-customers/charges/${editingCharge.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Failed to update charge');
+        } else {
+          throw new Error('Failed to update charge');
+        }
+      }
+
+      const updatedCharge = await response.json();
+
+      // Update the charge in the current list
+      setAllCharges(prev => prev.map(charge =>
+        charge.id === updatedCharge.id ? updatedCharge : charge
+      ));
+
+      // Recalculate totals
+      const newTotal = allCharges.reduce((sum, charge) =>
+        sum + (charge.id === updatedCharge.id ? updatedCharge.amount : charge.amount || 0), 0);
+      const newPaid = allCharges.reduce((sum, charge) =>
+        sum + (charge.id === updatedCharge.id ? updatedCharge.payment : charge.payment || 0), 0);
+      setTotalAmount(newTotal);
+      setTotalPaid(newPaid);
+
+      setSuccess('Charge updated successfully!');
+      setTimeout(() => setSuccess(null), 3000);
+      handleCloseEditDialog();
+
+    } catch (err) {
+      setError(err.message);
+      console.error('Error updating charge:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderCustomersTab = () => (
@@ -613,6 +739,7 @@ export default function LegacyCustomerManagementPage() {
               <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Driver</TableCell>
               <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Type</TableCell>
               <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Notes</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: '#475569' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -650,6 +777,15 @@ export default function LegacyCustomerManagementPage() {
                 </TableCell>
                 <TableCell sx={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {charge.notes || '-'}
+                </TableCell>
+                <TableCell>
+                  <IconButton
+                    size="small"
+                    onClick={() => handleEditCharge(charge)}
+                    sx={{ color: '#f57c00' }}
+                  >
+                    <Edit fontSize="small" />
+                  </IconButton>
                 </TableCell>
               </TableRow>
             ))}
@@ -866,6 +1002,136 @@ export default function LegacyCustomerManagementPage() {
     </Box>
   );
 
+  const renderEditDialog = () => (
+    <Dialog
+      open={editDialogOpen}
+      onClose={handleCloseEditDialog}
+      maxWidth="md"
+      fullWidth
+    >
+      <DialogTitle sx={{ fontWeight: 600, backgroundColor: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+        Edit Legacy Charge
+      </DialogTitle>
+      <DialogContent sx={{ pt: 3 }}>
+        <Grid container spacing={2} sx={{ mt: 0.5 }}>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              size="small"
+              type="date"
+              label="Date"
+              value={editDate}
+              onChange={(e) => setEditDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              required
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Autocomplete
+              size="small"
+              options={customers}
+              getOptionLabel={(option) => `${option.customerId} - ${option.name}`}
+              value={editCustomer}
+              onChange={(event, newValue) => setEditCustomer(newValue)}
+              isOptionEqualToValue={(option, value) => option.dbId === value.dbId}
+              renderInput={(params) => (
+                <TextField {...params} label="Customer *" required />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <Autocomplete
+              size="small"
+              options={drivers}
+              getOptionLabel={(option) => `${option.driverNumber} - ${option.driverName}`}
+              value={editDriver}
+              onChange={(event, newValue) => setEditDriver(newValue)}
+              isOptionEqualToValue={(option, value) => option.driverNumber === value.driverNumber}
+              renderInput={(params) => (
+                <TextField {...params} label="Driver *" required />
+              )}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Amount *"
+              value={editAmount}
+              onChange={(e) => setEditAmount(e.target.value)}
+              inputProps={{ step: '0.01', min: '0' }}
+              required
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Payment"
+              value={editPayment}
+              onChange={(e) => setEditPayment(e.target.value)}
+              inputProps={{ step: '0.01', min: '0' }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              size="small"
+              type="number"
+              label="Cab ID"
+              value={editCabId}
+              onChange={(e) => setEditCabId(e.target.value)}
+              inputProps={{ min: '0' }}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Type"
+              value={editType}
+              onChange={(e) => setEditType(e.target.value)}
+              placeholder="CHARGE"
+            />
+          </Grid>
+          <Grid item xs={12}>
+            <TextField
+              fullWidth
+              size="small"
+              multiline
+              rows={3}
+              label="Notes"
+              value={editNotes}
+              onChange={(e) => setEditNotes(e.target.value)}
+              placeholder="Add any notes..."
+            />
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions sx={{ p: 2, backgroundColor: '#f8fafc', borderTop: '1px solid #e5e7eb' }}>
+        <Button
+          onClick={handleCloseEditDialog}
+          sx={{ color: '#64748b' }}
+        >
+          Cancel
+        </Button>
+        <Button
+          onClick={handleSaveEdit}
+          variant="contained"
+          disabled={loading}
+          sx={{
+            backgroundColor: '#f57c00',
+            '&:hover': { backgroundColor: '#e65100' }
+          }}
+        >
+          {loading ? <CircularProgress size={20} sx={{ color: '#fff' }} /> : 'Save Changes'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#f6f9fc' }}>
       <GlobalNav currentUser={currentUser} />
@@ -980,6 +1246,9 @@ export default function LegacyCustomerManagementPage() {
         {currentTab === 'customers' && renderCustomersTab()}
         {currentTab === 'charges' && renderChargesTab()}
       </Box>
+
+      {/* Edit Dialog */}
+      {renderEditDialog()}
     </Box>
   );
 }
