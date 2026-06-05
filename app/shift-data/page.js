@@ -138,7 +138,7 @@ export default function ShiftDataPage() {
     const d = new Date(dt);
     return d.toLocaleString("en-US", {
       month: "short", day: "numeric", year: "numeric",
-      hour: "2-digit", minute: "2-digit",
+      hour: "2-digit", minute: "2-digit", hour12: false,
     });
   };
 

@@ -191,7 +191,7 @@ function CreditCardDataView({ currentUser }) {
       if (!response.ok) throw new Error("Failed to re-enrich");
       const result = await response.json();
       setEnrichResult(result);
-      if (result.cabsUpdated > 0 || result.driversUpdated > 0) {
+      if ((result.cabsSwapped || 0) > 0 || (result.cabsFilled || 0) > 0 || result.driversUpdated > 0) {
         fetchData();
       }
       setTimeout(() => setEnrichResult(null), 8000);
@@ -348,8 +348,8 @@ function CreditCardDataView({ currentUser }) {
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {success && <Alert severity="success" sx={{ mb: 2 }}>{success}</Alert>}
       {enrichResult && (
-        <Alert severity={enrichResult.cabsUpdated > 0 || enrichResult.driversUpdated > 0 ? "success" : "info"} sx={{ mb: 2 }}>
-          Checked {enrichResult.totalChecked} transactions — updated {enrichResult.cabsUpdated} cab(s) and {enrichResult.driversUpdated} driver(s)
+        <Alert severity={(enrichResult.cabsSwapped || 0) > 0 || (enrichResult.cabsFilled || 0) > 0 || enrichResult.driversUpdated > 0 ? "success" : "info"} sx={{ mb: 2 }}>
+          Checked {enrichResult.totalChecked} transactions — swapped {enrichResult.cabsSwapped || 0} virtual cab(s), filled {enrichResult.cabsFilled || 0} missing cab(s), and updated {enrichResult.driversUpdated} driver(s)
         </Alert>
       )}
 
@@ -380,22 +380,19 @@ function CreditCardDataView({ currentUser }) {
                 <TableCell>Cab #</TableCell>
                 <TableCell>Driver #</TableCell>
                 <TableCell>Amount</TableCell>
-                <TableCell>Card Type</TableCell>
-                <TableCell>Card Number</TableCell>
-                <TableCell>Auth Code</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} align="center" sx={{ py: 4 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4 }}>
                     No data found. Use filters and click Search.
                   </TableCell>
                 </TableRow>
@@ -441,11 +438,6 @@ function CreditCardDataView({ currentUser }) {
                       )}
                     </TableCell>
                     <TableCell>${row.amount?.toFixed(2)}</TableCell>
-                    <TableCell>{row.cardType || "-"}</TableCell>
-                    <TableCell sx={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-                      {row.cardholderNumber || (row.cardLastFour ? `****${row.cardLastFour}` : "-")}
-                    </TableCell>
-                    <TableCell>{row.authorizationCode || "-"}</TableCell>
                     <TableCell align="right">
                       {editingId === row.id ? (
                         <>
