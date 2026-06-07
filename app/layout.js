@@ -2,6 +2,7 @@ import './globals.css'
 import Script from 'next/script'
 import NewRelicTenantContext from './components/NewRelicTenantContext'
 import AuthGuard from './components/AuthGuard'
+import AuthInterceptor from './components/AuthInterceptor'
 import { getNewRelicScript } from './lib/newrelic-browser'
 
 export const metadata = {
@@ -77,6 +78,8 @@ export default function RootLayout({ children }) {
       <body>
         {/* New Relic Tenant Context - Sets custom attributes after hydration */}
         <NewRelicTenantContext />
+        {/* Auth Interceptor - Detects token expiry and 401 responses globally */}
+        <AuthInterceptor />
         <AuthGuard>{children}</AuthGuard>
       </body>
     </html>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   TextField,
   Button,
@@ -54,7 +54,20 @@ export default function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const router = useRouter();
+
+  // Check if redirected due to session expiry
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('expired') === 'true') {
+        setSessionExpired(true);
+        // Remove the query parameter from URL
+        window.history.replaceState({}, '', '/signin');
+      }
+    }
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -302,6 +315,26 @@ export default function SignInPage() {
               >
                 Sign in to your account
               </Typography>
+
+              {sessionExpired && (
+                <Alert
+                  severity="warning"
+                  sx={{
+                    mb: 2.5,
+                    borderRadius: "8px",
+                    fontSize: "0.9rem",
+                    "& .MuiAlert-icon": { fontSize: "1.2rem" },
+                  }}
+                  onClose={() => setSessionExpired(false)}
+                >
+                  <Typography variant="body2" fontWeight="bold" gutterBottom>
+                    Session Expired
+                  </Typography>
+                  <Typography variant="body2">
+                    Your session has expired. Please sign in again to continue.
+                  </Typography>
+                </Alert>
+              )}
 
               {error && (
                 <Alert
