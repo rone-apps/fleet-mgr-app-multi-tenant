@@ -33,6 +33,7 @@ import {
   Autocomplete,
   Checkbox,
   FormControlLabel,
+  CircularProgress,
 } from "@mui/material";
 import {
   Add,
@@ -84,6 +85,13 @@ export default function UsersPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
   const [changePassword, setChangePassword] = useState(false); // For edit mode - control password fields
+
+  // Activation/Deactivation dialog
+  const [openStatusDialog, setOpenStatusDialog] = useState(false);
+  const [userForStatusChange, setUserForStatusChange] = useState(null);
+  const [statusChangeReason, setStatusChangeReason] = useState("");
+  const [lastDeactivationInfo, setLastDeactivationInfo] = useState(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -495,22 +503,70 @@ export default function UsersPage() {
   };
 
   const handleToggleActive = async (user) => {
+    setUserForStatusChange(user);
+    setStatusChangeReason("");
+    setError("");
+    setLastDeactivationInfo(null);
+    setOpenStatusDialog(true);
+
+    // If user is inactive, fetch last deactivation reason
+    if (!user.active) {
+      setLoadingHistory(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/users/${user.id}/last-deactivation-reason`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.hasHistory) {
+            setLastDeactivationInfo(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch deactivation history:", err);
+      } finally {
+        setLoadingHistory(false);
+      }
+    }
+  };
+
+  const handleConfirmStatusChange = async () => {
+    if (!userForStatusChange) return;
+
+    // Validate reason
+    if (!statusChangeReason || statusChangeReason.trim().length < 3) {
+      setError("Please provide a reason (at least 3 characters)");
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_BASE_URL}/users/${user.id}/toggle-active`, {
+      const response = await fetch(`${API_BASE_URL}/users/${userForStatusChange.id}/toggle-active`, {
         method: 'PUT',
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
           "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
+        body: JSON.stringify({
+          reason: statusChangeReason.trim()
+        }),
       });
 
       if (response.ok) {
-        const newStatus = !user.active;
+        const newStatus = !userForStatusChange.active;
         const action = newStatus ? "activated" : "deactivated";
-        
-        setSuccess(`User "${user.username}" ${action} successfully!`);
+
+        setSuccess(`User "${userForStatusChange.username}" ${action} successfully!`);
+        setOpenStatusDialog(false);
+        setUserForStatusChange(null);
+        setStatusChangeReason("");
+        setLastDeactivationInfo(null);
         loadUsers();
-        
+
         setTimeout(() => {
           setSuccess("");
         }, 3000);
@@ -1099,6 +1155,159 @@ export default function UsersPage() {
             }}
           >
             {loading ? (dialogMode === "create" ? "Creating..." : "Updating...") : (dialogMode === "create" ? "Create User" : "Update User")}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Activation/Deactivation Confirmation Dialog */}
+      <Dialog
+        open={openStatusDialog}
+        onClose={() => {
+          setOpenStatusDialog(false);
+          setUserForStatusChange(null);
+          setStatusChangeReason("");
+          setLastDeactivationInfo(null);
+          setError("");
+        }}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+            {userForStatusChange?.active ? (
+              <>
+                <Block color="error" />
+                <Typography variant="h6">Deactivate User</Typography>
+              </>
+            ) : (
+              <>
+                <CheckCircle color="success" />
+                <Typography variant="h6">Activate User</Typography>
+              </>
+            )}
+          </Box>
+        </DialogTitle>
+
+        <DialogContent>
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+              {error}
+            </Alert>
+          )}
+
+          {userForStatusChange && (
+            <>
+              <Alert severity="warning" sx={{ mb: 3 }}>
+                <Typography variant="body2" fontWeight="bold" gutterBottom>
+                  {userForStatusChange.active
+                    ? "⚠️ You are about to deactivate this user"
+                    : "✓ You are about to activate this user"
+                  }
+                </Typography>
+                <Typography variant="body2">
+                  {userForStatusChange.active ? (
+                    <>
+                      User <strong>{userForStatusChange.username}</strong> will lose access to the system immediately.
+                      They will not be able to log in until reactivated.
+                    </>
+                  ) : (
+                    <>
+                      User <strong>{userForStatusChange.username}</strong> will regain access to the system.
+                      They will be able to log in with their existing credentials.
+                    </>
+                  )}
+                </Typography>
+              </Alert>
+
+              <Box sx={{ mb: 2, p: 2, bgcolor: "#f5f5f5", borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  User Details:
+                </Typography>
+                <Grid container spacing={1}>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Username</Typography>
+                    <Typography variant="body2" fontWeight="bold">{userForStatusChange.username}</Typography>
+                  </Grid>
+                  <Grid item xs={6}>
+                    <Typography variant="caption" color="textSecondary">Role</Typography>
+                    <Typography variant="body2">{userForStatusChange.role}</Typography>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="caption" color="textSecondary">Name</Typography>
+                    <Typography variant="body2">
+                      {userForStatusChange.firstName} {userForStatusChange.lastName}
+                    </Typography>
+                  </Grid>
+                </Grid>
+              </Box>
+
+              {/* Show last deactivation reason when activating */}
+              {!userForStatusChange.active && (
+                <Box sx={{ mb: 2 }}>
+                  {loadingHistory ? (
+                    <Alert severity="info" icon={<CircularProgress size={20} />}>
+                      Loading deactivation history...
+                    </Alert>
+                  ) : lastDeactivationInfo ? (
+                    <Alert severity="error" sx={{ bgcolor: "#fff3e0" }}>
+                      <Typography variant="body2" fontWeight="bold" gutterBottom>
+                        📋 Last Deactivation:
+                      </Typography>
+                      <Typography variant="body2" sx={{ mb: 1 }}>
+                        <strong>Reason:</strong> {lastDeactivationInfo.reason}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Deactivated by <strong>{lastDeactivationInfo.deactivatedBy}</strong> on{" "}
+                        {new Date(lastDeactivationInfo.deactivatedAt).toLocaleString()}
+                      </Typography>
+                    </Alert>
+                  ) : (
+                    <Alert severity="info">
+                      No deactivation history found for this user.
+                    </Alert>
+                  )}
+                </Box>
+              )}
+
+              <TextField
+                required
+                fullWidth
+                multiline
+                rows={3}
+                label={userForStatusChange.active ? "Reason for Deactivation *" : "Reason for Activation *"}
+                placeholder={
+                  userForStatusChange.active
+                    ? "e.g., Employee terminated, Account suspended, Security concern..."
+                    : "e.g., Employee rehired, Suspension lifted, Access restored..."
+                }
+                value={statusChangeReason}
+                onChange={(e) => setStatusChangeReason(e.target.value)}
+                helperText="Please provide a clear reason for audit trail (minimum 3 characters)"
+                error={statusChangeReason.length > 0 && statusChangeReason.trim().length < 3}
+              />
+            </>
+          )}
+        </DialogContent>
+
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setOpenStatusDialog(false);
+              setUserForStatusChange(null);
+              setStatusChangeReason("");
+              setLastDeactivationInfo(null);
+              setError("");
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmStatusChange}
+            variant="contained"
+            color={userForStatusChange?.active ? "error" : "success"}
+            disabled={!statusChangeReason || statusChangeReason.trim().length < 3}
+          >
+            {userForStatusChange?.active ? "Deactivate User" : "Activate User"}
           </Button>
         </DialogActions>
       </Dialog>
