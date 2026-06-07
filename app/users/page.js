@@ -31,6 +31,8 @@ import {
   Select,
   Tooltip,
   Autocomplete,
+  Checkbox,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Add,
@@ -81,6 +83,7 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
+  const [changePassword, setChangePassword] = useState(false); // For edit mode - control password fields
 
   const [formData, setFormData] = useState({
     username: "",
@@ -231,6 +234,7 @@ export default function UsersPage() {
     setEditingUser(user);
     setShowPassword(false);
     setShowPasswordConfirm(false);
+    setChangePassword(false); // Reset to unchecked in edit mode
     setError("");
     setSuccess("");
 
@@ -332,16 +336,30 @@ export default function UsersPage() {
         return false;
       }
     } else {
-      // Edit mode - password is optional
-      if (formData.password && formData.password.length < 6) {
-        setError("Password must be at least 6 characters if provided");
-        return false;
-      }
+      // Edit mode - password is optional (only required if changePassword is checked)
+      if (changePassword) {
+        // User wants to change password - validate it
+        if (!formData.password || formData.password.length === 0) {
+          setError("Password is required when 'Change Password' is checked");
+          return false;
+        }
 
-      if (formData.password && formData.password !== formData.passwordConfirm) {
-        setError("Passwords do not match");
-        return false;
+        if (formData.password.length < 6) {
+          setError("Password must be at least 6 characters");
+          return false;
+        }
+
+        if (!formData.passwordConfirm || formData.passwordConfirm.length === 0) {
+          setError("Password confirmation is required");
+          return false;
+        }
+
+        if (formData.password !== formData.passwordConfirm) {
+          setError("Passwords do not match");
+          return false;
+        }
       }
+      // If changePassword is false, ignore password fields entirely
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -437,9 +455,12 @@ export default function UsersPage() {
           role: formData.role,
         };
 
-        // Only include password if provided
-        if (formData.password) {
+        // Only include password if user explicitly chose to change it
+        if (changePassword && formData.password) {
           requestBody.password = formData.password;
+          console.log("Password change requested - including in update");
+        } else {
+          console.log("Password not being changed - excluded from update");
         }
 
         const response = await fetch(`${API_BASE_URL}/users/${editingUser.id}`, {
@@ -973,52 +994,96 @@ export default function UsersPage() {
               </Grid>
             )}
 
-            {/* Password */}
-            <Grid item xs={12}>
-              <TextField
-                required={dialogMode === "create"}
-                fullWidth
-                name="password"
-                label={dialogMode === "edit" ? "New Password (leave blank to keep current)" : "Password"}
-                type={showPassword ? "text" : "password"}
-                value={formData.password}
-                onChange={handleChange}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                helperText="At least 6 characters"
-              />
-            </Grid>
+            {/* Change Password Checkbox (Edit Mode Only) */}
+            {dialogMode === "edit" && (
+              <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={changePassword}
+                      onChange={(e) => {
+                        setChangePassword(e.target.checked);
+                        // Clear password fields when unchecking
+                        if (!e.target.checked) {
+                          setFormData({
+                            ...formData,
+                            password: "",
+                            passwordConfirm: ""
+                          });
+                          setShowPassword(false);
+                          setShowPasswordConfirm(false);
+                        }
+                      }}
+                      color="primary"
+                    />
+                  }
+                  label={
+                    <Box>
+                      <Typography variant="body2" fontWeight="bold">
+                        Change Password
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        Check this box to set a new password for this user
+                      </Typography>
+                    </Box>
+                  }
+                />
+              </Grid>
+            )}
 
-            {/* Password Confirmation */}
-            <Grid item xs={12}>
-              <TextField
-                required={dialogMode === "create" || (dialogMode === "edit" && formData.password.length > 0)}
-                fullWidth
-                name="passwordConfirm"
-                label={dialogMode === "edit" ? "Confirm New Password" : "Confirm Password"}
-                type={showPasswordConfirm ? "text" : "password"}
-                value={formData.passwordConfirm}
-                onChange={handleChange}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton onClick={() => setShowPasswordConfirm(!showPasswordConfirm)} edge="end">
-                        {showPasswordConfirm ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                helperText={formData.password !== formData.passwordConfirm && formData.passwordConfirm ? "Passwords do not match" : "Must match password above"}
-                error={formData.password !== formData.passwordConfirm && formData.passwordConfirm.length > 0}
-              />
-            </Grid>
+            {/* Password Fields (Always shown in create mode, conditionally in edit mode) */}
+            {(dialogMode === "create" || changePassword) && (
+              <>
+                {/* Password */}
+                <Grid item xs={12}>
+                  <TextField
+                    required
+                    fullWidth
+                    name="password"
+                    label="Password"
+                    type={showPassword ? "text" : "password"}
+                    value={formData.password}
+                    onChange={handleChange}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                            {showPassword ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                    helperText="At least 6 characters"
+                    autoComplete="new-password"
+                  />
+                </Grid>
+
+                {/* Password Confirmation */}
+                <Grid item xs={12}>
+                  <TextField
+                    required
+                    fullWidth
+                    name="passwordConfirm"
+                    label="Confirm Password"
+                    type={showPasswordConfirm ? "text" : "password"}
+                    value={formData.passwordConfirm}
+                    onChange={handleChange}
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton onClick={() => setShowPasswordConfirm(!showPasswordConfirm)} edge="end">
+                            {showPasswordConfirm ? <VisibilityOff /> : <Visibility />}
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                    helperText={formData.password !== formData.passwordConfirm && formData.passwordConfirm ? "Passwords do not match" : "Must match password above"}
+                    error={formData.password !== formData.passwordConfirm && formData.passwordConfirm.length > 0}
+                    autoComplete="new-password"
+                  />
+                </Grid>
+              </>
+            )}
           </Grid>
         </DialogContent>
 

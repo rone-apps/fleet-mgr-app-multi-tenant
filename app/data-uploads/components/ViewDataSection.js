@@ -211,8 +211,26 @@ function CreditCardDataView({ currentUser }) {
         fetch(`${API_BASE_URL}/drivers`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             "X-Tenant-ID": localStorage.getItem("tenantSchema"), } }),
       ]);
-      if (cabsRes.ok) setCabs(await cabsRes.json());
-      if (driversRes.ok) setDrivers(await driversRes.json());
+      if (cabsRes.ok) {
+        const cabsData = await cabsRes.json();
+        // Sort cab numbers naturally (2, 3, 10, 100 instead of 10, 100, 2, 3)
+        cabsData.sort((a, b) => {
+          const numA = parseInt(a.cabNumber);
+          const numB = parseInt(b.cabNumber);
+          return numA - numB;
+        });
+        setCabs(cabsData);
+      }
+      if (driversRes.ok) {
+        const driversData = await driversRes.json();
+        // Sort drivers alphabetically by name (firstName lastName)
+        driversData.sort((a, b) => {
+          const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+          const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setDrivers(driversData);
+      }
     } catch (e) {
       console.error("Error fetching dropdowns:", e);
     }
@@ -514,8 +532,26 @@ function MileageDataView({ currentUser }) {
         fetch(`${API_BASE_URL}/drivers`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             "X-Tenant-ID": localStorage.getItem("tenantSchema"), } }),
       ]);
-      if (cabsRes.ok) setCabs(await cabsRes.json());
-      if (driversRes.ok) setDrivers(await driversRes.json());
+      if (cabsRes.ok) {
+        const cabsData = await cabsRes.json();
+        // Sort cab numbers naturally (2, 3, 10, 100 instead of 10, 100, 2, 3)
+        cabsData.sort((a, b) => {
+          const numA = parseInt(a.cabNumber);
+          const numB = parseInt(b.cabNumber);
+          return numA - numB;
+        });
+        setCabs(cabsData);
+      }
+      if (driversRes.ok) {
+        const driversData = await driversRes.json();
+        // Sort drivers alphabetically by name (firstName lastName)
+        driversData.sort((a, b) => {
+          const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+          const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setDrivers(driversData);
+      }
     } catch (e) {
       console.error("Error fetching dropdowns:", e);
     }
@@ -789,8 +825,26 @@ function AirportTripsDataView({ currentUser }) {
         fetch(`${API_BASE_URL}/drivers`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
             "X-Tenant-ID": localStorage.getItem("tenantSchema"), } }),
       ]);
-      if (cabsRes.ok) setCabs(await cabsRes.json());
-      if (driversRes.ok) setDrivers(await driversRes.json());
+      if (cabsRes.ok) {
+        const cabsData = await cabsRes.json();
+        // Sort cab numbers naturally (2, 3, 10, 100 instead of 10, 100, 2, 3)
+        cabsData.sort((a, b) => {
+          const numA = parseInt(a.cabNumber);
+          const numB = parseInt(b.cabNumber);
+          return numA - numB;
+        });
+        setCabs(cabsData);
+      }
+      if (driversRes.ok) {
+        const driversData = await driversRes.json();
+        // Sort drivers alphabetically by name (firstName lastName)
+        driversData.sort((a, b) => {
+          const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+          const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setDrivers(driversData);
+      }
     } catch (e) {
       console.error("Error fetching dropdowns:", e);
     }
@@ -1112,8 +1166,26 @@ function AirportTripsDriverDataView({ currentUser }) {
         fetch(`${API_BASE_URL}/cabs`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") } }),
         fetch(`${API_BASE_URL}/drivers`, { headers: { Authorization: `Bearer ${token}`, "X-Tenant-ID": localStorage.getItem("tenantSchema") } }),
       ]);
-      if (cabsRes.ok) setCabs(await cabsRes.json());
-      if (driversRes.ok) setDrivers(await driversRes.json());
+      if (cabsRes.ok) {
+        const cabsData = await cabsRes.json();
+        // Sort cab numbers naturally (2, 3, 10, 100 instead of 10, 100, 2, 3)
+        cabsData.sort((a, b) => {
+          const numA = parseInt(a.cabNumber);
+          const numB = parseInt(b.cabNumber);
+          return numA - numB;
+        });
+        setCabs(cabsData);
+      }
+      if (driversRes.ok) {
+        const driversData = await driversRes.json();
+        // Sort drivers alphabetically by name (firstName lastName)
+        driversData.sort((a, b) => {
+          const nameA = `${a.firstName || ''} ${a.lastName || ''}`.trim().toLowerCase();
+          const nameB = `${b.firstName || ''} ${b.lastName || ''}`.trim().toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        setDrivers(driversData);
+      }
     } catch (e) {
       console.error("Error fetching dropdowns:", e);
     }

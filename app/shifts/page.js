@@ -69,6 +69,7 @@ import {
   Delete as DeleteIcon,
 } from "@mui/icons-material";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
+import { formatDatePST, getTodayPST, formatDateRangePST, calculateDuration, formatDateTimePST } from "../lib/dateUtils";
 
 export default function ShiftsPage() {
   const router = useRouter();
@@ -87,6 +88,7 @@ export default function ShiftsPage() {
   const [cabFilter, setCabFilter] = useState("");
   const [ownerFilter, setOwnerFilter] = useState("");
   const [viewMode, setViewMode] = useState("by-cab");
+  const [showInactiveCabs, setShowInactiveCabs] = useState(false);
   const [attributeFilters, setAttributeFilters] = useState({
     cabType: "ALL",
     shareType: "ALL",
@@ -104,6 +106,8 @@ export default function ShiftsPage() {
   const [openStatusDialog, setOpenStatusDialog] = useState(false);
   const [openProfileAssignmentDialog, setOpenProfileAssignmentDialog] = useState(false);
   const [openProfileHistoryDialog, setOpenProfileHistoryDialog] = useState(false);
+  const [openShiftTypeDialog, setOpenShiftTypeDialog] = useState(false);
+  const [shiftTypeHistory, setShiftTypeHistory] = useState([]);
   const [selectedShift, setSelectedShift] = useState(null);
   const [ownershipHistory, setOwnershipHistory] = useState([]);
   const [statusHistory, setStatusHistory] = useState([]);
@@ -114,6 +118,11 @@ export default function ShiftsPage() {
   const [attributeHistory, setAttributeHistory] = useState([]);
   const [statusChangeFormData, setStatusChangeFormData] = useState({
     effectiveFrom: new Date().toISOString().split("T")[0],
+    reason: "",
+  });
+
+  const [shiftTypeChangeFormData, setShiftTypeChangeFormData] = useState({
+    shiftType: "",
     reason: "",
   });
 
@@ -145,7 +154,6 @@ export default function ShiftsPage() {
   // Stats state (for banner)
   const [allShiftsStats, setAllShiftsStats] = useState({ total: 0, active: 0 });
   const [allShiftsData, setAllShiftsData] = useState([]);
-  const [showAll, setShowAll] = useState(false);
 
   // Tab state
   const [tabValue, setTabValue] = useState(0);
@@ -165,6 +173,7 @@ export default function ShiftsPage() {
     hasAirportLicense: false,
     airportLicenseNumber: "",
     airportLicenseExpiry: "",
+    createdDate: new Date().toISOString().split("T")[0], // Add creation date field
   });
 
   const [transferFormData, setTransferFormData] = useState({
@@ -200,6 +209,13 @@ export default function ShiftsPage() {
     loadData();
   }, [router]);
 
+  // Reload cabs when show inactive filter changes
+  useEffect(() => {
+    if (currentUser) {
+      loadCabs();
+    }
+  }, [showInactiveCabs]);
+
   const loadData = async () => {
     await Promise.all([loadCabs(), loadDrivers(), loadShiftProfiles(), loadAllShiftsStats()]);
     setLoading(false);
@@ -229,10 +245,11 @@ export default function ShiftsPage() {
 
   const loadCabs = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/cabs`, {
+      const url = `${API_BASE_URL}/cabs${showInactiveCabs ? '?includeInactive=true' : ''}`;
+      const response = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
         },
       });
 
@@ -635,10 +652,8 @@ export default function ShiftsPage() {
   const getFilteredCabs = () => {
     let result = cabs;
 
-    // Unless "Show All" is checked, only show active cabs that have shifts
-    if (!showAll) {
-      result = result.filter(cab => cab.status === "ACTIVE" && cabIdsWithShifts.has(cab.id));
-    }
+    // Cabs are already filtered by backend based on showInactiveCabs checkbox
+    // No need for additional client-side status filtering
 
     if (cabSearchText) {
       const searchLower = cabSearchText.toLowerCase();
@@ -656,8 +671,8 @@ export default function ShiftsPage() {
   const getFilteredOwners = () => {
     let result = drivers;
 
-    // Default: only owners with active shifts. Show All: owners with any shifts + all drivers
-    if (!showAll) {
+    // Default: only owners with active shifts. Show Inactive: owners with any shifts + all drivers
+    if (!showInactiveCabs) {
       result = result.filter(driver => ownerIdsWithActiveShifts.has(driver.id));
     }
 
@@ -700,6 +715,7 @@ export default function ShiftsPage() {
       hasAirportLicense: false,
       airportLicenseNumber: "",
       airportLicenseExpiry: "",
+      createdDate: new Date().toISOString().split("T")[0],
     });
     setError("");
     setSuccess("");
@@ -722,6 +738,21 @@ export default function ShiftsPage() {
 
   const handleCreateShift = async () => {
     try {
+      // Validate: Owner is required
+      if (!createFormData.ownerId) {
+        setError("Owner is required. Please select an owner for this shift.");
+        return;
+      }
+
+      // Validate: Check if shift type already exists for this cab
+      const existingShifts = allShiftsData.filter(s => s.cabId === selectedCab?.id);
+      const existingTypes = existingShifts.map(s => s.shiftType);
+
+      if (existingTypes.includes(createFormData.shiftType)) {
+        setError(`A ${createFormData.shiftType} shift already exists for this cab. Cannot create duplicate shift types.`);
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/shifts`, {
         method: "POST",
         headers: {
@@ -1064,12 +1095,8 @@ export default function ShiftsPage() {
 
   const formatDate = (dateString) => {
     if (!dateString) return "Present";
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", { 
-      year: "numeric", 
-      month: "short", 
-      day: "numeric" 
-    });
+    // Use PST date formatting utility
+    return formatDatePST(dateString);
   };
 
   const getAcquisitionTypeColor = (type) => {
@@ -1080,6 +1107,66 @@ export default function ShiftsPage() {
       "INHERITANCE": "secondary",
     };
     return colors[type] || "default";
+  };
+
+  const handleOpenShiftTypeDialog = async () => {
+    if (!selectedCab) return;
+
+    setShiftTypeChangeFormData({
+      shiftType: selectedCab.cabShiftType === "SINGLE" ? "DOUBLE" : "SINGLE",
+      reason: "",
+    });
+    setOpenShiftTypeDialog(true);
+
+    // Load history
+    try {
+      const response = await fetch(`${API_BASE_URL}/cabs/${selectedCab.id}/shift-type-history`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShiftTypeHistory(data);
+      }
+    } catch (err) {
+      console.error("Error loading shift type history:", err);
+    }
+  };
+
+  const handleChangeShiftType = async () => {
+    if (!selectedCab) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/cabs/${selectedCab.id}/shift-type`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+        body: JSON.stringify({
+          shiftType: shiftTypeChangeFormData.shiftType,
+          reason: shiftTypeChangeFormData.reason,
+          changedBy: "admin", // TODO: Get from auth context
+        }),
+      });
+
+      if (response.ok) {
+        setSuccess(`Cab shift type changed to ${shiftTypeChangeFormData.shiftType}`);
+        setOpenShiftTypeDialog(false);
+        loadAllShiftsStats(); // Reload data
+        loadShiftsForCab(selectedCab.id);
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to change shift type");
+      }
+    } catch (err) {
+      console.error("Error changing shift type:", err);
+      setError("Failed to change shift type");
+    }
   };
 
   const getAcquisitionTypeLabel = (type) => {
@@ -1149,12 +1236,12 @@ export default function ShiftsPage() {
           <FormControlLabel
             control={
               <Checkbox
-                checked={showAll}
-                onChange={(e) => setShowAll(e.target.checked)}
+                checked={showInactiveCabs}
+                onChange={(e) => setShowInactiveCabs(e.target.checked)}
               />
             }
-            label={<Typography variant="body1" fontWeight={600}>Show All (incl. inactive)</Typography>}
-            sx={{ mt: 0.5, border: "1px solid #e0e0e0", borderRadius: 1, px: 1.5, py: 0.25, backgroundColor: showAll ? "#e3f2fd" : "transparent" }}
+            label={<Typography variant="body1" fontWeight={600}>Show Deactivated Cabs</Typography>}
+            sx={{ mt: 0.5, border: "1px solid #e0e0e0", borderRadius: 1, px: 1.5, py: 0.25, backgroundColor: showInactiveCabs ? "#e3f2fd" : "transparent" }}
           />
         </Box>
 
@@ -1339,7 +1426,29 @@ export default function ShiftsPage() {
                           >
                             <DirectionsCar sx={{ mr: 2, color: "#1976d2" }} />
                             <ListItemText
-                              primary={cab.cabNumber}
+                              primary={
+                                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                                  {cab.cabNumber}
+                                  {cab.status === 'INACTIVE' && cab.deactivatedDate && (
+                                    <Chip
+                                      label={`Deactivated ${formatDatePST(cab.deactivatedDate)}`}
+                                      size="small"
+                                      color="error"
+                                      variant="outlined"
+                                      sx={{ fontSize: "0.65rem", height: "18px" }}
+                                    />
+                                  )}
+                                  {!cabIdsWithShifts.has(cab.id) && cab.status === 'ACTIVE' && (
+                                    <Chip
+                                      label="No Shifts"
+                                      size="small"
+                                      color="warning"
+                                      variant="outlined"
+                                      sx={{ fontSize: "0.65rem", height: "18px" }}
+                                    />
+                                  )}
+                                </Box>
+                              }
                               secondary={`${cab.registrationNumber} - ${cab.make} ${cab.model}`}
                             />
                           </ListItem>
@@ -1449,17 +1558,61 @@ export default function ShiftsPage() {
                           : `${selectedOwner?.driverNumber} - ${shifts.length} shift(s) owned`
                         }
                       </Typography>
+                      {viewMode === "by-cab" && (
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.5 }}>
+                          {selectedCab?.cabShiftType && (
+                            <Chip
+                              label={`${selectedCab.cabShiftType === "SINGLE" ? "Single" : "Double"} Shift`}
+                              size="small"
+                              color={selectedCab.cabShiftType === "SINGLE" ? "warning" : "primary"}
+                              sx={{ fontSize: "0.7rem", height: "20px", cursor: "pointer" }}
+                              onClick={handleOpenShiftTypeDialog}
+                            />
+                          )}
+                          {selectedCab?.fleetAddedDate && (
+                            <Typography variant="caption" color="text.secondary">
+                              Fleet Added: {formatDatePST(selectedCab.fleetAddedDate)}
+                            </Typography>
+                          )}
+                        </Box>
+                      )}
                     </Box>
                   </Box>
-                  {canEdit && viewMode === "by-cab" && shifts.length < 2 && (
-                    <Button
-                      variant="contained"
-                      startIcon={<AddIcon />}
-                      onClick={handleOpenCreateDialog}
-                    >
-                      Create Shift
-                    </Button>
-                  )}
+                  {canEdit && viewMode === "by-cab" && (() => {
+                    if (shifts.length === 0) {
+                      // Cab has NO shifts - show prominent message
+                      return (
+                        <Box>
+                          <Alert severity="info" sx={{ mb: 2 }}>
+                            This cab has no shifts configured. Click below to create DAY and NIGHT shifts.
+                          </Alert>
+                          <Button
+                            variant="contained"
+                            color="primary"
+                            size="large"
+                            startIcon={<AddIcon />}
+                            onClick={handleOpenCreateDialog}
+                          >
+                            Create Shifts for Cab {selectedCab?.cabNumber}
+                          </Button>
+                        </Box>
+                      );
+                    } else if (shifts.length < 2) {
+                      // Cab has 1 shift - show normal create button
+                      const existingShiftType = shifts[0]?.shiftType;
+                      const missingShiftType = existingShiftType === "DAY" ? "Night" : "Day";
+                      return (
+                        <Button
+                          variant="contained"
+                          startIcon={<AddIcon />}
+                          onClick={handleOpenCreateDialog}
+                        >
+                          Create {missingShiftType} Shift
+                        </Button>
+                      );
+                    }
+                    return null; // Cab has 2 shifts already
+                  })()}
                 </Box>
                 <Box sx={{ p: 3 }}>
 
@@ -1678,7 +1831,7 @@ export default function ShiftsPage() {
                                       Expires
                                     </Typography>
                                     <Typography variant="body2">
-                                      {new Date(shift.airportLicenseExpiry).toLocaleDateString()}
+                                      {formatDatePST(shift.airportLicenseExpiry)}
                                     </Typography>
                                   </Grid>
                                 )}
@@ -1711,6 +1864,20 @@ export default function ShiftsPage() {
                                 </Typography>
                               )}
                             </Box>
+
+                            <Divider sx={{ my: 2 }} />
+
+                            {/* Creation Date */}
+                            {shift.createdAt && (
+                              <Box sx={{ mb: 2 }}>
+                                <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+                                  Shift Created
+                                </Typography>
+                                <Typography variant="body2">
+                                  {formatDateTimePST(shift.createdAt)}
+                                </Typography>
+                              </Box>
+                            )}
 
                             <Divider sx={{ my: 2 }} />
 
@@ -1915,25 +2082,35 @@ export default function ShiftsPage() {
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Shift Type</InputLabel>
-                <Select
-                  value={createFormData.shiftType}
-                  label="Shift Type"
-                  onChange={(e) => handleShiftTypeChange(e.target.value)}
-                >
-                  <MenuItem value="DAY">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <DayIcon /> Day Shift
-                    </Box>
-                  </MenuItem>
-                  <MenuItem value="NIGHT">
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <NightIcon /> Night Shift
-                    </Box>
-                  </MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={(() => {
+                  // Filter shift type options based on existing shifts for this cab
+                  const existingShifts = allShiftsData.filter(s => s.cabId === selectedCab?.id);
+                  const existingTypes = existingShifts.map(s => s.shiftType);
+                  const allOptions = [
+                    { value: "DAY", label: "Day Shift" },
+                    { value: "NIGHT", label: "Night Shift" }
+                  ];
+                  // Only show options that don't already exist
+                  return allOptions.filter(opt => !existingTypes.includes(opt.value));
+                })()}
+                getOptionLabel={(option) => option.label || ""}
+                value={createFormData.shiftType ? { value: createFormData.shiftType, label: createFormData.shiftType === "DAY" ? "Day Shift" : "Night Shift" } : null}
+                onChange={(e, newValue) => handleShiftTypeChange(newValue?.value || "")}
+                renderInput={(params) => <TextField {...params} label="Shift Type" required size="small" />}
+                renderOption={(props, option) => {
+                  const { key, ...otherProps } = props;
+                  return (
+                    <li key={key} {...otherProps}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                        {option.value === "DAY" ? <DayIcon /> : <NightIcon />} {option.label}
+                      </Box>
+                    </li>
+                  );
+                }}
+                size="small"
+                noOptionsText="All shift types already exist for this cab"
+              />
             </Grid>
 
             <Grid item xs={6}>
@@ -1963,39 +2140,47 @@ export default function ShiftsPage() {
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth size="small" required>
-                <InputLabel>Owner</InputLabel>
-                <Select
-                  value={createFormData.ownerId}
-                  label="Owner"
-                  onChange={(e) => setCreateFormData({ ...createFormData, ownerId: e.target.value })}
-                >
-                  {drivers.map((driver) => (
-                    <MenuItem key={driver.id} value={driver.id}>
-                      {driver.driverNumber} - {driver.firstName} {driver.lastName}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={drivers}
+                getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
+                value={drivers.find(d => d.id === createFormData.ownerId) || null}
+                onChange={(e, newValue) => setCreateFormData({ ...createFormData, ownerId: newValue?.id || "" })}
+                renderInput={(params) => <TextField {...params} label="Owner" required size="small" />}
+                size="small"
+              />
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Acquisition Type</InputLabel>
-                <Select
-                  value={createFormData.acquisitionType}
-                  label="Acquisition Type"
-                  onChange={(e) => setCreateFormData({ ...createFormData, acquisitionType: e.target.value })}
-                >
-                  <MenuItem value="INITIAL_ASSIGNMENT">Initial Assignment</MenuItem>
-                  <MenuItem value="PURCHASE">Purchase</MenuItem>
-                  <MenuItem value="TRANSFER">Transfer</MenuItem>
-                  <MenuItem value="INHERITANCE">Inheritance</MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={[
+                  { value: "INITIAL_ASSIGNMENT", label: "Initial Assignment" },
+                  { value: "PURCHASE", label: "Purchase" },
+                  { value: "TRANSFER", label: "Transfer" },
+                  { value: "INHERITANCE", label: "Inheritance" }
+                ]}
+                getOptionLabel={(option) => option.label || ""}
+                value={createFormData.acquisitionType ? { value: createFormData.acquisitionType, label: createFormData.acquisitionType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) } : null}
+                onChange={(e, newValue) => setCreateFormData({ ...createFormData, acquisitionType: newValue?.value || "" })}
+                renderInput={(params) => <TextField {...params} label="Acquisition Type" size="small" />}
+                size="small"
+              />
             </Grid>
 
-            <Grid item xs={12}>
+            <Grid item xs={6}>
+              <TextField
+                label="Creation Date"
+                type="date"
+                value={createFormData.createdDate || new Date().toISOString().split("T")[0]}
+                onChange={(e) => setCreateFormData({ ...createFormData, createdDate: e.target.value })}
+                fullWidth
+                size="small"
+                required
+                InputLabelProps={{ shrink: true }}
+                helperText="Date when shift ownership begins"
+              />
+            </Grid>
+
+            <Grid item xs={6}>
               <TextField
                 label="Acquisition Price"
                 type="number"
@@ -2032,47 +2217,46 @@ export default function ShiftsPage() {
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Cab Type</InputLabel>
-                <Select
-                  value={createFormData.cabType || ""}
-                  label="Cab Type"
-                  onChange={(e) => setCreateFormData({ ...createFormData, cabType: e.target.value })}
-                >
-                  <MenuItem value="">Select Type</MenuItem>
-                  <MenuItem value="SEDAN">Sedan</MenuItem>
-                  <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={[
+                  { value: "SEDAN", label: "Sedan" },
+                  { value: "HANDICAP_VAN", label: "Handicap Van" }
+                ]}
+                getOptionLabel={(option) => option.label || ""}
+                value={createFormData.cabType ? { value: createFormData.cabType, label: createFormData.cabType === "SEDAN" ? "Sedan" : "Handicap Van" } : null}
+                onChange={(e, newValue) => setCreateFormData({ ...createFormData, cabType: newValue?.value || "" })}
+                renderInput={(params) => <TextField {...params} label="Cab Type" size="small" />}
+                size="small"
+              />
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Share Type</InputLabel>
-                <Select
-                  value={createFormData.shareType || ""}
-                  label="Share Type"
-                  onChange={(e) => setCreateFormData({ ...createFormData, shareType: e.target.value })}
-                >
-                  <MenuItem value="">None</MenuItem>
-                  <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
-                  <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={[
+                  { value: "", label: "None" },
+                  { value: "VOTING_SHARE", label: "Voting Share" },
+                  { value: "NON_VOTING_SHARE", label: "Non-Voting Share" }
+                ]}
+                getOptionLabel={(option) => option.label || ""}
+                value={createFormData.shareType ? { value: createFormData.shareType, label: createFormData.shareType === "VOTING_SHARE" ? "Voting Share" : "Non-Voting Share" } : { value: "", label: "None" }}
+                onChange={(e, newValue) => setCreateFormData({ ...createFormData, shareType: newValue?.value || "" })}
+                renderInput={(params) => <TextField {...params} label="Share Type" size="small" />}
+                size="small"
+              />
             </Grid>
 
             <Grid item xs={12}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Airport License</InputLabel>
-                <Select
-                  value={createFormData.hasAirportLicense ? "YES" : "NO"}
-                  label="Airport License"
-                  onChange={(e) => setCreateFormData({ ...createFormData, hasAirportLicense: e.target.value === "YES" })}
-                >
-                  <MenuItem value="NO">No</MenuItem>
-                  <MenuItem value="YES">Yes</MenuItem>
-                </Select>
-              </FormControl>
+              <Autocomplete
+                options={[
+                  { value: "NO", label: "No" },
+                  { value: "YES", label: "Yes" }
+                ]}
+                getOptionLabel={(option) => option.label || ""}
+                value={createFormData.hasAirportLicense ? { value: "YES", label: "Yes" } : { value: "NO", label: "No" }}
+                onChange={(e, newValue) => setCreateFormData({ ...createFormData, hasAirportLicense: newValue?.value === "YES" })}
+                renderInput={(params) => <TextField {...params} label="Airport License" size="small" />}
+                size="small"
+              />
             </Grid>
 
             {createFormData.hasAirportLicense && (
@@ -2303,8 +2487,65 @@ export default function ShiftsPage() {
 
           {!historyLoading && !historyError && ownershipHistory.length > 0 && (
             <Timeline position="right">
-              {ownershipHistory.map((ownership, index) => (
-                <TimelineItem key={ownership.id}>
+              {ownershipHistory.flatMap((ownership, index) => {
+                const items = [];
+
+                // Check if there's a gap before this ownership (deactivation period)
+                if (index > 0) {
+                  const previousOwnership = ownershipHistory[index - 1];
+                  const previousEndDate = previousOwnership.endDate;
+                  const currentStartDate = ownership.startDate;
+
+                  // If previous ended and current starts on different dates, there's a gap
+                  if (previousEndDate && currentStartDate) {
+                    const prevEnd = new Date(previousEndDate);
+                    const currStart = new Date(currentStartDate);
+
+                    // Calculate days between (if more than 1 day gap)
+                    const daysDiff = Math.floor((currStart - prevEnd) / (1000 * 60 * 60 * 24));
+
+                    if (daysDiff > 1) {
+                      // Add a gap indicator
+                      items.push(
+                        <TimelineItem key={`gap-${index}`}>
+                          <TimelineOppositeContent color="text.secondary" sx={{ flex: 0.3 }}>
+                            <Typography variant="caption" color="error">
+                              {formatDate(new Date(prevEnd.getTime() + 86400000).toISOString().split('T')[0])}
+                            </Typography>
+                            <Typography variant="caption" display="block">
+                              to
+                            </Typography>
+                            <Typography variant="caption" color="error">
+                              {formatDate(new Date(currStart.getTime() - 86400000).toISOString().split('T')[0])}
+                            </Typography>
+                          </TimelineOppositeContent>
+
+                          <TimelineSeparator>
+                            <TimelineDot color="error" variant="outlined">
+                              <BlockIcon fontSize="small" />
+                            </TimelineDot>
+                            <TimelineConnector sx={{ bgcolor: 'error.light' }} />
+                          </TimelineSeparator>
+
+                          <TimelineContent>
+                            <Alert severity="warning" sx={{ mb: 2 }}>
+                              <Typography variant="body2" fontWeight="bold">
+                                Cab Inactive
+                              </Typography>
+                              <Typography variant="caption">
+                                {daysDiff - 1} days out of service
+                              </Typography>
+                            </Alert>
+                          </TimelineContent>
+                        </TimelineItem>
+                      );
+                    }
+                  }
+                }
+
+                // Add the actual ownership item
+                items.push(
+                  <TimelineItem key={ownership.id}>
                   <TimelineOppositeContent color="text.secondary" sx={{ flex: 0.3 }}>
                     <Typography variant="body2" fontWeight="bold">
                       {formatDate(ownership.startDate)}
@@ -2420,7 +2661,10 @@ export default function ShiftsPage() {
                     </Card>
                   </TimelineContent>
                 </TimelineItem>
-              ))}
+                );
+
+                return items;
+              }).flat()}
             </Timeline>
           )}
         </DialogContent>
@@ -2658,11 +2902,15 @@ export default function ShiftsPage() {
                 <TimelineItem key={assignment.id}>
                   <TimelineOppositeContent color="textSecondary" sx={{ maxWidth: "30%" }}>
                     <Typography variant="body2" fontWeight="bold">
-                      {new Date(assignment.startDate).toLocaleDateString()}
+                      {formatDatePST(assignment.startDate)}
                     </Typography>
-                    {assignment.endDate && (
+                    {assignment.endDate ? (
                       <Typography variant="caption">
-                        to {new Date(assignment.endDate).toLocaleDateString()}
+                        to {formatDatePST(assignment.endDate)}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="success.main">
+                        to present
                       </Typography>
                     )}
                   </TimelineOppositeContent>
@@ -2714,7 +2962,7 @@ export default function ShiftsPage() {
                             Assigned by: {assignment.assignedBy}
                           </Typography>
                           <Typography variant="caption" color="textSecondary" sx={{ display: "block" }}>
-                            on {new Date(assignment.createdAt).toLocaleDateString()}
+                            on {formatDatePST(assignment.createdAt)}
                           </Typography>
                         </Box>
                       </CardContent>
@@ -3037,6 +3285,96 @@ export default function ShiftsPage() {
         <DialogActions sx={{ borderTop: 1, borderColor: "divider", px: 3, py: 2 }}>
           <Button onClick={() => setOpenManageAttributesDialog(false)} variant="contained">
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Shift Type Change Dialog */}
+      <Dialog open={openShiftTypeDialog} onClose={() => setOpenShiftTypeDialog(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <Typography variant="h6">Change Cab Shift Type</Typography>
+            <IconButton onClick={() => setOpenShiftTypeDialog(false)}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+        </DialogTitle>
+        <DialogContent dividers>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2" gutterBottom>
+              <strong>Current:</strong> {selectedCab?.cabShiftType === "SINGLE" ? "Single Shift (DAY only)" : "Double Shift (DAY + NIGHT)"}
+            </Typography>
+            <Typography variant="body2">
+              <strong>Change to:</strong> {shiftTypeChangeFormData.shiftType === "SINGLE" ? "Single Shift (DAY only)" : "Double Shift (DAY + NIGHT)"}
+            </Typography>
+          </Alert>
+
+          {shiftTypeChangeFormData.shiftType === "SINGLE" && (
+            <Alert severity="warning" sx={{ mb: 2 }}>
+              To change to SINGLE shift, you must first deactivate the NIGHT shift if it exists. Only DAY shift is allowed for single-shift cabs.
+            </Alert>
+          )}
+
+          <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel>New Shift Type</InputLabel>
+            <Select
+              value={shiftTypeChangeFormData.shiftType}
+              label="New Shift Type"
+              onChange={(e) => setShiftTypeChangeFormData({ ...shiftTypeChangeFormData, shiftType: e.target.value })}
+            >
+              <MenuItem value="SINGLE">Single Shift (DAY only)</MenuItem>
+              <MenuItem value="DOUBLE">Double Shift (DAY + NIGHT)</MenuItem>
+            </Select>
+          </FormControl>
+
+          <TextField
+            label="Reason for Change"
+            value={shiftTypeChangeFormData.reason}
+            onChange={(e) => setShiftTypeChangeFormData({ ...shiftTypeChangeFormData, reason: e.target.value })}
+            fullWidth
+            multiline
+            rows={3}
+            size="small"
+            helperText="Optional: Explain why you're changing the shift type"
+          />
+
+          {shiftTypeHistory.length > 0 && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" gutterBottom>
+                Change History
+              </Typography>
+              <Timeline>
+                {shiftTypeHistory.map((record, index) => (
+                  <TimelineItem key={record.id}>
+                    <TimelineSeparator>
+                      <TimelineDot color="primary" />
+                      {index < shiftTypeHistory.length - 1 && <TimelineConnector />}
+                    </TimelineSeparator>
+                    <TimelineContent>
+                      <Typography variant="body2" fontWeight="bold">
+                        {record.oldShiftType || "Initial"} → {record.newShiftType}
+                      </Typography>
+                      <Typography variant="caption" color="textSecondary">
+                        {new Date(record.changedAt).toLocaleString()}
+                      </Typography>
+                      {record.reason && (
+                        <Typography variant="caption" display="block">
+                          {record.reason}
+                        </Typography>
+                      )}
+                    </TimelineContent>
+                  </TimelineItem>
+                ))}
+              </Timeline>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenShiftTypeDialog(false)}>Cancel</Button>
+          <Button onClick={handleChangeShiftType} variant="contained" color="primary">
+            Change Shift Type
           </Button>
         </DialogActions>
       </Dialog>

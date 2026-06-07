@@ -59,7 +59,6 @@ import {
 } from "@mui/icons-material";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
 import { downloadCSV, downloadPDF, formatCabsForExport } from "../lib/exportUtils";
-import { formatDatePST, getTodayPST, formatDateRangePST, calculateDuration } from "../lib/dateUtils";
 
 export default function CabsPage() {
   const router = useRouter();
@@ -86,7 +85,7 @@ export default function CabsPage() {
   const [openDeactivateDialog, setOpenDeactivateDialog] = useState(false);
   const [selectedCabForDeactivation, setSelectedCabForDeactivation] = useState(null);
   const [deactivateFormData, setDeactivateFormData] = useState({
-    deactivationDate: getTodayPST(),
+    deactivationDate: new Date().toISOString().split('T')[0],
     reason: "",
   });
 
@@ -94,11 +93,9 @@ export default function CabsPage() {
   const [openReactivateDialog, setOpenReactivateDialog] = useState(false);
   const [selectedCabForReactivation, setSelectedCabForReactivation] = useState(null);
   const [reactivateFormData, setReactivateFormData] = useState({
-    reactivationDate: getTodayPST(),
+    reactivationDate: new Date().toISOString().split('T')[0],
     reason: "",
-    keepSameOwners: true, // Default to quick reactivation
-    shiftOwnerAssignments: {}, // { shiftId: ownerId } - for same owners mode
-    shifts: [] // For new owners mode - full shift configuration
+    shiftOwnerAssignments: {} // { shiftId: ownerId }
   });
   const [shiftsForReactivation, setShiftsForReactivation] = useState([]);
 
@@ -128,7 +125,7 @@ export default function CabsPage() {
     model: "",
     year: "",
     color: "",
-    fleetAddedDate: getTodayPST(),
+    fleetAddedDate: new Date().toISOString().split('T')[0],
     notes: "",
     cabShiftType: "DOUBLE",
     shifts: [
@@ -400,7 +397,7 @@ export default function CabsPage() {
         model: "",
         year: "",
         color: "",
-        fleetAddedDate: getTodayPST(),
+        fleetAddedDate: new Date().toISOString().split('T')[0],
         notes: "",
         cabShiftType: "DOUBLE",
         shifts: [
@@ -588,34 +585,33 @@ export default function CabsPage() {
     }
   };
 
-  // DEPRECATED: Old simple toggle - replaced with enhanced reactivation dialog
-  // const handleStatusChange = async (cabId, action) => {
-  //   try {
-  //     const response = await fetch(`${API_BASE_URL}/cabs/${cabId}/${action}`, {
-  //       method: "PUT",
-  //       headers: {
-  //         Authorization: `Bearer ${localStorage.getItem("token")}`,
-  //         "X-Tenant-ID": localStorage.getItem("tenantSchema"),
-  //       },
-  //     });
-  //
-  //     if (response.ok) {
-  //       const data = await response.json();
-  //       setSuccess(data.message);
-  //       loadCabs();
-  //     } else {
-  //       setError(`Failed to ${action} cab`);
-  //     }
-  //   } catch (err) {
-  //     console.error(`Error changing cab status:`, err);
-  //     setError(`Failed to ${action} cab`);
-  //   }
-  // };
+  const handleStatusChange = async (cabId, action) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/cabs/${cabId}/${action}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+            "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setSuccess(data.message);
+        loadCabs();
+      } else {
+        setError(`Failed to ${action} cab`);
+      }
+    } catch (err) {
+      console.error(`Error changing cab status:`, err);
+      setError(`Failed to ${action} cab`);
+    }
+  };
 
   const handleOpenDeactivateDialog = (cab) => {
     setSelectedCabForDeactivation(cab);
     setDeactivateFormData({
-      deactivationDate: getTodayPST(),
+      deactivationDate: new Date().toISOString().split('T')[0],
       reason: "",
     });
     setError("");
@@ -650,9 +646,7 @@ export default function CabsPage() {
         setSuccess(`Cab ${selectedCabForDeactivation.cabNumber} deactivated successfully`);
         setOpenDeactivateDialog(false);
         setSelectedCabForDeactivation(null);
-
-        // Force full page reload to refresh all cab and shift data
-        window.location.reload();
+        loadCabs(); // Reload cab list
       } else {
         const errorData = await response.json();
         setError(errorData.error || "Failed to deactivate cab");
@@ -680,35 +674,16 @@ export default function CabsPage() {
         const shifts = await response.json();
         setShiftsForReactivation(shifts);
 
-        // Initialize for BOTH modes
+        // Initialize empty ownership assignments
         const initialAssignments = {};
-        const initialShiftConfigs = [];
-
         shifts.forEach(shift => {
-          // Mode 1: Same owners - keep current owner
-          initialAssignments[shift.id] = shift.currentOwner?.id || null;
-
-          // Mode 2: New owners - initialize full config
-          initialShiftConfigs.push({
-            shiftId: shift.id,
-            shiftType: shift.shiftType,
-            ownerId: shift.currentOwner?.id || null,
-            profileId: shift.currentProfile?.id || null,
-            cabType: shift.cabType || "SEDAN",
-            shareType: shift.shareType || "VOTING_SHARE",
-            hasAirportLicense: shift.hasAirportLicense || false,
-            airportLicenseNumber: shift.airportLicenseNumber || "",
-            airportLicenseExpiry: shift.airportLicenseExpiry || "",
-            notes: ""
-          });
+          initialAssignments[shift.id] = null; // User must select owner
         });
 
         setReactivateFormData({
-          reactivationDate: getTodayPST(),
+          reactivationDate: new Date().toISOString().split('T')[0],
           reason: "",
-          keepSameOwners: true, // Default to quick mode
-          shiftOwnerAssignments: initialAssignments,
-          shifts: initialShiftConfigs
+          shiftOwnerAssignments: initialAssignments
         });
 
         setOpenReactivateDialog(true);
@@ -724,37 +699,18 @@ export default function CabsPage() {
   const handleReactivateCab = async () => {
     if (!selectedCabForReactivation) return;
 
-    setError("");
+    // Validate all shifts have owners assigned
+    const allAssigned = Object.values(reactivateFormData.shiftOwnerAssignments)
+      .every(ownerId => ownerId !== null && ownerId !== "");
 
-    // Validate ONLY in new owners mode
-    if (!reactivateFormData.keepSameOwners) {
-      // Mode 2: Full reconfiguration - validate all shifts have owners
-      const allAssigned = reactivateFormData.shifts.every(shift => shift.ownerId);
-      if (!allAssigned) {
-        setError("Please assign an owner for each shift");
-        return;
-      }
+    if (!allAssigned) {
+      setError("Please assign an owner for each shift");
+      return;
     }
 
-    // Mode 1 (same owners): No validation needed - we use existing owners from shift data
+    setError("");
 
     try {
-      // Build payload based on mode
-      const payload = {
-        reactivationDate: reactivateFormData.reactivationDate,
-        reason: reactivateFormData.reason,
-        reactivatedBy: "admin", // TODO: Get from auth context
-        keepSameOwners: reactivateFormData.keepSameOwners
-      };
-
-      if (reactivateFormData.keepSameOwners) {
-        // Mode 1: Simple owner assignments
-        payload.shiftOwnerAssignments = reactivateFormData.shiftOwnerAssignments;
-      } else {
-        // Mode 2: Full shift configurations
-        payload.shifts = reactivateFormData.shifts;
-      }
-
       const response = await fetch(
         `${API_BASE_URL}/cabs/${selectedCabForReactivation.id}/reactivate`,
         {
@@ -764,7 +720,12 @@ export default function CabsPage() {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
             "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({
+            reactivationDate: reactivateFormData.reactivationDate,
+            reason: reactivateFormData.reason,
+            shiftOwnerAssignments: reactivateFormData.shiftOwnerAssignments,
+            reactivatedBy: "admin", // TODO: Get from auth context
+          }),
         }
       );
 
@@ -774,9 +735,7 @@ export default function CabsPage() {
         setOpenReactivateDialog(false);
         setSelectedCabForReactivation(null);
         setShiftsForReactivation([]);
-
-        // Force full page reload to refresh all cab and shift data
-        window.location.reload();
+        loadCabs(); // Reload cab list
       } else {
         const errorData = await response.json();
         setError(errorData.error || "Failed to reactivate cab");
@@ -785,14 +744,6 @@ export default function CabsPage() {
       console.error("Error reactivating cab:", err);
       setError("Failed to reactivate cab");
     }
-  };
-
-  // Helper: Update individual shift in reactivation (new owners mode)
-  const handleReactivateShiftUpdate = (index, updatedShift) => {
-    setReactivateFormData(prev => ({
-      ...prev,
-      shifts: prev.shifts.map((shift, i) => i === index ? updatedShift : shift)
-    }));
   };
 
   const handleLogout = () => {
@@ -1560,10 +1511,10 @@ export default function CabsPage() {
                               </IconButton>
                             </Tooltip>
                           ) : (
-                            <Tooltip title="Reactivate Cab">
+                            <Tooltip title="Activate">
                               <IconButton
                                 size="small"
-                                onClick={() => handleOpenReactivateDialog(cab)}
+                                onClick={() => handleStatusChange(cab.id, "activate")}
                                 color="success"
                               >
                                 <CheckCircleIcon fontSize="small" />
@@ -1584,8 +1535,7 @@ export default function CabsPage() {
       </Box>
 
       {/* Create/Edit Dialog */}
-      {/* Enhanced Cab Creation Dialog with Shift Configuration */}
-      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="lg" fullWidth>
+      <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
         <DialogTitle>
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <Typography variant="h6">
@@ -1596,25 +1546,20 @@ export default function CabsPage() {
             </IconButton>
           </Box>
         </DialogTitle>
-
         <DialogContent dividers>
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {error}
             </Alert>
           )}
-
-          {/* SECTION 1: VEHICLE INFORMATION */}
-          <Typography variant="h6" sx={{ mb: 2, color: "primary.main" }}>
-            Vehicle Information
-          </Typography>
-
+          
           <Grid container spacing={2}>
             <Grid item xs={6}>
               <TextField
+                required
                 label="Cab Number"
-                placeholder="e.g. 175"
-                value={formData.cabNumber || ""}
+                placeholder="e.g. 59"
+                value={editMode ? (selectedCab?.cabNumber || "") : formData.cabNumber}
                 onChange={(e) => {
                   const val = e.target.value.replace(/\D/g, "");
                   setFormData({ ...formData, cabNumber: val });
@@ -1622,60 +1567,17 @@ export default function CabsPage() {
                 fullWidth
                 size="small"
                 disabled={editMode}
-                helperText="Numeric only - auto-generated if left empty"
+                error={!editMode && formData.cabNumber !== "" && !/^\d+$/.test(formData.cabNumber)}
+                helperText={!editMode && formData.cabNumber !== "" && !/^\d+$/.test(formData.cabNumber) ? "Must be a number" : ""}
                 inputProps={{ inputMode: "numeric" }}
               />
             </Grid>
 
             <Grid item xs={6}>
               <TextField
-                required
                 label="Registration Number"
-                value={formData.registrationNumber || ""}
+                value={formData.registrationNumber}
                 onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-                fullWidth
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={4}>
-              <TextField
-                label="Make"
-                placeholder="Toyota"
-                value={formData.make || ""}
-                onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                fullWidth
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={4}>
-              <TextField
-                label="Model"
-                placeholder="Camry"
-                value={formData.model || ""}
-                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                fullWidth
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={2}>
-              <TextField
-                label="Year"
-                type="number"
-                value={formData.year || ""}
-                onChange={(e) => setFormData({ ...formData, year: e.target.value })}
-                fullWidth
-                size="small"
-              />
-            </Grid>
-
-            <Grid item xs={2}>
-              <TextField
-                label="Color"
-                value={formData.color || ""}
-                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
                 fullWidth
                 size="small"
               />
@@ -1683,303 +1585,202 @@ export default function CabsPage() {
 
             <Grid item xs={6}>
               <TextField
-                required
-                label="Fleet Added Date"
-                type="date"
-                value={formData.fleetAddedDate || ""}
-                onChange={(e) => setFormData({ ...formData, fleetAddedDate: e.target.value })}
-                InputLabelProps={{ shrink: true }}
+                label="Make"
+                placeholder="Toyota"
+                value={formData.make}
+                onChange={(e) => setFormData({ ...formData, make: e.target.value })}
                 fullWidth
                 size="small"
-                disabled={editMode}
-                helperText="Date when cab was added to fleet (used as ownership start date)"
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
+                label="Model"
+                placeholder="Camry"
+                value={formData.model}
+                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                fullWidth
+                size="small"
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
+                label="Year"
+                type="number"
+                value={formData.year}
+                onChange={(e) => setFormData({ ...formData, year: e.target.value })}
+                fullWidth
+                size="small"
+              />
+            </Grid>
+
+            <Grid item xs={6}>
+              <TextField
+                label="Color"
+                value={formData.color}
+                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                fullWidth
+                size="small"
               />
             </Grid>
 
             <Grid item xs={12}>
+              <FormControl fullWidth size="small" required>
+                <InputLabel>Cab Type</InputLabel>
+                <Select
+                  value={formData.cabType}
+                  label="Cab Type"
+                  onChange={(e) => setFormData({ ...formData, cabType: e.target.value })}
+                >
+                  <MenuItem value="SEDAN">Sedan</MenuItem>
+                  <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small" disabled={editMode}>
+                <InputLabel>Share Type</InputLabel>
+                <Select
+                  value={formData.shareType}
+                  label="Share Type"
+                  onChange={(e) => setFormData({ ...formData, shareType: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
+                  <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={6}>
+              <FormControl fullWidth size="small">
+                <InputLabel>Shift Type</InputLabel>
+                <Select
+                  value={formData.cabShiftType}
+                  label="Shift Type"
+                  onChange={(e) => setFormData({ ...formData, cabShiftType: e.target.value })}
+                >
+                  <MenuItem value="">None</MenuItem>
+                  <MenuItem value="SINGLE">Single Shift</MenuItem>
+                  <MenuItem value="DOUBLE">Double Shift</MenuItem>
+                </Select>
+              </FormControl>
+            </Grid>
+
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.hasAirportLicense}
+                    onChange={(e) => setFormData({ ...formData, hasAirportLicense: e.target.checked })}
+                  />
+                }
+                label="Has Airport License"
+              />
+            </Grid>
+
+            {formData.hasAirportLicense && (
+              <>
+                <Grid item xs={6}>
+                  <TextField
+                    label="Airport License Number"
+                    value={formData.airportLicenseNumber}
+                    onChange={(e) => setFormData({ ...formData, airportLicenseNumber: e.target.value })}
+                    fullWidth
+                    size="small"
+                  />
+                </Grid>
+
+                <Grid item xs={6}>
+                  <TextField
+                    label="License Expiry"
+                    type="date"
+                    value={formData.airportLicenseExpiry}
+                    onChange={(e) => setFormData({ ...formData, airportLicenseExpiry: e.target.value })}
+                    fullWidth
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                </Grid>
+              </>
+            )}
+
+            <Grid item xs={12}>
               <TextField
-                label="Notes"
-                value={formData.notes || ""}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                label="Fleet Added Date"
+                type="date"
+                value={editMode
+                  ? (selectedCab?.fleetAddedDate || formData.fleetAddedDate || new Date().toISOString().split('T')[0])
+                  : (formData.fleetAddedDate || new Date().toISOString().split('T')[0])
+                }
+                onChange={(e) => setFormData({ ...formData, fleetAddedDate: e.target.value })}
                 fullWidth
                 size="small"
+                disabled={editMode}
+                InputLabelProps={{ shrink: true }}
+                helperText={editMode
+                  ? "Fleet added date cannot be changed after creation"
+                  : "Date when cab was physically added to the fleet"
+                }
+              />
+            </Grid>
+
+            {/* Show deactivation info if cab is inactive */}
+            {editMode && selectedCab?.status === 'INACTIVE' && selectedCab?.deactivatedDate && (
+              <Grid item xs={12}>
+                <Alert
+                  severity="warning"
+                  sx={{ mb: 0 }}
+                  action={
+                    <Button
+                      color="success"
+                      size="small"
+                      variant="contained"
+                      onClick={() => {
+                        handleCloseDialog();
+                        handleOpenReactivateDialog(selectedCab);
+                      }}
+                    >
+                      Reactivate Cab
+                    </Button>
+                  }
+                >
+                  <Typography variant="subtitle2" fontWeight="bold" gutterBottom>
+                    Cab Deactivated
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Deactivation Date:</strong> {new Date(selectedCab.deactivatedDate).toLocaleDateString()}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 0.5 }}>
+                    <strong>Status:</strong> Removed from active fleet
+                  </Typography>
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mt: 1, fontStyle: 'italic' }}>
+                    This cab was in service from {selectedCab.fleetAddedDate ? new Date(selectedCab.fleetAddedDate).toLocaleDateString() : 'N/A'} to {new Date(selectedCab.deactivatedDate).toLocaleDateString()}
+                  </Typography>
+                </Alert>
+              </Grid>
+            )}
+
+            <Grid item xs={12}>
+              <TextField
+                label="Notes"
+                value={formData.notes}
+                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                fullWidth
                 multiline
-                rows={2}
+                rows={3}
+                size="small"
               />
             </Grid>
           </Grid>
-
-          {!editMode && (
-            <>
-              <Divider sx={{ my: 3 }} />
-
-              {/* SECTION 2: SHIFT CONFIGURATION */}
-              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                <Typography variant="h6" sx={{ color: "primary.main" }}>
-                  Shift Configuration
-                </Typography>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={skipShifts || false}
-                      onChange={(e) => setSkipShifts(e.target.checked)}
-                    />
-                  }
-                  label="Skip shifts (add later)"
-                />
-              </Box>
-
-              {skipShifts && (
-                <Alert severity="warning" sx={{ mb: 2 }}>
-                  <Typography variant="body2" fontWeight="bold" gutterBottom>
-                    ⚠️ Warning: Creating Cab Without Shifts
-                  </Typography>
-                  <Typography variant="body2">
-                    This cab will be created in an incomplete state. You will need to manually add shifts later.
-                    <strong> Without shifts, this cab cannot generate revenue or be assigned to drivers.</strong>
-                  </Typography>
-                </Alert>
-              )}
-
-              {!skipShifts && formData.shifts && (
-                <>
-                  <FormControl fullWidth size="small" sx={{ mb: 3 }}>
-                    <InputLabel>Number of Shifts</InputLabel>
-                    <Select
-                      value={formData.cabShiftType || "DOUBLE"}
-                      label="Number of Shifts"
-                      onChange={(e) => handleShiftTypeChange(e.target.value)}
-                    >
-                      <MenuItem value="SINGLE">Single Shift (DAY only)</MenuItem>
-                      <MenuItem value="DOUBLE">Double Shift (DAY + NIGHT)</MenuItem>
-                    </Select>
-                  </FormControl>
-
-                  {/* Shift Cards */}
-                  {formData.shifts.map((shift, index) => (
-                    <Card
-                      key={index}
-                      variant="outlined"
-                      sx={{
-                        mb: 2,
-                        border: 2,
-                        borderColor: shift.shiftType === 'DAY' ? 'warning.light' : 'primary.light',
-                        bgcolor: shift.shiftType === 'DAY' ? 'rgba(255, 152, 0, 0.08)' : 'rgba(25, 118, 210, 0.08)'
-                      }}
-                    >
-                      <CardContent>
-                        <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                          <Box
-                            sx={{
-                              width: 40,
-                              height: 40,
-                              borderRadius: "50%",
-                              bgcolor: shift.shiftType === 'DAY' ? 'warning.main' : 'primary.main',
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: "1.5rem",
-                              mr: 2
-                            }}
-                          >
-                            {shift.shiftType === 'DAY' ? '☀️' : '🌙'}
-                          </Box>
-                          <Box>
-                            <Typography variant="h6">
-                              {shift.shiftType} Shift
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {shift.startTime} - {shift.endTime}
-                            </Typography>
-                          </Box>
-                        </Box>
-
-                        <Grid container spacing={2}>
-                          {/* Owner */}
-                          <Grid item xs={12}>
-                            <Autocomplete
-                              options={drivers.filter(d => d.isOwner)}
-                              getOptionLabel={(option) =>
-                                `${option.driverNumber} - ${option.firstName} ${option.lastName}`
-                              }
-                              value={drivers.find(d => d.id === shift.ownerId) || null}
-                              onChange={(e, newValue) => handleShiftUpdate(index, {
-                                ...shift,
-                                ownerId: newValue?.id || null
-                              })}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  label="Shift Owner *"
-                                  size="small"
-                                  required
-                                  error={!shift.ownerId}
-                                  helperText={!shift.ownerId ? "Owner is required" : ""}
-                                />
-                              )}
-                            />
-                          </Grid>
-
-                          {/* Profile */}
-                          <Grid item xs={12}>
-                            <Autocomplete
-                              options={shiftProfiles}
-                              getOptionLabel={(option) =>
-                                `${option.profileName}${option.isDefault ? ' (Default)' : ''}`
-                              }
-                              value={shiftProfiles.find(p => p.id === shift.profileId) || null}
-                              onChange={(e, newValue) => handleShiftUpdate(index, {
-                                ...shift,
-                                profileId: newValue?.id || null
-                              })}
-                              renderInput={(params) => (
-                                <TextField
-                                  {...params}
-                                  label="Shift Profile"
-                                  size="small"
-                                  helperText="Optional - default profile will be auto-assigned if not selected"
-                                />
-                              )}
-                            />
-                          </Grid>
-
-                          {/* Cab Type */}
-                          <Grid item xs={6}>
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Cab Type *</InputLabel>
-                              <Select
-                                value={shift.cabType || "SEDAN"}
-                                label="Cab Type *"
-                                onChange={(e) => handleShiftUpdate(index, {
-                                  ...shift,
-                                  cabType: e.target.value
-                                })}
-                                required
-                              >
-                                <MenuItem value="SEDAN">Sedan</MenuItem>
-                                <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-
-                          {/* Share Type */}
-                          <Grid item xs={6}>
-                            <FormControl fullWidth size="small">
-                              <InputLabel>Share Type</InputLabel>
-                              <Select
-                                value={shift.shareType || ""}
-                                label="Share Type"
-                                onChange={(e) => handleShiftUpdate(index, {
-                                  ...shift,
-                                  shareType: e.target.value
-                                })}
-                              >
-                                <MenuItem value="">None</MenuItem>
-                                <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
-                                <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
-                              </Select>
-                            </FormControl>
-                          </Grid>
-
-                          {/* Airport License */}
-                          <Grid item xs={12}>
-                            <FormControlLabel
-                              control={
-                                <Checkbox
-                                  checked={shift.hasAirportLicense || false}
-                                  onChange={(e) => handleShiftUpdate(index, {
-                                    ...shift,
-                                    hasAirportLicense: e.target.checked
-                                  })}
-                                />
-                              }
-                              label="Has Airport License"
-                            />
-                          </Grid>
-
-                          {shift.hasAirportLicense && (
-                            <>
-                              <Grid item xs={6}>
-                                <TextField
-                                  label="License Number"
-                                  value={shift.airportLicenseNumber || ""}
-                                  onChange={(e) => handleShiftUpdate(index, {
-                                    ...shift,
-                                    airportLicenseNumber: e.target.value
-                                  })}
-                                  fullWidth
-                                  size="small"
-                                />
-                              </Grid>
-                              <Grid item xs={6}>
-                                <TextField
-                                  label="License Expiry"
-                                  type="date"
-                                  value={shift.airportLicenseExpiry || ""}
-                                  onChange={(e) => handleShiftUpdate(index, {
-                                    ...shift,
-                                    airportLicenseExpiry: e.target.value
-                                  })}
-                                  InputLabelProps={{ shrink: true }}
-                                  fullWidth
-                                  size="small"
-                                />
-                              </Grid>
-                            </>
-                          )}
-                        </Grid>
-                      </CardContent>
-                    </Card>
-                  ))}
-
-                  {/* Bulk Assign */}
-                  {formData.shifts.length > 1 && (
-                    <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-                      <Typography variant="body2" gutterBottom fontWeight="bold">
-                        💡 Quick Assign: Same owner for all shifts?
-                      </Typography>
-                      <Autocomplete
-                        options={drivers.filter(d => d.isOwner)}
-                        getOptionLabel={(option) =>
-                          `${option.driverNumber} - ${option.firstName} ${option.lastName}`
-                        }
-                        onChange={(e, driver) => {
-                          if (driver) {
-                            setFormData(prev => ({
-                              ...prev,
-                              shifts: prev.shifts.map(shift => ({
-                                ...shift,
-                                ownerId: driver.id
-                              }))
-                            }));
-                          }
-                        }}
-                        renderInput={(params) => (
-                          <TextField
-                            {...params}
-                            label="Assign to all shifts"
-                            size="small"
-                          />
-                        )}
-                      />
-                    </Box>
-                  )}
-                </>
-              )}
-            </>
-          )}
         </DialogContent>
-
         <DialogActions>
-          <Button onClick={handleCloseDialog}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            startIcon={<AddIcon />}
-          >
-            {editMode ? "Update Cab" : (skipShifts ? "Create Cab Only" : "Create Cab with Shifts")}
+          <Button onClick={handleCloseDialog}>Cancel</Button>
+          <Button onClick={handleSubmit} variant="contained" color="primary">
+            {editMode ? "Update" : "Add"} Cab
           </Button>
         </DialogActions>
       </Dialog>
@@ -2241,7 +2042,10 @@ export default function CabsPage() {
                 <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Fleet Added</Typography>
                   <Typography variant="body2">
-                    {formatDatePST(selectedCabForDeactivation.fleetAddedDate)}
+                    {selectedCabForDeactivation.fleetAddedDate
+                      ? new Date(selectedCabForDeactivation.fleetAddedDate).toLocaleDateString()
+                      : "N/A"
+                    }
                   </Typography>
                 </Grid>
               </Grid>
@@ -2263,7 +2067,7 @@ export default function CabsPage() {
             helperText="Date when cab was physically removed from fleet (can be backdated)"
             sx={{ mb: 2 }}
             inputProps={{
-              max: getTodayPST(), // Cannot be in future
+              max: new Date().toISOString().split('T')[0], // Cannot be in future
               min: selectedCabForDeactivation?.fleetAddedDate, // Cannot be before added
             }}
           />
@@ -2299,12 +2103,11 @@ export default function CabsPage() {
         </DialogActions>
       </Dialog>
 
-
-      {/* Enhanced Reactivation Dialog with Two Modes */}
+      {/* Reactivation Dialog */}
       <Dialog
         open={openReactivateDialog}
         onClose={() => setOpenReactivateDialog(false)}
-        maxWidth="lg"
+        maxWidth="md"
         fullWidth
       >
         <DialogTitle>
@@ -2317,349 +2120,119 @@ export default function CabsPage() {
         </DialogTitle>
 
         <DialogContent dividers>
-          {error && <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>{error}</Alert>}
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          {/* Cab Details Summary */}
+          <Alert severity="info" sx={{ mb: 3 }}>
+            <Typography variant="body2" gutterBottom fontWeight="bold">
+              Bringing cab back into service
+            </Typography>
+            <ul style={{ margin: "4px 0 0 0", paddingLeft: 20 }}>
+              <li>Cab will be marked as ACTIVE</li>
+              <li>All shifts will be reactivated with new status history</li>
+              <li>New ownership records will be created for each shift</li>
+              <li>You must assign an owner for each shift</li>
+            </ul>
+          </Alert>
+
           {selectedCabForReactivation && (
             <Box sx={{ mb: 3, p: 2, bgcolor: "#f5f5f5", borderRadius: 1 }}>
               <Typography variant="subtitle2" gutterBottom fontWeight="bold">
                 Cab Details
               </Typography>
               <Grid container spacing={1}>
-                <Grid item xs={4}>
+                <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Cab Number</Typography>
-                  <Typography variant="body2" fontWeight="bold">{selectedCabForReactivation.cabNumber}</Typography>
+                  <Typography variant="body2">{selectedCabForReactivation.cabNumber}</Typography>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Registration</Typography>
                   <Typography variant="body2">{selectedCabForReactivation.registrationNumber}</Typography>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid item xs={6}>
                   <Typography variant="caption" color="textSecondary">Deactivated On</Typography>
-                  <Typography variant="body2" color="error">
-                    {formatDatePST(selectedCabForReactivation.deactivatedDate)}
+                  <Typography variant="body2">
+                    {selectedCabForReactivation.deactivatedDate
+                      ? new Date(selectedCabForReactivation.deactivatedDate).toLocaleDateString()
+                      : "N/A"
+                    }
                   </Typography>
                 </Grid>
               </Grid>
             </Box>
           )}
 
-          {/* Reactivation Date & Reason */}
-          <Grid container spacing={2} sx={{ mb: 3 }}>
-            <Grid item xs={6}>
-              <TextField
-                label="Reactivation Start Date *"
-                type="date"
-                value={reactivateFormData.reactivationDate || ""}
-                onChange={(e) => setReactivateFormData({
-                  ...reactivateFormData,
-                  reactivationDate: e.target.value
-                })}
-                fullWidth
-                required
-                size="small"
-                InputLabelProps={{ shrink: true }}
-                helperText="First day cab will be active (ownership starts from this date)"
-                inputProps={{
-                  min: selectedCabForReactivation?.deactivatedDate,
-                }}
-              />
-            </Grid>
-            <Grid item xs={6}>
-              <TextField
-                label="Reason for Reactivation"
-                value={reactivateFormData.reason || ""}
-                onChange={(e) => setReactivateFormData({
-                  ...reactivateFormData,
-                  reason: e.target.value
-                })}
-                fullWidth
-                size="small"
-                placeholder="e.g., Repairs completed, Lease renewed..."
-                helperText="Optional: Explain why cab is being reactivated"
-              />
-            </Grid>
-          </Grid>
+          <TextField
+            label="Reactivation Start Date"
+            type="date"
+            value={reactivateFormData.reactivationDate}
+            onChange={(e) => setReactivateFormData({
+              ...reactivateFormData,
+              reactivationDate: e.target.value
+            })}
+            fullWidth
+            required
+            size="small"
+            InputLabelProps={{ shrink: true }}
+            helperText="First day cab will be active again (ownership starts from this date)"
+            sx={{ mb: 2 }}
+            inputProps={{
+              min: selectedCabForReactivation?.deactivatedDate, // Cannot be before deactivation
+            }}
+          />
 
-          <Divider sx={{ my: 2 }} />
+          <TextField
+            label="Reason for Reactivation"
+            value={reactivateFormData.reason}
+            onChange={(e) => setReactivateFormData({
+              ...reactivateFormData,
+              reason: e.target.value
+            })}
+            fullWidth
+            multiline
+            rows={2}
+            size="small"
+            placeholder="e.g., Repairs completed, Lease renewed, Repurchased..."
+            helperText="Optional: Explain why cab is being reactivated"
+            sx={{ mb: 3 }}
+          />
 
-          {/* Mode Selection */}
-          <Box sx={{ mb: 2 }}>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={reactivateFormData.keepSameOwners || false}
-                  onChange={(e) => setReactivateFormData({
+          <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
+            Assign Owners for Each Shift
+          </Typography>
+
+          {shiftsForReactivation.map(shift => {
+            const owners = drivers.filter(d => d.isOwner);
+            const selectedOwner = owners.find(d => d.id === reactivateFormData.shiftOwnerAssignments[shift.id]);
+
+            return (
+              <Autocomplete
+                key={shift.id}
+                options={owners}
+                getOptionLabel={(option) => `${option.driverNumber} - ${option.firstName} ${option.lastName}`}
+                value={selectedOwner || null}
+                onChange={(event, newValue) => {
+                  setReactivateFormData({
                     ...reactivateFormData,
-                    keepSameOwners: e.target.checked
-                  })}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body2" fontWeight="bold">
-                    Keep same owners (Quick Reactivation)
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    Uncheck to reconfigure shifts with new owners, profiles, and attributes
-                  </Typography>
-                </Box>
-              }
-            />
-          </Box>
-
-          {/* MODE 1: Same Owners - Simple Owner Dropdowns */}
-          {reactivateFormData.keepSameOwners ? (
-            <>
-              <Alert severity="info" sx={{ mb: 2 }}>
-                <Typography variant="body2">
-                  ✅ Quick reactivation mode - shifts will be reactivated with current owners and settings
-                </Typography>
-              </Alert>
-
-              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
-                Shifts will be reactivated with current owners:
-              </Typography>
-
-              {shiftsForReactivation.map((shift, index) => {
-                return (
-                  <Box
-                    key={shift.id}
-                    sx={{
-                      mb: 2,
-                      p: 2,
-                      border: 1,
-                      borderColor: shift.shiftType === 'DAY' ? 'warning.light' : 'primary.light',
-                      borderRadius: 1,
-                      bgcolor: shift.shiftType === 'DAY' ? 'rgba(255, 152, 0, 0.05)' : 'rgba(25, 118, 210, 0.05)'
-                    }}
-                  >
-                    <Grid container spacing={2} alignItems="center">
-                      <Grid item xs={4}>
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <Typography variant="subtitle2" fontWeight="bold">
-                            {shift.shiftType === 'DAY' ? '☀️' : '🌙'} {shift.shiftType} Shift
-                          </Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={4}>
-                        <Box>
-                          <Typography variant="caption" color="textSecondary">Current Owner</Typography>
-                          <Typography variant="body2" fontWeight="bold">
-                            {shift.currentOwner
-                              ? `${shift.currentOwner.driverNumber} - ${shift.currentOwner.firstName} ${shift.currentOwner.lastName}`
-                              : "No owner assigned"}
-                          </Typography>
-                        </Box>
-                      </Grid>
-                      <Grid item xs={4}>
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          <Chip
-                            label={shift.cabType || "SEDAN"}
-                            size="small"
-                          />
-                          {shift.shareType && (
-                            <Chip
-                              label={shift.shareType === 'VOTING_SHARE' ? 'Voting' : 'Non-Voting'}
-                              size="small"
-                              variant="outlined"
-                            />
-                          )}
-                        </Box>
-                      </Grid>
-                    </Grid>
-                  </Box>
-                );
-              })}
-            </>
-          ) : (
-            <>
-              {/* MODE 2: New Owners - Full Shift Configuration */}
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                <Typography variant="body2" fontWeight="bold" gutterBottom>
-                  ⚠️ Full Reconfiguration Mode
-                </Typography>
-                <Typography variant="body2">
-                  You can now change owners, profiles, and all shift attributes. This is like adding a new cab.
-                </Typography>
-              </Alert>
-
-              <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2 }}>
-                Configure Each Shift
-              </Typography>
-
-              {reactivateFormData.shifts.map((shift, index) => (
-                <Card
-                  key={shift.shiftId}
-                  variant="outlined"
-                  sx={{
-                    mb: 2,
-                    border: 2,
-                    borderColor: shift.shiftType === 'DAY' ? 'warning.light' : 'primary.light',
-                    bgcolor: shift.shiftType === 'DAY' ? 'rgba(255, 152, 0, 0.08)' : 'rgba(25, 118, 210, 0.08)'
-                  }}
-                >
-                  <CardContent>
-                    <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
-                      <Box
-                        sx={{
-                          width: 40,
-                          height: 40,
-                          borderRadius: "50%",
-                          bgcolor: shift.shiftType === 'DAY' ? 'warning.main' : 'primary.main',
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          fontSize: "1.5rem",
-                          mr: 2
-                        }}
-                      >
-                        {shift.shiftType === 'DAY' ? '☀️' : '🌙'}
-                      </Box>
-                      <Typography variant="h6">
-                        {shift.shiftType} Shift
-                      </Typography>
-                    </Box>
-
-                    <Grid container spacing={2}>
-                      {/* Owner */}
-                      <Grid item xs={12}>
-                        <Autocomplete
-                          options={drivers.filter(d => d.isOwner)}
-                          getOptionLabel={(option) =>
-                            `${option.driverNumber} - ${option.firstName} ${option.lastName}`
-                          }
-                          value={drivers.find(d => d.id === shift.ownerId) || null}
-                          onChange={(e, newValue) => handleReactivateShiftUpdate(index, {
-                            ...shift,
-                            ownerId: newValue?.id || null
-                          })}
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              label="Shift Owner *"
-                              size="small"
-                              required
-                              error={!shift.ownerId}
-                              helperText={!shift.ownerId ? "Owner is required" : ""}
-                            />
-                          )}
-                        />
-                      </Grid>
-
-                      {/* Profile */}
-                      <Grid item xs={12}>
-                        <Autocomplete
-                          options={shiftProfiles}
-                          getOptionLabel={(option) =>
-                            `${option.profileName}${option.isDefault ? ' (Default)' : ''}`
-                          }
-                          value={shiftProfiles.find(p => p.id === shift.profileId) || null}
-                          onChange={(e, newValue) => handleReactivateShiftUpdate(index, {
-                            ...shift,
-                            profileId: newValue?.id || null
-                          })}
-                          renderInput={(params) => (
-                            <TextField
-                              {...params}
-                              label="Shift Profile"
-                              size="small"
-                              helperText="Optional - default profile will be auto-assigned if not selected"
-                            />
-                          )}
-                        />
-                      </Grid>
-
-                      {/* Cab Type */}
-                      <Grid item xs={6}>
-                        <FormControl fullWidth size="small">
-                          <InputLabel>Cab Type *</InputLabel>
-                          <Select
-                            value={shift.cabType || "SEDAN"}
-                            label="Cab Type *"
-                            onChange={(e) => handleReactivateShiftUpdate(index, {
-                              ...shift,
-                              cabType: e.target.value
-                            })}
-                            required
-                          >
-                            <MenuItem value="SEDAN">Sedan</MenuItem>
-                            <MenuItem value="HANDICAP_VAN">Handicap Van</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-
-                      {/* Share Type */}
-                      <Grid item xs={6}>
-                        <FormControl fullWidth size="small">
-                          <InputLabel>Share Type</InputLabel>
-                          <Select
-                            value={shift.shareType || ""}
-                            label="Share Type"
-                            onChange={(e) => handleReactivateShiftUpdate(index, {
-                              ...shift,
-                              shareType: e.target.value
-                            })}
-                          >
-                            <MenuItem value="">None</MenuItem>
-                            <MenuItem value="VOTING_SHARE">Voting Share</MenuItem>
-                            <MenuItem value="NON_VOTING_SHARE">Non-Voting Share</MenuItem>
-                          </Select>
-                        </FormControl>
-                      </Grid>
-
-                      {/* Airport License */}
-                      <Grid item xs={12}>
-                        <FormControlLabel
-                          control={
-                            <Checkbox
-                              checked={shift.hasAirportLicense || false}
-                              onChange={(e) => handleReactivateShiftUpdate(index, {
-                                ...shift,
-                                hasAirportLicense: e.target.checked
-                              })}
-                            />
-                          }
-                          label="Has Airport License"
-                        />
-                      </Grid>
-
-                      {shift.hasAirportLicense && (
-                        <>
-                          <Grid item xs={6}>
-                            <TextField
-                              label="License Number"
-                              value={shift.airportLicenseNumber || ""}
-                              onChange={(e) => handleReactivateShiftUpdate(index, {
-                                ...shift,
-                                airportLicenseNumber: e.target.value
-                              })}
-                              fullWidth
-                              size="small"
-                            />
-                          </Grid>
-                          <Grid item xs={6}>
-                            <TextField
-                              label="License Expiry"
-                              type="date"
-                              value={shift.airportLicenseExpiry || ""}
-                              onChange={(e) => handleReactivateShiftUpdate(index, {
-                                ...shift,
-                                airportLicenseExpiry: e.target.value
-                              })}
-                              InputLabelProps={{ shrink: true }}
-                              fullWidth
-                              size="small"
-                            />
-                          </Grid>
-                        </>
-                      )}
-                    </Grid>
-                  </CardContent>
-                </Card>
-              ))}
-            </>
-          )}
+                    shiftOwnerAssignments: {
+                      ...reactivateFormData.shiftOwnerAssignments,
+                      [shift.id]: newValue?.id || null
+                    }
+                  });
+                }}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label={`${shift.shiftType} Shift Owner *`}
+                    size="small"
+                    required
+                    error={!reactivateFormData.shiftOwnerAssignments[shift.id]}
+                    helperText={!reactivateFormData.shiftOwnerAssignments[shift.id] ? 'Owner required' : ''}
+                  />
+                )}
+                sx={{ mb: 2 }}
+              />
+            );
+          })}
         </DialogContent>
 
         <DialogActions>
@@ -2671,7 +2244,7 @@ export default function CabsPage() {
             variant="contained"
             color="success"
           >
-            {reactivateFormData.keepSameOwners ? "Quick Reactivate" : "Reactivate with New Configuration"}
+            Reactivate Cab
           </Button>
         </DialogActions>
       </Dialog>

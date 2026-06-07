@@ -355,6 +355,30 @@ export default function ShiftProfilesPage() {
     }
   };
 
+  const handleSetDefault = async (profileId) => {
+    try {
+      const tenantSchema = typeof window !== 'undefined'
+        ? (localStorage.getItem('tenantSchema') || localStorage.getItem('tenantId') || 'fareflow')
+        : 'fareflow';
+
+      const response = await fetch(`${API_BASE_URL}/shift-profiles/${profileId}/set-default`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'X-Tenant-ID': tenantSchema
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to set default profile');
+
+      setSuccessMessage('Default profile updated successfully! New shifts will auto-assign this profile.');
+      setTimeout(() => setSuccessMessage(null), 5000);
+      await loadProfiles();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const getAttributeName = (attributeTypeId) => {
     const attr = attributeTypes.find(a => a.id === attributeTypeId);
     return attr ? attr.attributeName : 'Unknown';
@@ -440,13 +464,14 @@ export default function ShiftProfilesPage() {
               <TableCell sx={{ fontWeight: 700 }}>Shift Type</TableCell>
               <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Usage</TableCell>
               <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Status</TableCell>
+              <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Default</TableCell>
               <TableCell sx={{ fontWeight: 700, textAlign: 'center' }}>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {profiles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} sx={{ textAlign: 'center', py: 4 }}>
+                <TableCell colSpan={10} sx={{ textAlign: 'center', py: 4 }}>
                   <Typography color="text.secondary">No profiles found</Typography>
                 </TableCell>
               </TableRow>
@@ -484,6 +509,20 @@ export default function ShiftProfilesPage() {
                       size="small"
                       color={profile.isActive ? 'success' : 'default'}
                     />
+                  </TableCell>
+                  <TableCell sx={{ textAlign: 'center' }}>
+                    {profile.isDefault ? (
+                      <Chip label="Default" size="small" color="primary" />
+                    ) : (
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => handleSetDefault(profile.id)}
+                        sx={{ fontSize: '0.7rem', py: 0.25 }}
+                      >
+                        Set Default
+                      </Button>
+                    )}
                   </TableCell>
                   <TableCell sx={{ textAlign: 'center' }}>
                     <IconButton

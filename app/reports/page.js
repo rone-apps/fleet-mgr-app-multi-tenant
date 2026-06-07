@@ -1984,7 +1984,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         Held Revenues Summary
                       </Typography>
                       <Grid container spacing={2} sx={{ mb: 3 }}>
-                        <Grid item xs={6}>
+                        <Grid item xs={4}>
                           <Card sx={{ bgcolor: "#e3f2fd", border: "1px solid #1976d2" }}>
                             <CardContent>
                               <Typography variant="caption" color="text.secondary">Credit Card Revenue</Typography>
@@ -1997,7 +1997,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             </CardContent>
                           </Card>
                         </Grid>
-                        <Grid item xs={6}>
+                        <Grid item xs={4}>
                           <Card sx={{ bgcolor: "#e3f2fd", border: "1px solid #1976d2" }}>
                             <CardContent>
                               <Typography variant="caption" color="text.secondary">Account Charges</Typography>
@@ -2006,6 +2006,19 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
                                 {reportData.holdingRevenues.filter(r => r.revenueSubType === "ACCOUNT_REVENUE").length} transactions
+                              </Typography>
+                            </CardContent>
+                          </Card>
+                        </Grid>
+                        <Grid item xs={4}>
+                          <Card sx={{ bgcolor: "#e8f5e9", border: "1px solid #4caf50" }}>
+                            <CardContent>
+                              <Typography variant="caption" color="text.secondary">Lease Income</Typography>
+                              <Typography variant="h6" sx={{ color: "#4caf50", fontWeight: "bold" }}>
+                                ${calculateSubtotal(reportData.holdingRevenues.filter(r => r.revenueSubType === "LEASE_INCOME")).toFixed(2)}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {reportData.holdingRevenues.filter(r => r.revenueSubType === "LEASE_INCOME").length} shifts
                               </Typography>
                             </CardContent>
                           </Card>
@@ -2032,10 +2045,17 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                 <TableCell>{rev.revenueDate || "-"}</TableCell>
                                 <TableCell>
                                   <Chip
-                                    label={rev.revenueSubType === "CARD_REVENUE" ? "Credit Card" : "Account Charge"}
+                                    label={
+                                      rev.revenueSubType === "CARD_REVENUE" ? "Credit Card" :
+                                      rev.revenueSubType === "LEASE_INCOME" ? "Lease Revenue" :
+                                      "Account Charge"
+                                    }
                                     size="small"
                                     sx={{
-                                      bgcolor: rev.revenueSubType === "CARD_REVENUE" ? "#bbdefb" : "#c5cae9",
+                                      bgcolor:
+                                        rev.revenueSubType === "CARD_REVENUE" ? "#bbdefb" :
+                                        rev.revenueSubType === "LEASE_INCOME" ? "#c8e6c9" :
+                                        "#c5cae9",
                                       color: "#1976d2",
                                       fontWeight: 600
                                     }}
