@@ -22,7 +22,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField
+  TextField,
+  Divider
 } from "@mui/material";
 import {
   People,
@@ -315,7 +316,7 @@ function HomePageContent() {
             <>
               <Typography sx={{ color: '#999' }}>/</Typography>
               <Typography sx={{ fontWeight: 600, color: '#3e5244', fontSize: '0.95rem' }}>
-                {selectedCategory === 'account' && 'Account & Customers'}
+                {selectedCategory === 'account' && 'Account Customers & Trips'}
                 {selectedCategory === 'operations' && 'Fleet Management'}
                 {selectedCategory === 'financials' && 'Billings & Charge Management'}
                 {selectedCategory === 'reports' && 'Reports'}
@@ -334,11 +335,11 @@ function HomePageContent() {
             </Typography>
 
             <Grid container spacing={3}>
-              {/* Account & Customers Management */}
+              {/* 1. Account Customers & Trips */}
               {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
-                    title="Account & Customers"
+                    title="Account Customers & Trips"
                     description="Manage customers and invoicing"
                     icon={AccountBalance}
                     gradient="linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
@@ -348,21 +349,35 @@ function HomePageContent() {
                 </Grid>
               )}
 
-              {/* Operations */}
-              {['ADMIN', 'MANAGER', 'DISPATCHER'].includes(user.role) && (
+              {/* 2. Data Uploads */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
-                    title="Fleet Management"
-                    description="Manage drivers, cabs & shifts"
-                    icon={DirectionsCar}
-                    gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
-                    accent="#22a558"
-                    onClick={() => setSelectedCategory('operations')}
+                    title="Data Uploads"
+                    description="Import CSV & Excel files for shifts, trips, mileage"
+                    icon={UploadFile}
+                    gradient="linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)"
+                    accent="#d97706"
+                    onClick={() => setSelectedCategory('data-uploads')}
                   />
                 </Grid>
               )}
 
-              {/* Payments - Direct Link */}
+              {/* 3. Reports */}
+              {user.role !== 'VIEWER' && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Reports"
+                    description="Financial analytics & insights"
+                    icon={Assessment}
+                    gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
+                    accent="#3b82f6"
+                    onClick={() => setSelectedCategory('reports')}
+                  />
+                </Grid>
+              )}
+
+              {/* 4. Payments - Direct Link */}
               {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
@@ -379,21 +394,7 @@ function HomePageContent() {
                 </Grid>
               )}
 
-              {/* Scan Receipts */}
-              {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DRIVER'].includes(user.role) && (
-                <Grid item xs={12} sm={6} md={4}>
-                  <CategoryCard
-                    title="Scan Receipts"
-                    description="Capture and analyze receipts with AI"
-                    icon={ReceiptOutlined}
-                    gradient="linear-gradient(135deg, #ec4899 0%, #f97316 100%)"
-                    accent="#ec4899"
-                    onClick={() => router.push('/receipt-scan')}
-                  />
-                </Grid>
-              )}
-
-              {/* Financials */}
+              {/* 5. Billings & Charge Management */}
               {['ADMIN', 'MANAGER', 'ACCOUNTANT'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
@@ -403,6 +404,34 @@ function HomePageContent() {
                     gradient="linear-gradient(135deg, #f5576c 0%, #f093fb 100%)"
                     accent="#e5576c"
                     onClick={() => setSelectedCategory('financials')}
+                  />
+                </Grid>
+              )}
+
+              {/* 6. Third-Party Integrations */}
+              {user.role === 'ADMIN' && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Third-Party Integrations"
+                    description="Connect dispatch systems, payment processors & external APIs"
+                    icon={ApiOutlined}
+                    gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
+                    accent="#38f9d7"
+                    onClick={() => setSelectedCategory('integrations')}
+                  />
+                </Grid>
+              )}
+
+              {/* Fleet Management */}
+              {['ADMIN', 'MANAGER', 'DISPATCHER'].includes(user.role) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <CategoryCard
+                    title="Fleet Management"
+                    description="Manage drivers, cabs & shifts"
+                    icon={DirectionsCar}
+                    gradient="linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)"
+                    accent="#22a558"
+                    onClick={() => setSelectedCategory('operations')}
                   />
                 </Grid>
               )}
@@ -421,30 +450,34 @@ function HomePageContent() {
                 </Grid>
               )}
 
-              {/* Reports */}
-              {user.role !== 'VIEWER' && (
-                <Grid item xs={12} sm={6} md={4}>
-                  <CategoryCard
-                    title="Reports"
-                    description="Financial analytics & insights"
-                    icon={Assessment}
-                    gradient="linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)"
-                    accent="#3b82f6"
-                    onClick={() => setSelectedCategory('reports')}
-                  />
-                </Grid>
-              )}
+              {/* Extras Section Divider */}
+              <Grid item xs={12}>
+                <Box sx={{ my: 4 }}>
+                  <Divider>
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color: 'text.secondary',
+                        fontWeight: 600,
+                        px: 2
+                      }}
+                    >
+                      Extras
+                    </Typography>
+                  </Divider>
+                </Box>
+              </Grid>
 
-              {/* Data Imports & Integrations */}
-              {user.role === 'ADMIN' && (
+              {/* Scan Receipts */}
+              {['ADMIN', 'MANAGER', 'ACCOUNTANT', 'DRIVER'].includes(user.role) && (
                 <Grid item xs={12} sm={6} md={4}>
                   <CategoryCard
-                    title="Data & Integrations"
-                    description="Imports & third-party integrations"
-                    icon={CloudUpload}
-                    gradient="linear-gradient(135deg, #F9D13E 0%, #E5C02E 100%)"
-                    accent="#d97706"
-                    onClick={() => setSelectedCategory('integrations')}
+                    title="Scan Receipts"
+                    description="Capture and analyze receipts with AI"
+                    icon={ReceiptOutlined}
+                    gradient="linear-gradient(135deg, #ec4899 0%, #f97316 100%)"
+                    accent="#ec4899"
+                    onClick={() => router.push('/receipt-scan')}
                   />
                 </Grid>
               )}
@@ -878,15 +911,19 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             accent: '#38f9d7'
           },
           {
-            title: 'Moneris Transactions',
-            description: 'Browse & filter credit card transactions from Moneris',
-            icon: CreditCard,
-            path: '/moneris-integration',
-            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
-            badge: 'Payments',
-            gradient: 'linear-gradient(135deg, #7B1FA2 0%, #CE93D8 100%)',
-            accent: '#CE93D8'
-          },
+            title: 'Plugin Management',
+            description: 'Configure third-party integrations & scheduled imports',
+            icon: Extension,
+            path: '/plugins',
+            roles: ['ADMIN'],
+            badge: 'Integrations',
+            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+            accent: '#764ba2'
+          }
+        ];
+
+      case 'data-uploads':
+        return [
           {
             title: 'Data Import/Export',
             description: 'Import & export data: CSV, Excel, external databases',
@@ -898,14 +935,14 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
             accent: '#E5C02E'
           },
           {
-            title: 'Plugin Management',
-            description: 'Configure third-party integrations & scheduled imports',
-            icon: Extension,
-            path: '/plugins',
-            roles: ['ADMIN'],
-            badge: 'Integrations',
-            gradient: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            accent: '#764ba2'
+            title: 'Moneris Transactions',
+            description: 'Browse & filter credit card transactions from Moneris',
+            icon: CreditCard,
+            path: '/moneris-integration',
+            roles: ['ADMIN', 'MANAGER', 'ACCOUNTANT'],
+            badge: 'Payments',
+            gradient: 'linear-gradient(135deg, #7B1FA2 0%, #CE93D8 100%)',
+            accent: '#CE93D8'
           }
         ];
 
@@ -930,7 +967,7 @@ function SubCategoryView({ user, category, onBack, onNavigate, helpDialogOpen, s
 
   const getCategoryTitle = () => {
     const titles = {
-      account: 'Account & Customers',
+      account: 'Account Customers & Trips',
       operations: 'Fleet Management',
       financials: 'Billings & Charge Management',
       reports: 'Reports',
