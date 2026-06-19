@@ -83,6 +83,7 @@ import {
   Article,
   Code,
   Extension,
+  Settings,
 } from "@mui/icons-material";
 import { getCurrentUser, logout, isAuthenticated, getTenantName, API_BASE_URL } from './lib/api';
 import { setSelectedCategory as storeCategoryNav } from './lib/categoryNav';
@@ -91,6 +92,9 @@ import OperationsHelpCard from '../components/OperationsHelpCard';
 import AccountCustomerHelpCard from '../components/AccountCustomerHelpCard';
 import ReportsHelpCard from '../components/ReportsHelpCard';
 import DataIntegrationHelpCard from '../components/DataIntegrationHelpCard';
+import HelpSearchBar from './components/HelpSearchBar';
+import HelpGuidanceDialog from './components/HelpGuidanceDialog';
+import SystemOverviewDialog from './components/SystemOverviewDialog';
 
 function HomePageContent() {
   const [user, setUser] = useState(null);
@@ -98,6 +102,9 @@ function HomePageContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+  const [selectedHelpTopic, setSelectedHelpTopic] = useState(null);
+  const [showGuidanceDialog, setShowGuidanceDialog] = useState(false);
+  const [showOverviewDialog, setShowOverviewDialog] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedCategory = searchParams.get('category') || null;
@@ -107,6 +114,30 @@ function HomePageContent() {
       router.push(`/?category=${category}`, { scroll: false });
     } else {
       router.push('/', { scroll: false });
+    }
+  }, [router]);
+
+  const navigateFromHelp = useCallback((topic) => {
+    const navigationMap = {
+      'Reports > Driver Reports': '/reports',
+      'Reports > Summary Reports': '/reports',
+      'Reports > Analytics Dashboard': '/reports',
+      'Data & Integrations > Data Import': '/data-uploads',
+      'Data & Integrations > Third-Party Integrations': '/integrations',
+      'Fleet Management > Drivers': '/drivers',
+      'Fleet Management > Cabs': '/cabs',
+      'Fleet Management > Shift Assignment': '/shifts',
+      'Billings & Charges > Financial Setup': '/financial-setup',
+      'Billings & Charges > Expense Management': '/expenses',
+      'Account Customers > Account Management': '/account-management',
+      'Account Customers > Invoicing': '/account-management',
+      'Payments > Driver Payments': '/driver-payments',
+    };
+
+    const route = navigationMap[topic.navigationPath];
+    if (route) {
+      router.push(route);
+      setShowGuidanceDialog(false);
     }
   }, [router]);
 
@@ -329,6 +360,34 @@ function HomePageContent() {
 
         {!selectedCategory ? (
           <>
+            {/* Help & Guide Section */}
+            <Box sx={{ mb: 6 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3 }}>
+                <Box>
+                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 1 }}>
+                    👋 How can we help you today?
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Search for help or explore our guides to get started
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<Settings />}
+                  onClick={() => setShowOverviewDialog(true)}
+                >
+                  System Overview
+                </Button>
+              </Box>
+              <HelpSearchBar
+                onSelectTopic={(topic) => {
+                  console.log('Setting help topic:', topic);
+                  setSelectedHelpTopic(topic);
+                  console.log('Opening guidance dialog');
+                  setShowGuidanceDialog(true);
+                }}
+              />
+            </Box>
 
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#3e5244', mb: 4 }}>
               Select a Category
@@ -525,6 +584,19 @@ function HomePageContent() {
             setHelpDialogOpen={setHelpDialogOpen}
           />
         )}
+
+        {/* Help & Guide Dialogs */}
+        <HelpGuidanceDialog
+          open={showGuidanceDialog}
+          onClose={() => setShowGuidanceDialog(false)}
+          topic={selectedHelpTopic}
+          onNavigate={navigateFromHelp}
+        />
+
+        <SystemOverviewDialog
+          open={showOverviewDialog}
+          onClose={() => setShowOverviewDialog(false)}
+        />
       </Container>
 
       {/* Professional Logout Confirmation Dialog */}
