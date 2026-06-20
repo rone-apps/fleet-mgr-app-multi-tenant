@@ -100,7 +100,7 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
 
     if (searchDate) {
       filtered = filtered.filter(item => {
-        const shiftDateStr = item.shiftDate ?
+        const shiftDateStr = item.shiftDate ? 
           (typeof item.shiftDate === 'string' ? item.shiftDate : item.shiftDate.toString()) : '';
         return shiftDateStr.includes(searchDate);
       });
@@ -112,48 +112,22 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
       );
     }
 
-    // Group by driver
-    const grouped = {};
-    filtered.forEach(item => {
-      const driverKey = item.driverNumber || "Unknown Driver";
-      if (!grouped[driverKey]) {
-        grouped[driverKey] = {
-          driverNumber: driverKey,
-          driverName: item.driverName,
-          items: []
-        };
-      }
-      grouped[driverKey].items.push(item);
-    });
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let compareValue = 0;
 
-    // Sort items within each group by date
-    Object.keys(grouped).forEach(driverKey => {
-      grouped[driverKey].items.sort((a, b) => {
+      if (sortBy === "date") {
         const dateA = a.shiftDate ? new Date(a.shiftDate) : new Date(0);
         const dateB = b.shiftDate ? new Date(b.shiftDate) : new Date(0);
-        const dateCompare = dateA - dateB;
-        return sortOrder === "asc" ? dateCompare : -dateCompare;
-      });
+        compareValue = dateA - dateB;
+      } else if (sortBy === "cab") {
+        compareValue = (a.cabNumber || "").localeCompare(b.cabNumber || "");
+      }
+
+      return sortOrder === "asc" ? compareValue : -compareValue;
     });
 
-    // Convert grouped object to array for display
-    const groupedArray = Object.keys(grouped).map(driverKey => ({
-      driverNumber: grouped[driverKey].driverNumber,
-      driverName: grouped[driverKey].driverName,
-      items: grouped[driverKey].items,
-      subtotals: {
-        count: grouped[driverKey].items.length,
-        miles: grouped[driverKey].items.reduce((sum, item) => sum + (item.miles || 0), 0),
-        baseRate: grouped[driverKey].items.reduce((sum, item) => sum + (item.baseRate || 0), 0),
-        mileageLease: grouped[driverKey].items.reduce((sum, item) => sum + (item.mileageLease || 0), 0),
-        totalLease: grouped[driverKey].items.reduce((sum, item) => sum + (item.totalLease || 0), 0),
-      }
-    }));
-
-    // Sort groups by driver number
-    groupedArray.sort((a, b) => a.driverNumber.localeCompare(b.driverNumber));
-
-    setFilteredData(groupedArray);
+    setFilteredData(filtered);
   };
 
   const handleSort = (column) => {
@@ -175,10 +149,10 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
     if (!filteredData || filteredData.length === 0) return;
 
     const headers = [
-      "Working Driver",
       "Date",
       "Cab",
       "Shift Type",
+      "Working Driver",
       "Miles",
       "Base Rate",
       "Mileage Rate",
@@ -186,46 +160,21 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
       "Total Lease",
     ];
 
-    const rows = [];
-    filteredData.forEach((group) => {
-      // Add group header
-      rows.push([`${group.driverName} (${group.driverNumber})`, "", "", "", "", "", "", "", ""]);
+    const rows = filteredData.map((item) => [
+      item.shiftDate || "",
+      item.cabNumber || "",
+      item.shiftType || "",
+      `${item.driverName || ""} (${item.driverNumber || ""})`,
+      item.miles?.toFixed(2) || "0.00",
+      item.baseRate?.toFixed(2) || "0.00",
+      item.mileageRate?.toFixed(2) || "0.00",
+      item.mileageLease?.toFixed(2) || "0.00",
+      item.totalLease?.toFixed(2) || "0.00",
+    ]);
 
-      // Add shift rows
-      group.items.forEach((item) => {
-        rows.push([
-          `${item.driverName || ""} (${item.driverNumber || ""})`,
-          item.shiftDate || "",
-          item.cabNumber || "",
-          item.shiftType || "",
-          item.miles?.toFixed(2) || "0.00",
-          item.baseRate?.toFixed(2) || "0.00",
-          item.mileageRate?.toFixed(2) || "0.00",
-          item.mileageLease?.toFixed(2) || "0.00",
-          item.totalLease?.toFixed(2) || "0.00",
-        ]);
-      });
-
-      // Add subtotal row
-      rows.push([
-        `${group.driverName} Subtotal`,
-        "",
-        "",
-        "",
-        group.subtotals.miles.toFixed(0),
-        group.subtotals.baseRate.toFixed(2),
-        "",
-        group.subtotals.mileageLease.toFixed(2),
-        group.subtotals.totalLease.toFixed(2),
-      ]);
-
-      // Add blank row between groups
-      rows.push(["", "", "", "", "", "", "", "", ""]);
-    });
-
-    // Add grand total
-    rows.push(["GRAND TOTAL", "", "", "", "", "", "", "",
-      filteredData.reduce((sum, group) => sum + group.subtotals.totalLease, 0).toFixed(2)]);
+    rows.push([]);
+    rows.push(["GRAND TOTAL", "", "", "", "", "", "", "", 
+      filteredData.reduce((sum, item) => sum + (item.totalLease || 0), 0).toFixed(2)]);
 
     const csvContent = [
       headers.join(","),
@@ -380,7 +329,7 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
           </Grid>
         </Grid>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Showing {filteredData.reduce((sum, group) => sum + group.items.length, 0)} of {reportData.leaseItems.length} shifts ({filteredData.length} drivers)
+          Showing {filteredData.length} of {reportData.leaseItems.length} shifts
         </Typography>
       </Paper>
 
@@ -445,83 +394,46 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredData.map((group, groupIndex) => (
-                <React.Fragment key={groupIndex}>
-                  {/* Group Header Row */}
-                  <TableRow sx={{ bgcolor: "success.light" }}>
-                    <TableCell colSpan={9} sx={{ fontWeight: 600, py: 1.5 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <DirectionsCar sx={{ fontSize: 20 }} />
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                          Driver: {group.driverName || "N/A"} ({group.driverNumber}) - {group.subtotals.count} shifts
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Shift Rows */}
-                  {group.items.map((item, itemIndex) => (
-                    <TableRow key={`${groupIndex}-${itemIndex}`} hover>
-                      <TableCell>
-                        {item.shiftDate ?
-                          (typeof item.shiftDate === 'string' ? item.shiftDate : format(new Date(item.shiftDate), 'yyyy-MM-dd'))
-                          : 'N/A'}
-                      </TableCell>
-                      <TableCell>
-                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                          <DirectionsCar sx={{ fontSize: 18, color: "text.secondary" }} />
-                          {item.cabNumber || "N/A"}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{item.shiftType || "N/A"}</TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {item.driverName || "N/A"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {item.driverNumber || ""}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 500 }}>
-                        {item.miles?.toFixed(0) || "0"}
-                      </TableCell>
-                      <TableCell align="right">
-                        ${item.baseRate?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell align="right">
-                        ${item.mileageRate?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell align="right">
-                        ${item.mileageLease?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, color: "success.main" }}>
-                        ${item.totalLease?.toFixed(2) || "0.00"}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {/* Subtotal Row */}
-                  <TableRow sx={{ bgcolor: "action.hover" }}>
-                    <TableCell colSpan={4} align="right" sx={{ fontWeight: 600, fontStyle: "italic" }}>
-                      {group.driverName} Subtotal
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      {group.subtotals.miles.toFixed(0)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      ${group.subtotals.baseRate.toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right"></TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      ${group.subtotals.mileageLease.toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600, color: "success.main" }}>
-                      ${group.subtotals.totalLease.toFixed(2)}
-                    </TableCell>
-                  </TableRow>
-                </React.Fragment>
+              {filteredData.map((item, index) => (
+                <TableRow key={index} hover>
+                  <TableCell>
+                    {item.shiftDate ? 
+                      (typeof item.shiftDate === 'string' ? item.shiftDate : format(new Date(item.shiftDate), 'yyyy-MM-dd'))
+                      : 'N/A'}
+                  </TableCell>
+                  <TableCell>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <DirectionsCar sx={{ fontSize: 18, color: "text.secondary" }} />
+                      {item.cabNumber || "N/A"}
+                    </Box>
+                  </TableCell>
+                  <TableCell>{item.shiftType || "N/A"}</TableCell>
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {item.driverName || "N/A"}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.driverNumber || ""}
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 500 }}>
+                    {item.miles?.toFixed(0) || "0"}
+                  </TableCell>
+                  <TableCell align="right">
+                    ${item.baseRate?.toFixed(2) || "0.00"}
+                  </TableCell>
+                  <TableCell align="right">
+                    ${item.mileageRate?.toFixed(2) || "0.00"}
+                  </TableCell>
+                  <TableCell align="right">
+                    ${item.mileageLease?.toFixed(2) || "0.00"}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, color: "success.main" }}>
+                    ${item.totalLease?.toFixed(2) || "0.00"}
+                  </TableCell>
+                </TableRow>
               ))}
             </TableBody>
             <TableFooter>
@@ -533,7 +445,7 @@ export default function LeaseRevenueTab({ driverNumber, startDate, endDate }) {
                   align="right"
                   sx={{ fontWeight: 700, color: "success.main", fontSize: 18 }}
                 >
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.totalLease, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.totalLease || 0), 0).toFixed(2)}
                 </TableCell>
               </TableRow>
             </TableFooter>
