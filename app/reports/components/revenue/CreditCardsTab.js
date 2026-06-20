@@ -202,46 +202,24 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
       });
     }
 
-    // Group by card type
-    const grouped = {};
-    filtered.forEach(item => {
-      const cardType = item.cardType || "Unknown";
-      if (!grouped[cardType]) {
-        grouped[cardType] = [];
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let compareValue = 0;
+
+      if (sortBy === "date") {
+        compareValue = new Date(a.transactionDate) - new Date(b.transactionDate);
+      } else if (sortBy === "cab") {
+        compareValue = (a.cabNumber || "").localeCompare(b.cabNumber || "");
+      } else if (sortBy === "card") {
+        const cardA = getCardTypeInfo(a.cardType).code;
+        const cardB = getCardTypeInfo(b.cardType).code;
+        compareValue = cardA.localeCompare(cardB);
       }
-      grouped[cardType].push(item);
+
+      return sortOrder === "asc" ? compareValue : -compareValue;
     });
 
-    // Sort items within each group by date
-    Object.keys(grouped).forEach(cardType => {
-      grouped[cardType].sort((a, b) => {
-        const dateCompare = new Date(a.transactionDate) - new Date(b.transactionDate);
-        return sortOrder === "asc" ? dateCompare : -dateCompare;
-      });
-    });
-
-    // Convert grouped object to array for display
-    const groupedArray = Object.keys(grouped).map(cardType => ({
-      cardType,
-      items: grouped[cardType],
-      subtotals: {
-        count: grouped[cardType].length,
-        amount: grouped[cardType].reduce((sum, item) => sum + (item.amount || 0), 0),
-        tipAmount: grouped[cardType].reduce((sum, item) => sum + (item.tipAmount || 0), 0),
-        totalAmount: grouped[cardType].reduce((sum, item) => sum + (item.totalAmount || 0), 0),
-        processingFee: grouped[cardType].reduce((sum, item) => sum + (item.processingFee || 0), 0),
-        netAmount: grouped[cardType].reduce((sum, item) => sum + (item.netAmount || 0), 0),
-      }
-    }));
-
-    // Sort groups by card type name
-    groupedArray.sort((a, b) => {
-      const cardA = getCardTypeInfo(a.cardType).code;
-      const cardB = getCardTypeInfo(b.cardType).code;
-      return cardA.localeCompare(cardB);
-    });
-
-    setFilteredData(groupedArray);
+    setFilteredData(filtered);
   };
 
   const handleSort = (column) => {
@@ -263,11 +241,11 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
     if (!filteredData || filteredData.length === 0) return;
 
     const headers = [
-      "Card Type",
       "Date",
       "Time",
       "Auth Code",
       "Terminal ID",
+      "Card Type",
       "Card Number",
       "Cab",
       "Amount",
@@ -279,53 +257,24 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
       "Settled",
     ];
 
-    const rows = [];
-    filteredData.forEach((group) => {
-      const cardInfo = getCardTypeInfo(group.cardType);
-
-      // Add group header
-      rows.push([cardInfo.name, "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-
-      // Add transaction rows
-      group.items.forEach((item) => {
-        rows.push([
-          cardInfo.name,
-          item.transactionDate,
-          item.transactionTime || "",
-          item.authorizationCode,
-          item.terminalId,
-          item.cardholderNumber || (item.cardLastFour ? `****${item.cardLastFour}` : ""),
-          item.cabNumber || "",
-          item.amount?.toFixed(2) || "0.00",
-          item.tipAmount?.toFixed(2) || "0.00",
-          item.totalAmount?.toFixed(2) || "0.00",
-          item.processingFee?.toFixed(2) || "0.00",
-          item.netAmount?.toFixed(2) || "0.00",
-          item.transactionStatus,
-          item.isSettled ? "Yes" : "No",
-        ]);
-      });
-
-      // Add subtotal row
-      rows.push([
-        `${cardInfo.name} Subtotal`,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        group.subtotals.amount.toFixed(2),
-        group.subtotals.tipAmount.toFixed(2),
-        group.subtotals.totalAmount.toFixed(2),
-        group.subtotals.processingFee.toFixed(2),
-        group.subtotals.netAmount.toFixed(2),
-        "",
-        "",
-      ]);
-
-      // Add blank row between groups
-      rows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+    const rows = filteredData.map((item) => {
+      const cardInfo = getCardTypeInfo(item.cardType);
+      return [
+        item.transactionDate,
+        item.transactionTime || "",
+        item.authorizationCode,
+        item.terminalId,
+        cardInfo.name,
+        item.cardholderNumber || (item.cardLastFour ? `****${item.cardLastFour}` : ""),
+        item.cabNumber || "",
+        item.amount?.toFixed(2) || "0.00",
+        item.tipAmount?.toFixed(2) || "0.00",
+        item.totalAmount?.toFixed(2) || "0.00",
+        item.processingFee?.toFixed(2) || "0.00",
+        item.netAmount?.toFixed(2) || "0.00",
+        item.transactionStatus,
+        item.isSettled ? "Yes" : "No",
+      ];
     });
 
     const csvContent = [
@@ -518,7 +467,7 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
           </Grid>
         </Grid>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Showing {filteredData.reduce((sum, group) => sum + group.items.length, 0)} of {reportData.transactionItems.length} transactions ({filteredData.length} card types)
+          Showing {filteredData.length} of {reportData.transactionItems.length} transactions
         </Typography>
       </Paper>
 
@@ -591,14 +540,32 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredData.map((group, groupIndex) => {
-                const cardInfo = getCardTypeInfo(group.cardType);
+              {filteredData.map((item, index) => {
+                const cardInfo = getCardTypeInfo(item.cardType);
                 return (
-                  <React.Fragment key={groupIndex}>
-                    {/* Group Header Row */}
-                    <TableRow sx={{ bgcolor: "primary.light" }}>
-                      <TableCell colSpan={12} sx={{ fontWeight: 600, py: 1.5 }}>
+                  <TableRow key={index} hover>
+                    <TableCell>
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                          {item.transactionDate}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.transactionTime || "N/A"}
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
+                        {item.authorizationCode}
+                      </Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Typography variant="caption">{item.terminalId}</Typography>
+                    </TableCell>
+                    <TableCell>
+                      <Tooltip title={cardInfo.name}>
                         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          {/* Card Icon - SVG or Emoji */}
                           <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 40 }}>
                             {typeof cardInfo.icon === 'string' ? (
                               <Typography sx={{ fontSize: 24 }}>{cardInfo.icon}</Typography>
@@ -606,35 +573,7 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
                               cardInfo.icon
                             )}
                           </Box>
-                          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                            {cardInfo.name} ({group.subtotals.count} transactions)
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-
-                    {/* Transaction Rows */}
-                    {group.items.map((item, itemIndex) => (
-                      <TableRow key={`${groupIndex}-${itemIndex}`} hover>
-                        <TableCell>
-                          <Box>
-                            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                              {item.transactionDate}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.transactionTime || "N/A"}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontFamily: "monospace" }}>
-                            {item.authorizationCode}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption">{item.terminalId}</Typography>
-                        </TableCell>
-                        <TableCell>
+                          {/* Card Name and Number */}
                           <Box>
                             <Typography variant="body2" sx={{ fontWeight: 500 }}>
                               {cardInfo.code}
@@ -643,58 +582,35 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
                               {item.cardholderNumber || (item.cardLastFour ? `****${item.cardLastFour}` : "")}
                             </Typography>
                           </Box>
-                        </TableCell>
-                        <TableCell>{item.cabNumber || "N/A"}</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 500 }}>
-                          ${item.amount?.toFixed(2) || "0.00"}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: "success.main" }}>
-                          ${item.tipAmount?.toFixed(2) || "0.00"}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600 }}>
-                          ${item.totalAmount?.toFixed(2) || "0.00"}
-                        </TableCell>
-                        <TableCell align="right" sx={{ color: "error.main" }}>
-                          ${item.processingFee?.toFixed(2) || "0.00"}
-                        </TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 600, color: "primary.main" }}>
-                          ${item.netAmount?.toFixed(2) || "0.00"}
-                        </TableCell>
-                        <TableCell>{getStatusChip(item.transactionStatus)}</TableCell>
-                        <TableCell>
-                          <Chip
-                            icon={item.isSettled ? <CheckCircle /> : <Schedule />}
-                            label={item.isSettled ? "Settled" : "Pending"}
-                            size="small"
-                            color={item.isSettled ? "success" : "warning"}
-                          />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-
-                    {/* Subtotal Row */}
-                    <TableRow sx={{ bgcolor: "action.hover" }}>
-                      <TableCell colSpan={5} align="right" sx={{ fontWeight: 600, fontStyle: "italic" }}>
-                        {cardInfo.name} Subtotal
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        ${group.subtotals.amount.toFixed(2)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        ${group.subtotals.tipAmount.toFixed(2)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        ${group.subtotals.totalAmount.toFixed(2)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600 }}>
-                        ${group.subtotals.processingFee.toFixed(2)}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, color: "primary.main" }}>
-                        ${group.subtotals.netAmount.toFixed(2)}
-                      </TableCell>
-                      <TableCell colSpan={2}></TableCell>
-                    </TableRow>
-                  </React.Fragment>
+                        </Box>
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>{item.cabNumber || "N/A"}</TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 500 }}>
+                      ${item.amount?.toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: "success.main" }}>
+                      ${item.tipAmount?.toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600 }}>
+                      ${item.totalAmount?.toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ color: "error.main" }}>
+                      ${item.processingFee?.toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell align="right" sx={{ fontWeight: 600, color: "primary.main" }}>
+                      ${item.netAmount?.toFixed(2) || "0.00"}
+                    </TableCell>
+                    <TableCell>{getStatusChip(item.transactionStatus)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        icon={item.isSettled ? <CheckCircle /> : <Schedule />}
+                        label={item.isSettled ? "Settled" : "Pending"}
+                        size="small"
+                        color={item.isSettled ? "success" : "warning"}
+                      />
+                    </TableCell>
+                  </TableRow>
                 );
               })}
             </TableBody>
@@ -704,22 +620,22 @@ export default function CreditCardsTab({ driverNumber, startDate, endDate }) {
                   GRAND TOTAL
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.amount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.amount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.tipAmount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.tipAmount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.totalAmount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.totalAmount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.processingFee, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.processingFee || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell
                   align="right"
                   sx={{ fontWeight: 700, color: "primary.main", fontSize: 18 }}
                 >
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.netAmount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.netAmount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell colSpan={2}></TableCell>
               </TableRow>

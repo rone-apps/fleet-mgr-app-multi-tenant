@@ -108,45 +108,20 @@ export default function ChargesTab({ driverNumber, startDate, endDate }) {
       );
     }
 
-    // Group by account ID
-    const grouped = {};
-    filtered.forEach(item => {
-      const accountKey = item.accountId || "Unknown Account";
-      if (!grouped[accountKey]) {
-        grouped[accountKey] = {
-          accountId: accountKey,
-          customerName: item.customerName,
-          items: []
-        };
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let compareValue = 0;
+
+      if (sortBy === "date") {
+        compareValue = new Date(a.tripDate) - new Date(b.tripDate);
+      } else if (sortBy === "customer") {
+        compareValue = (a.customerName || "").localeCompare(b.customerName || "");
       }
-      grouped[accountKey].items.push(item);
+
+      return sortOrder === "asc" ? compareValue : -compareValue;
     });
 
-    // Sort items within each group by date
-    Object.keys(grouped).forEach(accountKey => {
-      grouped[accountKey].items.sort((a, b) => {
-        const dateCompare = new Date(a.tripDate) - new Date(b.tripDate);
-        return sortOrder === "asc" ? dateCompare : -dateCompare;
-      });
-    });
-
-    // Convert grouped object to array for display
-    const groupedArray = Object.keys(grouped).map(accountKey => ({
-      accountId: grouped[accountKey].accountId,
-      customerName: grouped[accountKey].customerName,
-      items: grouped[accountKey].items,
-      subtotals: {
-        count: grouped[accountKey].items.length,
-        fareAmount: grouped[accountKey].items.reduce((sum, item) => sum + (item.fareAmount || 0), 0),
-        tipAmount: grouped[accountKey].items.reduce((sum, item) => sum + (item.tipAmount || 0), 0),
-        totalAmount: grouped[accountKey].items.reduce((sum, item) => sum + (item.totalAmount || 0), 0),
-      }
-    }));
-
-    // Sort groups by account ID
-    groupedArray.sort((a, b) => a.accountId.localeCompare(b.accountId));
-
-    setFilteredData(groupedArray);
+    setFilteredData(filtered);
   };
 
   const handleSort = (column) => {
@@ -167,10 +142,10 @@ export default function ChargesTab({ driverNumber, startDate, endDate }) {
     if (!filteredData || filteredData.length === 0) return;
 
     const headers = [
-      "Account ID",
-      "Customer",
       "Date",
       "Time",
+      "Account ID",
+      "Customer",
       "Sub-Account",
       "Job Code",
       "Pickup",
@@ -184,54 +159,23 @@ export default function ChargesTab({ driverNumber, startDate, endDate }) {
       "Invoice #",
     ];
 
-    const rows = [];
-    filteredData.forEach((group) => {
-      // Add group header
-      rows.push([group.accountId, group.customerName || "N/A", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-
-      // Add charge rows
-      group.items.forEach((item) => {
-        rows.push([
-          item.accountId,
-          item.customerName || "",
-          item.tripDate,
-          item.startTime || "",
-          item.subAccount || "",
-          item.jobCode || "",
-          item.pickupAddress || "",
-          item.dropoffAddress || "",
-          item.passengerName || "",
-          item.cabNumber || "",
-          item.fareAmount?.toFixed(2) || "0.00",
-          item.tipAmount?.toFixed(2) || "0.00",
-          item.totalAmount?.toFixed(2) || "0.00",
-          item.isPaid ? "Yes" : "No",
-          item.invoiceNumber || "",
-        ]);
-      });
-
-      // Add subtotal row
-      rows.push([
-        `${group.accountId} Subtotal`,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        group.subtotals.fareAmount.toFixed(2),
-        group.subtotals.tipAmount.toFixed(2),
-        group.subtotals.totalAmount.toFixed(2),
-        "",
-        "",
-      ]);
-
-      // Add blank row between groups
-      rows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-    });
+    const rows = filteredData.map((item) => [
+      item.tripDate,
+      item.startTime || "",
+      item.accountId,
+      item.customerName || "",
+      item.subAccount || "",
+      item.jobCode || "",
+      item.pickupAddress || "",
+      item.dropoffAddress || "",
+      item.passengerName || "",
+      item.cabNumber || "",
+      item.fareAmount?.toFixed(2) || "0.00",
+      item.tipAmount?.toFixed(2) || "0.00",
+      item.totalAmount?.toFixed(2) || "0.00",
+      item.isPaid ? "Yes" : "No",
+      item.invoiceNumber || "",
+    ]);
 
     const csvContent = [
       headers.join(","),
@@ -414,7 +358,7 @@ export default function ChargesTab({ driverNumber, startDate, endDate }) {
           </Grid>
         </Grid>
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Showing {filteredData.reduce((sum, group) => sum + group.items.length, 0)} of {reportData.chargeItems.length} charges ({filteredData.length} accounts)
+          Showing {filteredData.length} of {reportData.chargeItems.length} charges
         </Typography>
       </Paper>
 
@@ -480,97 +424,63 @@ export default function ChargesTab({ driverNumber, startDate, endDate }) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredData.map((group, groupIndex) => (
-                <React.Fragment key={groupIndex}>
-                  {/* Group Header Row */}
-                  <TableRow sx={{ bgcolor: "primary.light" }}>
-                    <TableCell colSpan={13} sx={{ fontWeight: 600, py: 1.5 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                        <Receipt sx={{ fontSize: 20 }} />
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                          Account: {group.accountId} - {group.customerName || "N/A"} ({group.subtotals.count} charges)
+              {filteredData.map((item, index) => (
+                <TableRow key={index} hover>
+                  <TableCell>{item.tripDate}</TableCell>
+                  <TableCell>
+                    <Typography variant="body2">
+                      {item.startTime || "N/A"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Box>
+                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                        {item.accountId}
+                      </Typography>
+                      {item.subAccount && (
+                        <Typography variant="caption" color="text.secondary">
+                          {item.subAccount}
                         </Typography>
-                      </Box>
-                    </TableCell>
-                  </TableRow>
-
-                  {/* Charge Rows */}
-                  {group.items.map((item, itemIndex) => (
-                    <TableRow key={`${groupIndex}-${itemIndex}`} hover>
-                      <TableCell>{item.tripDate}</TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {item.startTime || "N/A"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {item.accountId}
-                          </Typography>
-                          {item.subAccount && (
-                            <Typography variant="caption" color="text.secondary">
-                              {item.subAccount}
-                            </Typography>
-                          )}
-                        </Box>
-                      </TableCell>
-                      <TableCell>{item.customerName || "N/A"}</TableCell>
-                      <TableCell>{item.jobCode || "N/A"}</TableCell>
-                      <TableCell>
-                        <Typography variant="caption" sx={{ maxWidth: 150, display: "block" }}>
-                          {item.pickupAddress || "N/A"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="caption" sx={{ maxWidth: 150, display: "block" }}>
-                          {item.dropoffAddress || "N/A"}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>{item.passengerName || "N/A"}</TableCell>
-                      <TableCell>{item.cabNumber || "N/A"}</TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 500 }}>
-                        ${item.fareAmount?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell align="right" sx={{ color: "success.main" }}>
-                        ${item.tipAmount?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell align="right" sx={{ fontWeight: 600, color: "primary.main" }}>
-                        ${item.totalAmount?.toFixed(2) || "0.00"}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          icon={item.isPaid ? <CheckCircle /> : <Cancel />}
-                          label={item.isPaid ? "Paid" : "Unpaid"}
-                          size="small"
-                          color={item.isPaid ? "success" : "warning"}
-                        />
-                        {item.isPaid && item.invoiceNumber && (
-                          <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>
-                            Inv: {item.invoiceNumber}
-                          </Typography>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-
-                  {/* Subtotal Row */}
-                  <TableRow sx={{ bgcolor: "action.hover" }}>
-                    <TableCell colSpan={9} align="right" sx={{ fontWeight: 600, fontStyle: "italic" }}>
-                      {group.accountId} Subtotal
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      ${group.subtotals.fareAmount.toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      ${group.subtotals.tipAmount.toFixed(2)}
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600, color: "primary.main" }}>
-                      ${group.subtotals.totalAmount.toFixed(2)}
-                    </TableCell>
-                    <TableCell></TableCell>
-                  </TableRow>
-                </React.Fragment>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>{item.customerName || "N/A"}</TableCell>
+                  <TableCell>{item.jobCode || "N/A"}</TableCell>
+                  <TableCell>
+                    <Typography variant="caption" sx={{ maxWidth: 150, display: "block" }}>
+                      {item.pickupAddress || "N/A"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <Typography variant="caption" sx={{ maxWidth: 150, display: "block" }}>
+                      {item.dropoffAddress || "N/A"}
+                    </Typography>
+                  </TableCell>
+                  <TableCell>{item.passengerName || "N/A"}</TableCell>
+                  <TableCell>{item.cabNumber || "N/A"}</TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 500 }}>
+                    ${item.fareAmount?.toFixed(2) || "0.00"}
+                  </TableCell>
+                  <TableCell align="right" sx={{ color: "success.main" }}>
+                    ${item.tipAmount?.toFixed(2) || "0.00"}
+                  </TableCell>
+                  <TableCell align="right" sx={{ fontWeight: 600, color: "primary.main" }}>
+                    ${item.totalAmount?.toFixed(2) || "0.00"}
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      icon={item.isPaid ? <CheckCircle /> : <Cancel />}
+                      label={item.isPaid ? "Paid" : "Unpaid"}
+                      size="small"
+                      color={item.isPaid ? "success" : "warning"}
+                    />
+                    {item.isPaid && item.invoiceNumber && (
+                      <Typography variant="caption" sx={{ display: "block", mt: 0.5 }}>
+                        Inv: {item.invoiceNumber}
+                      </Typography>
+                    )}
+                  </TableCell>
+                </TableRow>
               ))}
             </TableBody>
             <TableFooter>
@@ -579,16 +489,16 @@ export default function ChargesTab({ driverNumber, startDate, endDate }) {
                   GRAND TOTAL
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.fareAmount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.fareAmount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 600 }}>
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.tipAmount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.tipAmount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell
                   align="right"
                   sx={{ fontWeight: 700, color: "primary.main", fontSize: 18 }}
                 >
-                  ${filteredData.reduce((sum, group) => sum + group.subtotals.totalAmount, 0).toFixed(2)}
+                  ${filteredData.reduce((sum, item) => sum + (item.totalAmount || 0), 0).toFixed(2)}
                 </TableCell>
                 <TableCell></TableCell>
               </TableRow>

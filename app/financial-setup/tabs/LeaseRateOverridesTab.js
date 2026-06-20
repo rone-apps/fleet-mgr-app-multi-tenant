@@ -70,10 +70,7 @@ export default function LeaseRateOverridesTab({
     cabNumber: "",
     shiftType: "",
     dayOfWeek: "",
-    rateMode: "flat", // "flat" or "structured"
-    leaseRate: "", // For flat mode
-    baseRateOverride: "", // For structured mode
-    mileageRateOverride: "", // For structured mode
+    leaseRate: "",
     startDate: new Date(),
     endDate: null,
     notes: "",
@@ -257,18 +254,13 @@ export default function LeaseRateOverridesTab({
   const handleOpenOverrideDialog = (override = null) => {
     if (override) {
       setEditingOverride(override);
-      // Detect mode based on which fields are populated
-      const isStructured = override.baseRateOverride != null && override.mileageRateOverride != null;
       setOverrideFormData({
         ownerDriverNumber: override.ownerDriverNumber,
         beneficiaryDriverNumber: override.beneficiaryDriverNumber || "",
         cabNumber: override.cabNumber || "",
         shiftType: override.shiftType || "",
         dayOfWeek: override.dayOfWeek || "",
-        rateMode: isStructured ? "structured" : "flat",
-        leaseRate: override.leaseRate || "",
-        baseRateOverride: override.baseRateOverride || "",
-        mileageRateOverride: override.mileageRateOverride || "",
+        leaseRate: override.leaseRate,
         startDate: new Date(override.startDate),
         endDate: override.endDate ? new Date(override.endDate) : null,
         notes: override.notes || "",
@@ -282,10 +274,7 @@ export default function LeaseRateOverridesTab({
         cabNumber: "",
         shiftType: "",
         dayOfWeek: "",
-        rateMode: "flat",
         leaseRate: "",
-        baseRateOverride: "",
-        mileageRateOverride: "",
         startDate: new Date(),
         endDate: null,
         notes: "",
@@ -297,17 +286,9 @@ export default function LeaseRateOverridesTab({
   };
 
   const handleSaveOverride = async () => {
-    // Validate based on mode
-    if (overrideFormData.rateMode === "flat") {
-      if (!overrideFormData.leaseRate) {
-        setError("Lease rate is required for flat rate mode");
-        return;
-      }
-    } else {
-      if (!overrideFormData.baseRateOverride || !overrideFormData.mileageRateOverride) {
-        setError("Both base rate and mileage rate are required for structured mode");
-        return;
-      }
+    if (!overrideFormData.leaseRate) {
+      setError("Lease rate is required");
+      return;
     }
 
     try {
@@ -315,44 +296,23 @@ export default function LeaseRateOverridesTab({
         ? `${API_BASE_URL}/lease-rate-overrides/${editingOverride.id}`
         : `${API_BASE_URL}/lease-rate-overrides`;
 
-      // Build payload based on mode
-      const basePayload = {
-        ownerDriverNumber: overrideFormData.ownerDriverNumber,
-        beneficiaryDriverNumber: overrideFormData.beneficiaryDriverNumber || null,
-        cabNumber: overrideFormData.cabNumber || null,
-        shiftType: overrideFormData.shiftType || null,
-        dayOfWeek: overrideFormData.dayOfWeek || null,
+      const payload = {
+        ...overrideFormData,
         startDate: overrideFormData.startDate.toISOString().split("T")[0],
         endDate: overrideFormData.endDate
           ? overrideFormData.endDate.toISOString().split("T")[0]
           : null,
-        notes: overrideFormData.notes || null,
-        isActive: overrideFormData.isActive,
+        beneficiaryDriverNumber: overrideFormData.beneficiaryDriverNumber || null,
+        cabNumber: overrideFormData.cabNumber || null,
+        shiftType: overrideFormData.shiftType || null,
+        dayOfWeek: overrideFormData.dayOfWeek || null,
+        leaseRate: parseFloat(overrideFormData.leaseRate),
       };
-
-      // Add rate fields based on mode
-      let payload;
-      if (overrideFormData.rateMode === "flat") {
-        payload = {
-          ...basePayload,
-          leaseRate: parseFloat(overrideFormData.leaseRate),
-          baseRateOverride: null,
-          mileageRateOverride: null,
-        };
-      } else {
-        payload = {
-          ...basePayload,
-          leaseRate: null,
-          baseRateOverride: parseFloat(overrideFormData.baseRateOverride),
-          mileageRateOverride: parseFloat(overrideFormData.mileageRateOverride),
-        };
-      }
 
       const response = await fetch(url, {
         method: editingOverride ? "PUT" : "POST",
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-          "X-Tenant-ID": localStorage.getItem("tenantSchema"),
+          Authorization: `Bearer ${localStorage.getItem("token")}`, "X-Tenant-ID": localStorage.getItem("tenantSchema"),
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
@@ -655,25 +615,13 @@ export default function LeaseRateOverridesTab({
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
-                      {override.baseRateOverride != null && override.mileageRateOverride != null ? (
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold" color="success.main">
-                            ${parseFloat(override.baseRateOverride).toFixed(2)} + ${parseFloat(override.mileageRateOverride).toFixed(4)}/mi
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            (Structured)
-                          </Typography>
-                        </Box>
-                      ) : (
-                        <Box>
-                          <Typography variant="body2" fontWeight="bold" color="success.main">
-                            ${parseFloat(override.leaseRate).toFixed(2)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            (Flat)
-                          </Typography>
-                        </Box>
-                      )}
+                      <Typography
+                        variant="body2"
+                        fontWeight="bold"
+                        color="success.main"
+                      >
+                        ${parseFloat(override.leaseRate).toFixed(2)}
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
@@ -899,96 +847,20 @@ export default function LeaseRateOverridesTab({
                 </FormControl>
               </Grid>
               <Grid item xs={12} sm={6}>
-                {/* Rate Mode Toggle */}
-                <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Rate Type
-                  </Typography>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={overrideFormData.rateMode === "flat"}
-                          onChange={() =>
-                            setOverrideFormData({
-                              ...overrideFormData,
-                              rateMode: "flat",
-                            })
-                          }
-                        />
-                      }
-                      label="Flat Rate (fixed total)"
-                    />
-                    <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={overrideFormData.rateMode === "structured"}
-                          onChange={() =>
-                            setOverrideFormData({
-                              ...overrideFormData,
-                              rateMode: "structured",
-                            })
-                          }
-                        />
-                      }
-                      label="Base + Mileage (variable)"
-                    />
-                  </Box>
-                </Box>
-
-                {/* Conditional Rate Fields */}
-                {overrideFormData.rateMode === "flat" ? (
-                  <TextField
-                    fullWidth
-                    label="Flat Lease Rate"
-                    type="number"
-                    value={overrideFormData.leaseRate}
-                    onChange={(e) =>
-                      setOverrideFormData({
-                        ...overrideFormData,
-                        leaseRate: e.target.value,
-                      })
-                    }
-                    InputProps={{ startAdornment: "$" }}
-                    required
-                    helperText="Total lease amount regardless of miles driven"
-                  />
-                ) : (
-                  <>
-                    <TextField
-                      fullWidth
-                      label="Base Rate"
-                      type="number"
-                      value={overrideFormData.baseRateOverride}
-                      onChange={(e) =>
-                        setOverrideFormData({
-                          ...overrideFormData,
-                          baseRateOverride: e.target.value,
-                        })
-                      }
-                      InputProps={{ startAdornment: "$" }}
-                      required
-                      helperText="Fixed component of lease charge"
-                      sx={{ mb: 2 }}
-                    />
-                    <TextField
-                      fullWidth
-                      label="Mileage Rate"
-                      type="number"
-                      value={overrideFormData.mileageRateOverride}
-                      onChange={(e) =>
-                        setOverrideFormData({
-                          ...overrideFormData,
-                          mileageRateOverride: e.target.value,
-                        })
-                      }
-                      InputProps={{ startAdornment: "$", endAdornment: "/ mile" }}
-                      inputProps={{ step: "0.01" }}
-                      required
-                      helperText="Per-mile charge (e.g., 0.20 for $0.20/mile)"
-                    />
-                  </>
-                )}
+                <TextField
+                  fullWidth
+                  label="Lease Rate"
+                  type="number"
+                  value={overrideFormData.leaseRate}
+                  onChange={(e) =>
+                    setOverrideFormData({
+                      ...overrideFormData,
+                      leaseRate: e.target.value,
+                    })
+                  }
+                  InputProps={{ startAdornment: "$" }}
+                  required
+                />
               </Grid>
               <Grid item xs={12} sm={6}>
                 <DatePicker
