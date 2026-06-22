@@ -91,6 +91,13 @@ export default function LeaseRateOverridesTab({
     notes: "",
   });
 
+  // Parse date string (YYYY-MM-DD) as local date, not UTC
+  const parseLocalDate = (dateString) => {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const daysOfWeek = [
     "MONDAY",
     "TUESDAY",
@@ -269,8 +276,8 @@ export default function LeaseRateOverridesTab({
         leaseRate: override.leaseRate || "",
         baseRateOverride: override.baseRateOverride || "",
         mileageRateOverride: override.mileageRateOverride || "",
-        startDate: new Date(override.startDate),
-        endDate: override.endDate ? new Date(override.endDate) : null,
+        startDate: parseLocalDate(override.startDate),
+        endDate: override.endDate ? parseLocalDate(override.endDate) : null,
         notes: override.notes || "",
         isActive: override.isActive,
       });
@@ -677,13 +684,13 @@ export default function LeaseRateOverridesTab({
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2">
-                        {new Date(override.startDate).toLocaleDateString()}
+                        {parseLocalDate(override.startDate).toLocaleDateString()}
                       </Typography>
                     </TableCell>
                     <TableCell>
                       {override.endDate ? (
                         <Typography variant="body2">
-                          {new Date(override.endDate).toLocaleDateString()}
+                          {parseLocalDate(override.endDate).toLocaleDateString()}
                         </Typography>
                       ) : (
                         <Chip label="Ongoing" size="small" color="info" />

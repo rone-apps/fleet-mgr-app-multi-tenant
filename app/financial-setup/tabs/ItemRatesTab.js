@@ -76,6 +76,13 @@ export default function ItemRatesTab({ canEdit, canDelete, setError, setSuccess,
     }
   };
 
+  // Parse date string (YYYY-MM-DD) as local date, not UTC
+  const parseLocalDate = (dateString) => {
+    if (!dateString) return new Date();
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   const handleOpenDialog = (rate = null) => {
     if (rate) {
       setEditing(rate.id);
@@ -84,7 +91,7 @@ export default function ItemRatesTab({ canEdit, canDelete, setError, setSuccess,
         unitType: rate.unitType,
         rate: rate.rate.toString(),
         chargedTo: rate.chargedTo,
-        effectiveFrom: new Date(rate.effectiveFrom),
+        effectiveFrom: parseLocalDate(rate.effectiveFrom),
         notes: rate.notes || "",
       });
     } else {
@@ -210,7 +217,7 @@ export default function ItemRatesTab({ canEdit, canDelete, setError, setSuccess,
                   <TableCell>{rate.unitTypeDisplay}</TableCell>
                   <TableCell align="right">${rate.rate}</TableCell>
                   <TableCell>{rate.chargedToDisplay}</TableCell>
-                  <TableCell>{new Date(rate.effectiveFrom).toLocaleDateString()}</TableCell>
+                  <TableCell>{parseLocalDate(rate.effectiveFrom).toLocaleDateString()}</TableCell>
                   <TableCell>
                     {rate.isActive ? (
                       <Chip

@@ -5,7 +5,7 @@ import {
   TextField, MenuItem, FormControl, InputLabel, Select, IconButton, Chip, Alert,
   Grid,
 } from "@mui/material";
-import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Info as InfoIcon, Calculate as CalculateIcon, AttachMoney as AttachMoneyIcon } from "@mui/icons-material";
+import { Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Info as InfoIcon, Calculate as CalculateIcon, AttachMoney as AttachMoneyIcon, Refresh as RefreshIcon } from "@mui/icons-material";
 import { API_BASE_URL } from "../../lib/api";
 import ShiftChargesCalculator from "./ShiftChargesCalculator";
 
@@ -233,14 +233,14 @@ export default function AttributeCostsTab({ canEdit }) {
       </Alert>
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
-        <Grid item xs={12} sm={6}>
+        <Grid item xs={12} sm={5}>
           {canEdit && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenDialog()}>
               Add Attribute Cost
             </Button>
           )}
         </Grid>
-        <Grid item xs={12} sm={6}>
+        <Grid item xs={12} sm={5.5}>
           <Button
             variant="outlined"
             startIcon={<CalculateIcon />}
@@ -248,6 +248,11 @@ export default function AttributeCostsTab({ canEdit }) {
             fullWidth
           >
             Calculate Shift Charges
+          </Button>
+        </Grid>
+        <Grid item xs={12} sm={1.5}>
+          <Button variant="outlined" onClick={loadAttributeCosts} fullWidth sx={{ height: '100%', minWidth: 'auto', px: 1 }}>
+            <RefreshIcon />
           </Button>
         </Grid>
       </Grid>

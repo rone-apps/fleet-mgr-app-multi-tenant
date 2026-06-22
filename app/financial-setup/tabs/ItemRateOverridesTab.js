@@ -77,6 +77,13 @@ export default function ItemRateOverridesTab({ canEdit, canDelete, setError, set
 
   const daysOfWeek = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
 
+  // Parse date string (YYYY-MM-DD) as local date, not UTC
+  const parseLocalDate = (dateString) => {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  };
+
   useEffect(() => {
     loadOwners();
     loadBaseRates();
@@ -192,8 +199,8 @@ export default function ItemRateOverridesTab({ canEdit, canDelete, setError, set
         shiftType: override.shiftType || "",
         dayOfWeek: override.dayOfWeek || "",
         overrideRate: override.overrideRate.toString(),
-        startDate: new Date(override.startDate),
-        endDate: override.endDate ? new Date(override.endDate) : null,
+        startDate: parseLocalDate(override.startDate),
+        endDate: override.endDate ? parseLocalDate(override.endDate) : null,
         notes: override.notes || "",
       });
     } else {
@@ -383,8 +390,8 @@ export default function ItemRateOverridesTab({ canEdit, canDelete, setError, set
                       <Chip label={override.priority} size="small" />
                     </TableCell>
                     <TableCell>
-                      {new Date(override.startDate).toLocaleDateString()}
-                      {override.endDate && ` - ${new Date(override.endDate).toLocaleDateString()}`}
+                      {parseLocalDate(override.startDate).toLocaleDateString()}
+                      {override.endDate && ` - ${parseLocalDate(override.endDate).toLocaleDateString()}`}
                     </TableCell>
                     <TableCell>
                       {override.isActive ? (

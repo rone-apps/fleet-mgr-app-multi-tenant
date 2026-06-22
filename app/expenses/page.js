@@ -13,6 +13,7 @@ import {
   TrendingUp as TrendingUpIcon, TrendingDown as TrendingDownIcon, Search as SearchIcon,
   Repeat as RecurringIcon, EventNote as OneTimeIcon, CheckCircle as ActiveIcon,
   Cancel as InactiveIcon, Block as BlockIcon, Close as CloseIcon, AccountBalance as RevenueIcon,
+  Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import GlobalNav from "../components/GlobalNav";
 import { getCurrentUser, API_BASE_URL } from "../lib/api";
@@ -542,6 +543,14 @@ export default function ExpensesRevenuesPage() {
         return shift ? `Shift: Cab ${shift.cabNumber} ${shift.shiftType}` : `Shift #${expense.specificShiftId}`;
 
       case "SPECIFIC_PERSON":
+        // Use transient fields from backend if available
+        if (expense.driverName) {
+          return expense.driverName;
+        }
+        if (expense.ownerName) {
+          return `${expense.ownerName} (Owner)`;
+        }
+        // Fallback to looking up in drivers array
         const person = drivers.find(d => d.id === expense.specificPersonId);
         if (!person) return `Person #${expense.specificPersonId}`;
         return `${person.firstName} ${person.lastName} ${person.isOwner ? "(Owner)" : "(Driver)"}`;
@@ -819,8 +828,13 @@ export default function ExpensesRevenuesPage() {
                             <TextField placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} fullWidth size="small"
                               InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
                           </Grid>
-                          <Grid item xs={12} md={2}>
+                          <Grid item xs={12} md={1.5}>
                             <FormControlLabel control={<Switch checked={showActiveOnly} onChange={(e) => { setShowActiveOnly(e.target.checked); loadRecurringExpenses(); }} />} label="Active Only" />
+                          </Grid>
+                          <Grid item xs={12} md={0.5}>
+                            <Button variant="outlined" onClick={loadRecurringExpenses} fullWidth sx={{ height: '100%', minWidth: 'auto', px: 1 }}>
+                              <RefreshIcon />
+                            </Button>
                           </Grid>
                           <Grid item xs={12} md={4}>
                             {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenRecurringDialog()} fullWidth>Add Recurring Expense</Button>}
@@ -879,8 +893,25 @@ export default function ExpensesRevenuesPage() {
                           <Grid item xs={12} md={2}>
                             <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
                           </Grid>
-                          <Grid item xs={12} md={6}></Grid>
                           <Grid item xs={12} md={2}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Category</InputLabel>
+                              <Select value={filterCategory} label="Category" onChange={(e) => setFilterCategory(e.target.value)}>
+                                <MenuItem value="">All</MenuItem>
+                                {expenseCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <TextField placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} fullWidth size="small"
+                              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
+                          </Grid>
+                          <Grid item xs={12} md={0.5}>
+                            <Button variant="outlined" onClick={loadOneTimeExpenses} fullWidth sx={{ height: '100%', minWidth: 'auto', px: 1 }}>
+                              <RefreshIcon />
+                            </Button>
+                          </Grid>
+                          <Grid item xs={12} md={3.5}>
                             {canEdit && <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenOneTimeDialog()} fullWidth>Add Expense</Button>}
                           </Grid>
                         </Grid>
@@ -935,8 +966,25 @@ export default function ExpensesRevenuesPage() {
                           <Grid item xs={12} md={2}>
                             <TextField label="End Date" type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} fullWidth size="small" InputLabelProps={{ shrink: true }} />
                           </Grid>
-                          <Grid item xs={12} md={6}></Grid>
                           <Grid item xs={12} md={2}>
+                            <FormControl fullWidth size="small">
+                              <InputLabel>Category</InputLabel>
+                              <Select value={filterCategory} label="Category" onChange={(e) => setFilterCategory(e.target.value)}>
+                                <MenuItem value="">All</MenuItem>
+                                {revenueCategories.map(cat => <MenuItem key={cat.id} value={cat.id}>{cat.categoryName}</MenuItem>)}
+                              </Select>
+                            </FormControl>
+                          </Grid>
+                          <Grid item xs={12} md={2}>
+                            <TextField placeholder="Search..." value={searchText} onChange={(e) => setSearchText(e.target.value)} fullWidth size="small"
+                              InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
+                          </Grid>
+                          <Grid item xs={12} md={0.5}>
+                            <Button variant="outlined" onClick={loadOtherRevenues} fullWidth sx={{ height: '100%', minWidth: 'auto', px: 1 }}>
+                              <RefreshIcon />
+                            </Button>
+                          </Grid>
+                          <Grid item xs={12} md={3.5}>
                             {canEdit && <Button variant="contained" color="success" startIcon={<AddIcon />} onClick={() => handleOpenRevenueDialog()} fullWidth>Add Revenue</Button>}
                           </Grid>
                         </Grid>
