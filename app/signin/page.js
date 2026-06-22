@@ -42,10 +42,12 @@ const theme = createTheme({
 // Backend's TenantSchemaMapper then maps tenant ID -> actual database schema name
 const KNOWN_COMPANIES = [
   { id: 'mac-cabs', name: 'Maclures Cabs', schema: 'mac-cabs' },      // Backend maps to fareflow_maclures
-  { id: 'yellow-cabs', name: 'Yellow Cabs', schema: 'yellow-cabs' },  // Backend maps to fareflow_yellow
   { id: 'bonny-taxi', name: 'Bonny Taxi', schema: 'bonny-taxi' },     // Backend maps to fareflow_bonny
   { id: 'demo', name: 'Demo Tenant', schema: 'demo' },                // Backend maps to fareflow_demo
 ];
+
+// Disabled tenants - prevent login
+const DISABLED_TENANTS = ['yellow-cabs', 'yellow cabs'];
 
 export default function SignInPage() {
   const [companyId, setCompanyId] = useState("");
@@ -76,6 +78,13 @@ export default function SignInPage() {
 
     if (!companyId) {
       setError("Please enter your company ID");
+      setLoading(false);
+      return;
+    }
+
+    // Check if tenant is disabled
+    if (DISABLED_TENANTS.some(disabled => companyId.toLowerCase() === disabled.toLowerCase())) {
+      setError("Unable to sign in. This tenant is currently unavailable.");
       setLoading(false);
       return;
     }
