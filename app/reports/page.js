@@ -1296,10 +1296,31 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Miles</strong></TableCell>
                                   <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
                                   <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
                                   <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
+                                {(() => {
+                                  // Calculate mileage rate from first lease item with breakdown data
+                                  const firstLeaseItem = getFilteredLeaseRevenue().find(
+                                    rev => rev.leaseBreakdown?.miles > 0 &&
+                                           rev.leaseBreakdown?.mileageLeaseAmount > 0
+                                  );
+                                  const mileageRate = firstLeaseItem
+                                    ? (firstLeaseItem.leaseBreakdown.mileageLeaseAmount / firstLeaseItem.leaseBreakdown.miles).toFixed(4)
+                                    : null;
+
+                                  return mileageRate ? (
+                                    <TableRow sx={{ bgcolor: "#f1f8e9" }}>
+                                      <TableCell colSpan={7} sx={{ py: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                          Mileage rate: ${mileageRate}/mile
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : null;
+                                })()}
                               </TableHead>
                               <TableBody>
                                 {(() => {
@@ -1317,12 +1338,13 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
                                     rows.push(
                                       <TableRow key={`tab-cab-hdr-${cab}`} sx={{ bgcolor: "#c8e6c9" }}>
-                                        <TableCell colSpan={6}>
+                                        <TableCell colSpan={7}>
                                           <Typography variant="body2" fontWeight="bold" color="success.main">Cab {cab}</Typography>
                                         </TableCell>
                                       </TableRow>
                                     );
                                     items.forEach((rev, idx) => {
+                                      const miles = rev.leaseBreakdown?.miles != null ? parseFloat(rev.leaseBreakdown.miles) : null;
                                       const fixed = rev.leaseBreakdown?.fixedLeaseAmount != null ? parseFloat(rev.leaseBreakdown.fixedLeaseAmount) : null;
                                       const mileage = rev.leaseBreakdown?.mileageLeaseAmount != null ? parseFloat(rev.leaseBreakdown.mileageLeaseAmount) : null;
                                       rows.push(
@@ -1330,6 +1352,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                           <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
                                           <TableCell>{rev.revenueDate || "-"}</TableCell>
                                           <TableCell>{rev.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#666" }}>
+                                            {miles != null ? miles.toFixed(2) : "-"}
+                                          </TableCell>
                                           <TableCell align="right" sx={{ color: "#666" }}>
                                             {fixed != null ? `$${fixed.toFixed(2)}` : "-"}
                                           </TableCell>
@@ -1344,7 +1369,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     });
                                     rows.push(
                                       <TableRow key={`tab-cab-sub-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
-                                        <TableCell colSpan={5} align="right">
+                                        <TableCell colSpan={6} align="right">
                                           <Typography variant="caption" fontWeight="bold" color="success.main">Cab {cab} Subtotal:</Typography>
                                         </TableCell>
                                         <TableCell align="right">
@@ -1355,7 +1380,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   });
                                   rows.push(
                                     <TableRow key="tab-lease-total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
-                                      <TableCell colSpan={5} align="right"><strong>Lease Revenue Total:</strong></TableCell>
+                                      <TableCell colSpan={6} align="right"><strong>Lease Revenue Total:</strong></TableCell>
                                       <TableCell align="right"><strong>${calculateSubtotal(leaseData).toFixed(2)}</strong></TableCell>
                                     </TableRow>
                                   );
@@ -1543,10 +1568,31 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
+                                  <TableCell align="right"><strong>Miles</strong></TableCell>
                                   <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
                                   <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
                                   <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
+                                {(() => {
+                                  // Calculate mileage rate from first lease item with breakdown data
+                                  const firstLeaseItem = getLeaseExpenses().find(
+                                    exp => exp.leaseBreakdown?.miles > 0 &&
+                                           exp.leaseBreakdown?.mileageLeaseAmount > 0
+                                  );
+                                  const mileageRate = firstLeaseItem
+                                    ? (firstLeaseItem.leaseBreakdown.mileageLeaseAmount / firstLeaseItem.leaseBreakdown.miles).toFixed(4)
+                                    : null;
+
+                                  return mileageRate ? (
+                                    <TableRow sx={{ bgcolor: "#fffbf0" }}>
+                                      <TableCell colSpan={7} sx={{ py: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                          Mileage rate: ${mileageRate}/mile
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : null;
+                                })()}
                               </TableHead>
                               <TableBody>
                                 {(() => {
@@ -1563,12 +1609,13 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     const cabSubtotal = items.reduce((sum, r) => sum + parseFloat(r.amount || 0), 0);
                                     rows.push(
                                       <TableRow key={`tab-exp-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
-                                        <TableCell colSpan={6}>
+                                        <TableCell colSpan={7}>
                                           <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
                                         </TableCell>
                                       </TableRow>
                                     );
                                     items.forEach((exp, idx) => {
+                                      const miles = exp.leaseBreakdown?.miles != null ? parseFloat(exp.leaseBreakdown.miles) : null;
                                       const fixed = exp.leaseBreakdown?.fixedLeaseAmount != null ? parseFloat(exp.leaseBreakdown.fixedLeaseAmount) : null;
                                       const mileage = exp.leaseBreakdown?.mileageLeaseAmount != null ? parseFloat(exp.leaseBreakdown.mileageLeaseAmount) : null;
                                       rows.push(
@@ -1576,6 +1623,9 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                           <TableCell sx={{ fontWeight: "bold", color: "#d32f2f" }}>Cab {cab}</TableCell>
                                           <TableCell>{exp.date || "-"}</TableCell>
                                           <TableCell>{exp.description || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#666" }}>
+                                            {miles != null ? miles.toFixed(2) : "-"}
+                                          </TableCell>
                                           <TableCell align="right" sx={{ color: "#666" }}>
                                             {fixed != null ? `$${fixed.toFixed(2)}` : "-"}
                                           </TableCell>
@@ -1590,7 +1640,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                     });
                                     rows.push(
                                       <TableRow key={`tab-exp-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
-                                        <TableCell colSpan={5} align="right">
+                                        <TableCell colSpan={6} align="right">
                                           <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
                                         </TableCell>
                                         <TableCell align="right">
@@ -1601,7 +1651,7 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   });
                                   rows.push(
                                     <TableRow key="tab-exp-total" sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #e57373" }}>
-                                      <TableCell colSpan={5} align="right"><strong>Lease Expenses Total:</strong></TableCell>
+                                      <TableCell colSpan={6} align="right"><strong>Lease Expenses Total:</strong></TableCell>
                                       <TableCell align="right"><strong>${calculateSubtotal(getLeaseExpenses()).toFixed(2)}</strong></TableCell>
                                     </TableRow>
                                   );

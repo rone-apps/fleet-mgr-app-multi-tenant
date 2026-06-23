@@ -29,6 +29,8 @@ import {
   Autocomplete,
   Checkbox,
   FormControlLabel,
+  Radio,
+  RadioGroup,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -621,7 +623,7 @@ export default function LeaseRateOverridesTab({
                           {override.ownerDriverNumber}
                         </Typography>
                         {override.ownerName && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography variant="caption" color="text.secondary" display="block">
                             {override.ownerName}
                           </Typography>
                         )}
@@ -629,9 +631,16 @@ export default function LeaseRateOverridesTab({
                     )}
                     <TableCell>
                       {override.beneficiaryDriverNumber ? (
-                        <Typography variant="body2" fontWeight="medium" color="primary">
-                          {override.beneficiaryDriverNumber}
-                        </Typography>
+                        <>
+                          <Typography variant="body2" fontWeight="medium" color="primary">
+                            {override.beneficiaryDriverNumber}
+                          </Typography>
+                          {override.beneficiaryName && (
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              {override.beneficiaryName}
+                            </Typography>
+                          )}
+                        </>
                       ) : (
                         <Typography variant="body2" color="text.secondary">
                           All Drivers
@@ -905,46 +914,45 @@ export default function LeaseRateOverridesTab({
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12} sm={6}>
-                {/* Rate Mode Toggle */}
+              <Grid item xs={12}>
+                {/* Rate Mode Toggle - Radio Buttons */}
                 <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                    Rate Type
+                    Rate Type *
                   </Typography>
-                  <Box sx={{ display: 'flex', gap: 2 }}>
+                  <RadioGroup
+                    row
+                    value={overrideFormData.rateMode}
+                    onChange={(e) => {
+                      const newMode = e.target.value;
+                      setOverrideFormData({
+                        ...overrideFormData,
+                        rateMode: newMode,
+                        // Clear opposing fields when switching modes
+                        leaseRate: newMode === "flat" ? overrideFormData.leaseRate : "",
+                        baseRateOverride: newMode === "structured" ? overrideFormData.baseRateOverride : "",
+                        mileageRateOverride: newMode === "structured" ? overrideFormData.mileageRateOverride : "",
+                      });
+                    }}
+                  >
                     <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={overrideFormData.rateMode === "flat"}
-                          onChange={() =>
-                            setOverrideFormData({
-                              ...overrideFormData,
-                              rateMode: "flat",
-                            })
-                          }
-                        />
-                      }
+                      value="flat"
+                      control={<Radio color="primary" />}
                       label="Flat Rate (fixed total)"
                     />
                     <FormControlLabel
-                      control={
-                        <Checkbox
-                          checked={overrideFormData.rateMode === "structured"}
-                          onChange={() =>
-                            setOverrideFormData({
-                              ...overrideFormData,
-                              rateMode: "structured",
-                            })
-                          }
-                        />
-                      }
+                      value="structured"
+                      control={<Radio color="primary" />}
                       label="Base + Mileage (variable)"
                     />
-                  </Box>
+                  </RadioGroup>
                 </Box>
+              </Grid>
 
-                {/* Conditional Rate Fields */}
-                {overrideFormData.rateMode === "flat" ? (
+
+              {/* Conditional Rate Fields */}
+              {overrideFormData.rateMode === "flat" ? (
+                <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     label="Flat Lease Rate"
@@ -960,8 +968,10 @@ export default function LeaseRateOverridesTab({
                     required
                     helperText="Total lease amount regardless of miles driven"
                   />
-                ) : (
-                  <>
+                </Grid>
+              ) : (
+                <>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
                       label="Base Rate"
@@ -976,8 +986,9 @@ export default function LeaseRateOverridesTab({
                       InputProps={{ startAdornment: "$" }}
                       required
                       helperText="Fixed component of lease charge"
-                      sx={{ mb: 2 }}
                     />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
                     <TextField
                       fullWidth
                       label="Mileage Rate"
@@ -990,13 +1001,13 @@ export default function LeaseRateOverridesTab({
                         })
                       }
                       InputProps={{ startAdornment: "$", endAdornment: "/ mile" }}
-                      inputProps={{ step: "0.01" }}
+                      inputProps={{ step: "0.0001" }}
                       required
                       helperText="Per-mile charge (e.g., 0.20 for $0.20/mile)"
                     />
-                  </>
-                )}
-              </Grid>
+                  </Grid>
+                </>
+              )}
               <Grid item xs={12} sm={6}>
                 <DatePicker
                   label="Start Date"

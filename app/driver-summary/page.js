@@ -2198,8 +2198,32 @@ export default function DriverSummaryPage() {
                                   <TableCell><strong>Cab</strong></TableCell>
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Description</strong></TableCell>
-                                  <TableCell align="right"><strong>Amount</strong></TableCell>
+                                  <TableCell align="right"><strong>Miles</strong></TableCell>
+                                  <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
+                                  <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
+                                {(() => {
+                                  // Calculate mileage rate from first lease item with breakdown data
+                                  const firstLeaseItem = driverDetailReport.revenues?.find(
+                                    r => r.revenueSubType === "LEASE_INCOME" &&
+                                         r.leaseBreakdown?.miles > 0 &&
+                                         r.leaseBreakdown?.mileageLeaseAmount > 0
+                                  );
+                                  const mileageRate = firstLeaseItem
+                                    ? (firstLeaseItem.leaseBreakdown.mileageLeaseAmount / firstLeaseItem.leaseBreakdown.miles).toFixed(4)
+                                    : null;
+
+                                  return mileageRate ? (
+                                    <TableRow sx={{ bgcolor: "#f1f8e9" }}>
+                                      <TableCell colSpan={7} sx={{ py: 0.5 }}>
+                                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                          Mileage rate: ${mileageRate}/mile
+                                        </Typography>
+                                      </TableCell>
+                                    </TableRow>
+                                  ) : null;
+                                })()}
                               </TableHead>
                               <TableBody>
                                 {(() => {
@@ -2236,7 +2260,7 @@ export default function DriverSummaryPage() {
                                     // Add cab header row
                                     rows.push(
                                       <TableRow key={`cab-header-${cab}`} sx={{ bgcolor: "#c8e6c9", fontWeight: "bold" }}>
-                                        <TableCell colSpan={4}>
+                                        <TableCell colSpan={7}>
                                           <Typography variant="body2" fontWeight="bold" color="success.main">
                                             Cab {cab}
                                           </Typography>
@@ -2251,6 +2275,9 @@ export default function DriverSummaryPage() {
                                           <TableCell sx={{ fontWeight: "bold", color: "#388e3c" }}>Cab {cab}</TableCell>
                                           <TableCell>{rev.revenueDate || "-"}</TableCell>
                                           <TableCell>{rev.description || "-"}</TableCell>
+                                          <TableCell align="right">{rev.leaseBreakdown?.miles?.toFixed(2) || "0.00"}</TableCell>
+                                          <TableCell align="right">{formatCurrency(rev.leaseBreakdown?.fixedLeaseAmount)}</TableCell>
+                                          <TableCell align="right">{formatCurrency(rev.leaseBreakdown?.mileageLeaseAmount)}</TableCell>
                                           <TableCell align="right" sx={{ color: "#388e3c", fontWeight: "bold" }}>
                                             {formatCurrency(rev.amount)}
                                           </TableCell>
@@ -2261,7 +2288,7 @@ export default function DriverSummaryPage() {
                                     // Add subtotal for this cab
                                     rows.push(
                                       <TableRow key={`cab-subtotal-${cab}`} sx={{ bgcolor: "#e8f5e9", borderTop: "1px solid #4caf50" }}>
-                                        <TableCell colSpan={3} align="right">
+                                        <TableCell colSpan={6} align="right">
                                           <Typography variant="caption" fontWeight="bold" color="success.main">
                                             Cab {cab} Subtotal:
                                           </Typography>
@@ -2278,7 +2305,7 @@ export default function DriverSummaryPage() {
                                   // Add total row
                                   rows.push(
                                     <TableRow key="total" sx={{ bgcolor: "#c8e6c9", borderTop: "2px solid #4caf50" }}>
-                                      <TableCell colSpan={3} align="right">
+                                      <TableCell colSpan={6} align="right">
                                         <Typography variant="body2" fontWeight="bold" color="success.main">
                                           TOTAL LEASE INCOME
                                         </Typography>
@@ -2910,10 +2937,31 @@ export default function DriverSummaryPage() {
                                     <TableCell><strong>Cab</strong></TableCell>
                                     <TableCell><strong>Date</strong></TableCell>
                                     <TableCell><strong>Description</strong></TableCell>
+                                    <TableCell align="right"><strong>Miles</strong></TableCell>
                                     <TableCell align="right"><strong>Fixed Lease</strong></TableCell>
                                     <TableCell align="right"><strong>Mileage Lease</strong></TableCell>
                                     <TableCell align="right"><strong>Total</strong></TableCell>
                                   </TableRow>
+                                  {(() => {
+                                    // Calculate mileage rate from first lease expense item with breakdown data
+                                    const firstLeaseItem = leaseItems.find(
+                                      exp => exp.leaseBreakdown?.miles > 0 &&
+                                             exp.leaseBreakdown?.mileageLeaseAmount > 0
+                                    );
+                                    const mileageRate = firstLeaseItem
+                                      ? (firstLeaseItem.leaseBreakdown.mileageLeaseAmount / firstLeaseItem.leaseBreakdown.miles).toFixed(4)
+                                      : null;
+
+                                    return mileageRate ? (
+                                      <TableRow sx={{ bgcolor: "#fff5f5" }}>
+                                        <TableCell colSpan={7} sx={{ py: 0.5 }}>
+                                          <Typography variant="caption" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                                            Mileage rate: ${mileageRate}/mile
+                                          </Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    ) : null;
+                                  })()}
                                 </TableHead>
                                 <TableBody>
                                   {sortedCabs.map((cab) => {
@@ -2921,7 +2969,7 @@ export default function DriverSummaryPage() {
                                     const cabSubtotal = items.reduce((sum, e) => sum + (e.amount || 0), 0);
                                     return [
                                       <TableRow key={`cab-header-${cab}`} sx={{ bgcolor: "#ffcdd2" }}>
-                                        <TableCell colSpan={6}>
+                                        <TableCell colSpan={7}>
                                           <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
                                         </TableCell>
                                       </TableRow>,
@@ -2930,13 +2978,14 @@ export default function DriverSummaryPage() {
                                           <TableCell>Cab {cab}</TableCell>
                                           <TableCell>{exp.date || "-"}</TableCell>
                                           <TableCell>{exp.description || "-"}</TableCell>
+                                          <TableCell align="right">{exp.leaseBreakdown?.miles?.toFixed(2) || "0.00"}</TableCell>
                                           <TableCell align="right">{formatCurrency(exp.leaseBreakdown?.fixedLeaseAmount)}</TableCell>
                                           <TableCell align="right">{formatCurrency(exp.leaseBreakdown?.mileageLeaseAmount)}</TableCell>
                                           <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>{formatCurrency(exp.amount)}</TableCell>
                                         </TableRow>
                                       )),
                                       <TableRow key={`cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #f44336" }}>
-                                        <TableCell colSpan={5} align="right">
+                                        <TableCell colSpan={6} align="right">
                                           <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
                                         </TableCell>
                                         <TableCell align="right">
@@ -2946,7 +2995,7 @@ export default function DriverSummaryPage() {
                                     ];
                                   })}
                                   <TableRow sx={{ bgcolor: "#ffcdd2", borderTop: "2px solid #f44336" }}>
-                                    <TableCell colSpan={5} align="right">
+                                    <TableCell colSpan={6} align="right">
                                       <Typography variant="body2" fontWeight="bold" color="error.main">TOTAL LEASE EXPENSE</Typography>
                                     </TableCell>
                                     <TableCell align="right">
