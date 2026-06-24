@@ -8,7 +8,7 @@ import {
   Tabs, Tab, Card, CardContent, CircularProgress, Alert, Dialog, DialogTitle,
   DialogContent, DialogActions, Autocomplete, Chip,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  FormControl, InputLabel, Select, MenuItem,
+  FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox,
 } from "@mui/material";
 import {
   Assessment, TrendingUp, Download, Print, Close,
@@ -46,6 +46,7 @@ export default function ReportsPage() {
   // Revenue and Expense Tabs
   const [revenueTabIndex, setRevenueTabIndex] = useState(0);
   const [expenseTabIndex, setExpenseTabIndex] = useState(0);
+  const [useModernCharges, setUseModernCharges] = useState(false); // Default to legacy system
 
   // Helper function to filter lease expenses from one-time expenses
   const getLeaseExpenses = () => {
@@ -313,8 +314,9 @@ export default function ReportsPage() {
     setError("");
 
     try {
+      const useModernParam = useModernCharges ? `&useModernCharges=true` : '';
       const response = await fetch(
-        `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}?from=${startDate}&to=${endDate}`,
+        `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}?from=${startDate}&to=${endDate}${useModernParam}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -737,6 +739,26 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={useModernCharges}
+                        onChange={(e) => setUseModernCharges(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="body2">Use Modern Charges</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          (TaxiCaller system)
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ mt: 1 }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
                   <Button
                     variant="outlined"
                     fullWidth
@@ -805,6 +827,13 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
             {/* Draft Report with Banner Row */}
             {reportData && (
               <>
+                {/* Data Source Indicator */}
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: useModernCharges ? '#e8f5e9' : '#fff8e1', borderRadius: 1, border: '1px solid', borderColor: useModernCharges ? '#4caf50' : '#ffa726' }}>
+                  <Typography variant="caption" color="text.secondary">
+                    📊 Data Source: {useModernCharges ? 'Modern Account Charges (TaxiCaller)' : 'Legacy Account Charges (Manual Entry)'}
+                  </Typography>
+                </Box>
+
                 {/* Banner Row - 5 Clickable Cards */}
                 <Paper sx={{ p: { xs: 1.5, md: 3 }, mb: 3 }}>
                   <Grid container spacing={{ xs: 1, md: 2 }}>
