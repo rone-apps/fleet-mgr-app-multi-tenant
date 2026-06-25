@@ -47,6 +47,7 @@ export default function ReportsPage() {
   const [revenueTabIndex, setRevenueTabIndex] = useState(0);
   const [expenseTabIndex, setExpenseTabIndex] = useState(0);
   const [useModernCharges, setUseModernCharges] = useState(false); // Default to legacy system
+  const [useSmartFleetsAI, setUseSmartFleetsAI] = useState(false); // Default to legacy balance
 
   // Helper function to filter lease expenses from one-time expenses
   const getLeaseExpenses = () => {
@@ -315,8 +316,10 @@ export default function ReportsPage() {
 
     try {
       const useModernParam = useModernCharges ? `&useModernCharges=true` : '';
+      // Always send useSmartFleetsAI parameter (true or false, not omitted)
+      const useSmartFleetsParam = `&useSmartFleetsAI=${useSmartFleetsAI}`;
       const response = await fetch(
-        `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}?from=${startDate}&to=${endDate}${useModernParam}`,
+        `${API_BASE_URL}/financial-statements/owner-report/${selectedDriverId}?from=${startDate}&to=${endDate}${useModernParam}${useSmartFleetsParam}`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("token")}`,
@@ -759,6 +762,26 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   />
                 </Grid>
                 <Grid item xs={12} sm={6} md={2}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        checked={useSmartFleetsAI}
+                        onChange={(e) => setUseSmartFleetsAI(e.target.checked)}
+                        color="primary"
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'flex', flexDirection: 'column' }}>
+                        <Typography variant="body2">Use SmartFleets AI</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          (Automatic balance)
+                        </Typography>
+                      </Box>
+                    }
+                    sx={{ mt: 1 }}
+                  />
+                </Grid>
+                <Grid item xs={12} sm={6} md={2}>
                   <Button
                     variant="outlined"
                     fullWidth
@@ -828,9 +851,12 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
             {reportData && (
               <>
                 {/* Data Source Indicator */}
-                <Box sx={{ mb: 2, p: 1.5, bgcolor: useModernCharges ? '#e8f5e9' : '#fff8e1', borderRadius: 1, border: '1px solid', borderColor: useModernCharges ? '#4caf50' : '#ffa726' }}>
+                <Box sx={{ mb: 2, p: 1.5, bgcolor: '#f5f5f5', borderRadius: 1, border: '1px solid #e0e0e0' }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                    📊 Charge System: {useModernCharges ? 'Modern (TaxiCaller)' : 'Legacy (Manual)'}
+                  </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    📊 Data Source: {useModernCharges ? 'Modern Account Charges (TaxiCaller)' : 'Legacy Account Charges (Manual Entry)'}
+                    💰 Balance System: {useSmartFleetsAI ? 'SmartFleets AI (Automatic)' : 'Legacy Manual Balance'}
                   </Typography>
                 </Box>
 
