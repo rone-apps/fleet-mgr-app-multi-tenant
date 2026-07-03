@@ -1589,20 +1589,68 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0).map((exp, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{exp.categoryName || "-"}</TableCell>
-                                    <TableCell>{exp.entityDescription || "-"}</TableCell>
-                                    <TableCell>{exp.billingMethod || "-"}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                      ${parseFloat(exp.amount).toFixed(2)}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={3} align="right"><strong>Recurring Expenses Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(reportData?.recurringExpenses || []).toFixed(2)}</strong></TableCell>
-                                </TableRow>
+                                {(() => {
+                                  const items = reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0);
+                                  // Group by cab number
+                                  const grouped = {};
+                                  items.forEach((exp) => {
+                                    // Extract cab number from entityDescription (e.g., "Cab 33 - DAY (Profile: 34)")
+                                    const cabMatch = exp.entityDescription?.match(/Cab\s+(\d+)/);
+                                    const cabNum = cabMatch ? cabMatch[1] : "Unknown";
+                                    if (!grouped[cabNum]) grouped[cabNum] = [];
+                                    grouped[cabNum].push(exp);
+                                  });
+                                  const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+                                  const rows = [];
+                                  sortedCabs.forEach((cab) => {
+                                    const cabItems = grouped[cab];
+                                    const cabSubtotal = cabItems.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+
+                                    // Cab header row
+                                    rows.push(
+                                      <TableRow key={`rec-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
+                                        <TableCell colSpan={4}>
+                                          <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+
+                                    // Expense rows for this cab
+                                    cabItems.forEach((exp, idx) => {
+                                      rows.push(
+                                        <TableRow key={`rec-cab-${cab}-${idx}`} hover>
+                                          <TableCell>{exp.categoryName || "-"}</TableCell>
+                                          <TableCell>{exp.entityDescription || "-"}</TableCell>
+                                          <TableCell>{exp.billingMethod || "-"}</TableCell>
+                                          <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
+                                            ${parseFloat(exp.amount).toFixed(2)}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    });
+
+                                    // Cab subtotal row
+                                    rows.push(
+                                      <TableRow key={`rec-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
+                                        <TableCell colSpan={3} align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
+                                        </TableCell>
+                                        <TableCell align="right">
+                                          <Typography variant="caption" fontWeight="bold" color="error.main">${cabSubtotal.toFixed(2)}</Typography>
+                                        </TableCell>
+                                      </TableRow>
+                                    );
+                                  });
+
+                                  // Grand total
+                                  rows.push(
+                                    <TableRow key="rec-grand-total" sx={{ backgroundColor: "#ffcdd2", fontWeight: "bold", borderTop: "2px solid #e57373" }}>
+                                      <TableCell colSpan={3} align="right"><strong>Recurring Expenses Total:</strong></TableCell>
+                                      <TableCell align="right"><strong>${calculateSubtotal(reportData?.recurringExpenses || []).toFixed(2)}</strong></TableCell>
+                                    </TableRow>
+                                  );
+                                  return rows;
+                                })()}
                               </TableBody>
                             </Table>
                           </TableContainer>
@@ -2805,6 +2853,18 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   {(() => {
                     const items = reportData.recurringExpenses.filter((exp) => parseFloat(exp.amount || 0) !== 0);
                     const hasTax = items.some(e => e.taxAmount);
+
+                    // Group by cab number
+                    const grouped = {};
+                    items.forEach((exp) => {
+                      // Extract cab number from entityDescription (e.g., "Cab 33 - DAY (Profile: 34)")
+                      const cabMatch = exp.entityDescription?.match(/Cab\s+(\d+)/);
+                      const cabNum = cabMatch ? cabMatch[1] : "Unknown";
+                      if (!grouped[cabNum]) grouped[cabNum] = [];
+                      grouped[cabNum].push(exp);
+                    });
+                    const sortedCabs = Object.keys(grouped).sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+
                     return (
                       <TableContainer>
                         <Table size="small">
@@ -2818,21 +2878,54 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                             </TableRow>
                           </TableHead>
                           <TableBody>
-                            {items.map((exp, idx) => (
-                              <TableRow key={idx}>
-                                <TableCell>{exp.categoryName || "-"}</TableCell>
-                                <TableCell>{exp.entityDescription || "-"}</TableCell>
-                                <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
-                                {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>
-                                  {exp.taxAmount ? `${exp.taxTypeName || "Tax"} $${parseFloat(exp.taxAmount).toFixed(2)}` : "-"}
-                                </TableCell>}
-                                {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>
-                                  ${parseFloat(exp.amountWithTax || exp.amount || 0).toFixed(2)}
-                                </TableCell>}
-                              </TableRow>
-                            ))}
-                            <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                              <TableCell colSpan={2} align="right"><strong>Recurring Expenses Subtotal:</strong></TableCell>
+                            {sortedCabs.map((cab) => {
+                              const cabItems = grouped[cab];
+                              const cabSubtotal = cabItems.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+                              const cabTax = cabItems.reduce((sum, e) => sum + (parseFloat(e.taxAmount) || 0), 0);
+                              const cabTotal = cabItems.reduce((sum, e) => sum + (parseFloat(e.amountWithTax || e.amount) || 0), 0);
+                              const colSpan = hasTax ? 5 : 3;
+
+                              return [
+                                // Cab header row
+                                <TableRow key={`modal-rec-cab-hdr-${cab}`} sx={{ bgcolor: "#fff3e0" }}>
+                                  <TableCell colSpan={colSpan}>
+                                    <Typography variant="body2" fontWeight="bold" color="error.main">Cab {cab}</Typography>
+                                  </TableCell>
+                                </TableRow>,
+                                // Expense rows for this cab
+                                ...cabItems.map((exp, idx) => (
+                                  <TableRow key={`modal-rec-cab-${cab}-${idx}`}>
+                                    <TableCell>{exp.categoryName || "-"}</TableCell>
+                                    <TableCell>{exp.entityDescription || "-"}</TableCell>
+                                    <TableCell align="right">${parseFloat(exp.amount).toFixed(2)}</TableCell>
+                                    {hasTax && <TableCell align="right" sx={{ color: "#6a1b9a" }}>
+                                      {exp.taxAmount ? `${exp.taxTypeName || "Tax"} $${parseFloat(exp.taxAmount).toFixed(2)}` : "-"}
+                                    </TableCell>}
+                                    {hasTax && <TableCell align="right" sx={{ fontWeight: "bold" }}>
+                                      ${parseFloat(exp.amountWithTax || exp.amount || 0).toFixed(2)}
+                                    </TableCell>}
+                                  </TableRow>
+                                )),
+                                // Cab subtotal row
+                                <TableRow key={`modal-rec-cab-sub-${cab}`} sx={{ bgcolor: "#ffebee", borderTop: "1px solid #e57373" }}>
+                                  <TableCell colSpan={2} align="right">
+                                    <Typography variant="caption" fontWeight="bold" color="error.main">Cab {cab} Subtotal:</Typography>
+                                  </TableCell>
+                                  <TableCell align="right">
+                                    <Typography variant="caption" fontWeight="bold" color="error.main">${cabSubtotal.toFixed(2)}</Typography>
+                                  </TableCell>
+                                  {hasTax && <TableCell align="right">
+                                    <Typography variant="caption" fontWeight="bold" color="error.main">${cabTax.toFixed(2)}</Typography>
+                                  </TableCell>}
+                                  {hasTax && <TableCell align="right">
+                                    <Typography variant="caption" fontWeight="bold" color="error.main">${cabTotal.toFixed(2)}</Typography>
+                                  </TableCell>}
+                                </TableRow>
+                              ];
+                            })}
+                            {/* Grand total row */}
+                            <TableRow sx={{ backgroundColor: "#ffcdd2", fontWeight: "bold", borderTop: "2px solid #e57373" }}>
+                              <TableCell colSpan={2} align="right"><strong>Recurring Expenses Total:</strong></TableCell>
                               <TableCell align="right"><strong>${calculateSubtotal(reportData.recurringExpenses).toFixed(2)}</strong></TableCell>
                               {hasTax && <TableCell align="right"><strong>${items.reduce((s, e) => s + (parseFloat(e.taxAmount) || 0), 0).toFixed(2)}</strong></TableCell>}
                               {hasTax && <TableCell align="right"><strong>${items.reduce((s, e) => s + (parseFloat(e.amountWithTax || e.amount) || 0), 0).toFixed(2)}</strong></TableCell>}
