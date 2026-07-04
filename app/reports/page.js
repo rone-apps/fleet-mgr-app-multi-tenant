@@ -49,6 +49,101 @@ export default function ReportsPage() {
   const [useModernCharges, setUseModernCharges] = useState(false); // Default to legacy system
   const [useSmartFleetsAI, setUseSmartFleetsAI] = useState(false); // Default to legacy balance
 
+  // Helper to build dynamic expense tabs based on reportData
+  const buildExpenseTabs = () => {
+    if (!reportData) return [];
+
+    const tabs = [];
+
+    // 1. Recurring Expenses (always show if data exists)
+    if (reportData.recurringExpenses && reportData.recurringExpenses.length > 0) {
+      tabs.push({
+        id: 'recurring',
+        label: `Recurring (${reportData.recurringExpenses.length})`,
+        data: reportData.recurringExpenses,
+        type: 'recurring'
+      });
+    }
+
+    // 2. Lease Expenses (from oneTimeExpenses with LEASE_RENT type)
+    const leaseExpenses = getLeaseExpenses();
+    if (leaseExpenses.length > 0) {
+      tabs.push({
+        id: 'lease',
+        label: `Lease (${leaseExpenses.length})`,
+        data: leaseExpenses,
+        type: 'lease'
+      });
+    }
+
+    // 3. One-Time Expenses (filtered - no lease, no airport, no transfers)
+    const otherOneTime = getOtherOneTimeExpenses();
+    if (otherOneTime.length > 0) {
+      tabs.push({
+        id: 'onetime',
+        label: `One-Time (${otherOneTime.length})`,
+        data: otherOneTime,
+        type: 'onetime'
+      });
+    }
+
+    // 4. Per-Unit Expenses - REMOVED
+    // This created aggregate tabs like "Miles driven" that duplicate the detailed item-rate tabs.
+    // All mileage-based expenses are now shown in separate tabs per item (INSURANCE Expense, DISPATCH_MILAGE, etc.)
+    // via the insuranceMileageExpenses array below.
+
+    // 5. Airport Trips (from oneTimeExpenses with AIRPORT_TRIP code)
+    const airportExpenses = getAirportExpenses();
+    if (airportExpenses.length > 0) {
+      tabs.push({
+        id: 'airport',
+        label: `Airport Trips (${airportExpenses.length})`,
+        data: airportExpenses,
+        type: 'airport'
+      });
+    }
+
+    // 6. Mileage Expenses - REMOVED
+    // This legacy tab is deprecated. All mileage-based expenses (insurance, dispatch, etc.)
+    // are now handled by the dynamic item rate system and appear in separate tabs below.
+    // The old "mileageExpenses" field is no longer used.
+
+    // 7. Item Rate Expenses (Insurance, Mileage, Dispatch, etc.)
+    // Group by categoryName to create separate tabs for each item rate type
+    if (reportData.insuranceMileageExpenses && reportData.insuranceMileageExpenses.length > 0) {
+      // Group expenses by categoryName
+      const grouped = reportData.insuranceMileageExpenses.reduce((acc, exp) => {
+        const category = exp.categoryName || 'Insurance';
+        if (!acc[category]) {
+          acc[category] = [];
+        }
+        acc[category].push(exp);
+        return acc;
+      }, {});
+
+      // Create a tab for each category
+      Object.keys(grouped).sort().forEach((categoryName) => {
+        const items = grouped[categoryName];
+        tabs.push({
+          id: `item-rate-${categoryName.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
+          label: `${categoryName} (${items.length})`,
+          data: items,
+          type: 'insurance' // Keep same rendering type
+        });
+      });
+    }
+
+    return tabs;
+  };
+
+  // Reset expense tab index when tabs change (prevents invalid tab index error)
+  useEffect(() => {
+    const tabs = buildExpenseTabs();
+    if (expenseTabIndex >= tabs.length) {
+      setExpenseTabIndex(0);
+    }
+  }, [reportData]);
+
   // Helper function to filter lease expenses from one-time expenses
   const getLeaseExpenses = () => {
     if (!reportData?.oneTimeExpenses) return [];
@@ -1538,45 +1633,53 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                   </Paper>
                 )}
 
-                {/* Expense Details - Tabbed View */}
-                {(reportData?.recurringExpenses?.length > 0 || reportData?.oneTimeExpenses?.length > 0 || reportData?.mileageExpenses?.length > 0 || reportData?.insuranceMileageExpenses?.length > 0) && (
-                  <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #c62828", borderRadius: 2 }}>
-                    <Box sx={{ bgcolor: "#c62828", px: 2, pt: 1.5, pb: 0.5 }}>
-                      <Typography variant="subtitle2" sx={{ color: "#fff", fontWeight: 700, mb: 1, letterSpacing: 1, textTransform: "uppercase", fontSize: "0.75rem" }}>
-                        Expense Details — Select a category below
-                      </Typography>
-                      <Tabs
-                        value={expenseTabIndex}
-                        onChange={(e, newValue) => setExpenseTabIndex(newValue)}
-                        variant="scrollable"
-                        scrollButtons="auto"
-                        TabIndicatorProps={{ sx: { display: "none" } }}
-                        sx={{
-                          minHeight: 38,
-                          "& .MuiTab-root": {
-                            minHeight: 38, py: 0.75, px: 2.5, mr: 1, mb: 1, borderRadius: "20px",
-                            color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.82rem",
-                            textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
-                            border: "1.5px solid rgba(255,255,255,0.35)",
-                            transition: "all 0.2s ease",
-                            "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
-                            "&.Mui-selected": { bgcolor: "#fff", color: "#c62828", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
-                          },
-                        }}
-                      >
-                        <Tab label={`Recurring (${reportData?.recurringExpenses?.length || 0})`} />
-                        <Tab label={`Lease (${getLeaseExpenses().length})`} />
-                        <Tab label={`One-Time (${getOtherOneTimeExpenses().length})`} />
-                        <Tab label={`Per-Unit (${reportData?.perUnitExpenses?.length || 0})`} />
-                        <Tab label={`Airport Trips (${getAirportExpenses().length})`} />
-                        <Tab label={`Mileage (${reportData?.mileageExpenses?.length || 0})`} />
-                        <Tab label={`Insurance (${reportData?.insuranceMileageExpenses?.length || 0})`} />
-                      </Tabs>
-                    </Box>
+                {/* Expense Details - Dynamic Tabbed View */}
+                {(() => {
+                  const expenseTabs = buildExpenseTabs();
+                  if (expenseTabs.length === 0) return null;
 
-                    {/* Recurring Expenses Tab - Index 0 */}
-                    {expenseTabIndex === 0 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                  // Safety check: ensure tab index is valid (prevents MUI error when tabs change)
+                  const safeTabIndex = expenseTabIndex >= expenseTabs.length ? 0 : expenseTabIndex;
+
+                  return (
+                    <Paper sx={{ mb: 3, overflow: "hidden", border: "2px solid #c62828", borderRadius: 2 }}>
+                      <Box sx={{ bgcolor: "#c62828", px: 2, pt: 1.5, pb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ color: "#fff", fontWeight: 700, mb: 1, letterSpacing: 1, textTransform: "uppercase", fontSize: "0.75rem" }}>
+                          Expense Details — Select a category below
+                        </Typography>
+                        <Tabs
+                          value={safeTabIndex}
+                          onChange={(e, newValue) => setExpenseTabIndex(newValue)}
+                          variant="scrollable"
+                          scrollButtons="auto"
+                          TabIndicatorProps={{ sx: { display: "none" } }}
+                          sx={{
+                            minHeight: 38,
+                            "& .MuiTab-root": {
+                              minHeight: 38, py: 0.75, px: 2.5, mr: 1, mb: 1, borderRadius: "20px",
+                              color: "rgba(255,255,255,0.75)", fontWeight: 600, fontSize: "0.82rem",
+                              textTransform: "none", bgcolor: "rgba(255,255,255,0.1)",
+                              border: "1.5px solid rgba(255,255,255,0.35)",
+                              transition: "all 0.2s ease",
+                              "&:hover": { bgcolor: "rgba(255,255,255,0.2)", color: "#fff", border: "1.5px solid rgba(255,255,255,0.6)" },
+                              "&.Mui-selected": { bgcolor: "#fff", color: "#c62828", border: "1.5px solid #fff", fontWeight: 700, boxShadow: "0 2px 8px rgba(0,0,0,0.15)" },
+                            },
+                          }}
+                        >
+                          {expenseTabs.map((tab, idx) => (
+                            <Tab key={tab.id} label={tab.label} />
+                          ))}
+                        </Tabs>
+                      </Box>
+
+                    {/* Dynamic Expense Tab Content */}
+                    {expenseTabs.map((tab, tabIdx) => {
+                      if (safeTabIndex !== tabIdx) return null;
+
+                      // Render based on tab type
+                      if (tab.type === 'recurring') {
+                        return (
+                          <Box key={tab.id} sx={{ p: { xs: 1.5, md: 3 } }}>
                         {reportData?.recurringExpenses?.length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
                             <Table size="small">
@@ -1657,12 +1760,14 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         ) : (
                           <Typography color="textSecondary">No recurring expenses</Typography>
                         )}
-                      </Box>
-                    )}
+                          </Box>
+                        );
+                      }
 
-                    {/* Lease Expenses Tab - Index 1 */}
-                    {expenseTabIndex === 1 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                      // Lease tab
+                      if (tab.type === 'lease') {
+                        return (
+                          <Box key={tab.id} sx={{ p: { xs: 1.5, md: 3 } }}>
                         {getLeaseExpenses().length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
                             <Table size="small">
@@ -1766,12 +1871,14 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         ) : (
                           <Typography color="textSecondary">No lease expenses</Typography>
                         )}
-                      </Box>
-                    )}
+                          </Box>
+                        );
+                      }
 
-                    {/* One-Time Expenses Tab - Index 2 */}
-                    {expenseTabIndex === 2 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                      // One-time tab
+                      if (tab.type === 'onetime') {
+                        return (
+                          <Box key={tab.id} sx={{ p: { xs: 1.5, md: 3 } }}>
                         <Typography variant="subtitle2" fontWeight="bold" sx={{ mb: 2, color: "#d32f2f" }}>
                           Filters
                         </Typography>
@@ -1884,55 +1991,14 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         ) : (
                           <Typography color="textSecondary">No one-time expenses</Typography>
                         )}
-                      </Box>
-                    )}
+                          </Box>
+                        );
+                      }
 
-                    {/* Per-Unit Expenses Tab - Index 3 */}
-                    {expenseTabIndex === 3 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
-                        {reportData?.perUnitExpenses && reportData.perUnitExpenses.length > 0 ? (
-                          <TableContainer sx={{ overflowX: 'auto' }}>
-                            <Table size="small">
-                              <TableHead>
-                                <TableRow sx={{ backgroundColor: "#e8f5e9" }}>
-                                  <TableCell><strong>Name</strong></TableCell>
-                                  <TableCell><strong>Unit Type</strong></TableCell>
-                                  <TableCell align="right"><strong>Units</strong></TableCell>
-                                  <TableCell align="right"><strong>Rate/Unit</strong></TableCell>
-                                  <TableCell align="right"><strong>Total</strong></TableCell>
-                                  <TableCell><strong>Charged To</strong></TableCell>
-                                </TableRow>
-                              </TableHead>
-                              <TableBody>
-                                {reportData.perUnitExpenses.map((exp, idx) => (
-                                  <TableRow key={idx} hover>
-                                    <TableCell>{exp.name || "-"}</TableCell>
-                                    <TableCell>{exp.unitTypeDisplay || exp.unitType || "-"}</TableCell>
-                                    <TableCell align="right">{parseFloat(exp.totalUnits || 0).toFixed(2)}</TableCell>
-                                    <TableCell align="right">${parseFloat(exp.rate || 0).toFixed(2)}</TableCell>
-                                    <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
-                                      ${parseFloat(exp.amount || 0).toFixed(2)}
-                                    </TableCell>
-                                    <TableCell>{exp.chargedTo || "-"}</TableCell>
-                                  </TableRow>
-                                ))}
-                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={4} align="right"><strong>Per-Unit Expenses Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(reportData?.perUnitExpenses || []).toFixed(2)}</strong></TableCell>
-                                  <TableCell></TableCell>
-                                </TableRow>
-                              </TableBody>
-                            </Table>
-                          </TableContainer>
-                        ) : (
-                          <Typography color="textSecondary">No per-unit expenses</Typography>
-                        )}
-                      </Box>
-                    )}
-
-                    {/* Airport Trips Tab - Index 4 */}
-                    {expenseTabIndex === 4 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                      // Airport tab
+                      if (tab.type === 'airport') {
+                        return (
+                          <Box key={tab.id} sx={{ p: { xs: 1.5, md: 3 } }}>
                         {getAirportExpenses().length > 0 ? (
                           (() => {
                             const airportItems = getAirportExpenses();
@@ -2025,12 +2091,14 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         ) : (
                           <Typography color="textSecondary">No airport trip expenses</Typography>
                         )}
-                      </Box>
-                    )}
+                          </Box>
+                        );
+                      }
 
-                    {/* Mileage Expenses Tab - Index 5 */}
-                    {expenseTabIndex === 5 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
+                      // Mileage tab
+                      if (tab.type === 'mileage') {
+                        return (
+                          <Box key={tab.id} sx={{ p: { xs: 1.5, md: 3 } }}>
                         {reportData?.mileageExpenses?.length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
                             <Table size="small">
@@ -2069,13 +2137,15 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                         ) : (
                           <Typography color="textSecondary">No mileage expenses</Typography>
                         )}
-                      </Box>
-                    )}
+                          </Box>
+                        );
+                      }
 
-                    {/* Insurance Mileage Expenses Tab - Index 6 */}
-                    {expenseTabIndex === 6 && (
-                      <Box sx={{ p: { xs: 1.5, md: 3 } }}>
-                        {reportData?.insuranceMileageExpenses?.length > 0 ? (
+                      // Insurance tab (and other item-rate tabs like DISPATCH_MILAGE)
+                      if (tab.type === 'insurance') {
+                        return (
+                          <Box key={tab.id} sx={{ p: { xs: 1.5, md: 3 } }}>
+                        {tab.data && tab.data.length > 0 ? (
                           <TableContainer sx={{ overflowX: 'auto' }}>
                             <Table size="small">
                               <TableHead>
@@ -2083,22 +2153,22 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   <TableCell><strong>Date</strong></TableCell>
                                   <TableCell><strong>Cab #</strong></TableCell>
                                   <TableCell align="right"><strong>Mileage</strong></TableCell>
-                                  <TableCell align="right"><strong>Insurance Rate</strong></TableCell>
+                                  <TableCell align="right"><strong>Rate</strong></TableCell>
                                   <TableCell align="right"><strong>Total</strong></TableCell>
                                 </TableRow>
                               </TableHead>
                               <TableBody>
-                                {[...reportData.insuranceMileageExpenses].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
+                                {[...tab.data].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
                                   const miles = exp.miles ? parseFloat(exp.miles) : 0;
                                   const amount = exp.amount ? parseFloat(exp.amount) : 0;
-                                  const insuranceRate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
+                                  const rate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
 
                                   return (
                                     <TableRow key={idx} hover>
                                       <TableCell>{exp.date || "-"}</TableCell>
                                       <TableCell><strong>{exp.cabNumber || "-"}</strong></TableCell>
                                       <TableCell align="right">{miles.toFixed(2)}</TableCell>
-                                      <TableCell align="right">${insuranceRate}</TableCell>
+                                      <TableCell align="right">${rate}</TableCell>
                                       <TableCell align="right" sx={{ color: "#d32f2f", fontWeight: "bold" }}>
                                         ${amount.toFixed(2)}
                                       </TableCell>
@@ -2106,19 +2176,25 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                                   );
                                 })}
                                 <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                                  <TableCell colSpan={4} align="right"><strong>Insurance Mileage Expenses Total:</strong></TableCell>
-                                  <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</strong></TableCell>
+                                  <TableCell colSpan={4} align="right"><strong>{tab.label} Total:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(tab.data).toFixed(2)}</strong></TableCell>
                                 </TableRow>
                               </TableBody>
                             </Table>
                           </TableContainer>
                         ) : (
-                          <Typography color="textSecondary">No insurance mileage expenses</Typography>
+                          <Typography color="textSecondary">No {tab.label.toLowerCase()} expenses</Typography>
                         )}
                       </Box>
-                    )}
+                        );
+                      }
+
+                      // Fallback - should not reach here
+                      return null;
+                    })}
                   </Paper>
-                )}
+                  );
+                })()}
 
                 {/* Revenue Holding Details - For Owners Only */}
                 {reportData?.holdingRevenues && reportData.holdingRevenues.length > 0 && (
@@ -3198,48 +3274,67 @@ ${reportData.netDue > 0 ? "Net Payable" : "Net Due"}: ${reportData.netDue > 0 ? 
                 </Box>
               )}
 
-              {/* Insurance Mileage Expenses Section */}
-              {reportData.insuranceMileageExpenses && reportData.insuranceMileageExpenses.length > 0 && (
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
-                    Insurance Mileage Expenses
-                  </Typography>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell>Cab #</TableCell>
-                          <TableCell align="right">Mileage</TableCell>
-                          <TableCell align="right">Insurance Rate</TableCell>
-                          <TableCell align="right">Total</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {[...reportData.insuranceMileageExpenses].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
-                          const miles = exp.miles ? parseFloat(exp.miles) : 0;
-                          const amount = exp.amount ? parseFloat(exp.amount) : 0;
-                          const insuranceRate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
+              {/* Mileage-Based Expenses Section (grouped by item type) */}
+              {reportData.insuranceMileageExpenses && reportData.insuranceMileageExpenses.length > 0 && (() => {
+                // Group by categoryName (e.g., "INSURANCE Expense", "DISPATCH_MILAGE")
+                const grouped = reportData.insuranceMileageExpenses.reduce((acc, exp) => {
+                  const category = exp.categoryName || 'Mileage Expense';
+                  if (!acc[category]) {
+                    acc[category] = [];
+                  }
+                  acc[category].push(exp);
+                  return acc;
+                }, {});
 
-                          return (
-                            <TableRow key={idx}>
-                              <TableCell>{exp.date || "-"}</TableCell>
-                              <TableCell><strong>{exp.cabNumber || "-"}</strong></TableCell>
-                              <TableCell align="right">{miles.toFixed(2)}</TableCell>
-                              <TableCell align="right">${insuranceRate}</TableCell>
-                              <TableCell align="right">${amount.toFixed(2)}</TableCell>
-                            </TableRow>
-                          );
-                        })}
-                        <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
-                          <TableCell colSpan={4} align="right"><strong>Insurance Mileage Expenses Subtotal:</strong></TableCell>
-                          <TableCell align="right"><strong>${calculateSubtotal(reportData.insuranceMileageExpenses).toFixed(2)}</strong></TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Box>
-              )}
+                return (
+                  <Box sx={{ mb: 3 }}>
+                    {Object.keys(grouped).sort().map((categoryName) => {
+                      const items = grouped[categoryName];
+                      return (
+                        <Box key={categoryName} sx={{ mb: 2 }}>
+                          <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1, color: "#c2185b" }}>
+                            {categoryName}
+                          </Typography>
+                          <TableContainer>
+                            <Table size="small">
+                              <TableHead>
+                                <TableRow>
+                                  <TableCell>Date</TableCell>
+                                  <TableCell>Cab #</TableCell>
+                                  <TableCell align="right">Mileage</TableCell>
+                                  <TableCell align="right">Rate</TableCell>
+                                  <TableCell align="right">Total</TableCell>
+                                </TableRow>
+                              </TableHead>
+                              <TableBody>
+                                {[...items].sort((a, b) => (a.date || "").localeCompare(b.date || "")).map((exp, idx) => {
+                                  const miles = exp.miles ? parseFloat(exp.miles) : 0;
+                                  const amount = exp.amount ? parseFloat(exp.amount) : 0;
+                                  const rate = miles > 0 ? (amount / miles).toFixed(2) : "0.00";
+
+                                  return (
+                                    <TableRow key={idx}>
+                                      <TableCell>{exp.date || "-"}</TableCell>
+                                      <TableCell><strong>{exp.cabNumber || "-"}</strong></TableCell>
+                                      <TableCell align="right">{miles.toFixed(2)}</TableCell>
+                                      <TableCell align="right">${rate}</TableCell>
+                                      <TableCell align="right">${amount.toFixed(2)}</TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                                <TableRow sx={{ backgroundColor: "#f5f5f5", fontWeight: "bold" }}>
+                                  <TableCell colSpan={4} align="right"><strong>{categoryName} Subtotal:</strong></TableCell>
+                                  <TableCell align="right"><strong>${calculateSubtotal(items).toFixed(2)}</strong></TableCell>
+                                </TableRow>
+                              </TableBody>
+                            </Table>
+                          </TableContainer>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                );
+              })()}
 
               {/* Tax Expenses Section */}
               {reportData.taxExpenses && reportData.taxExpenses.length > 0 && (
